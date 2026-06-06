@@ -58,6 +58,9 @@ const freeformBlockSchema = z.object({
   x: z.number(),
   y: z.number(),
   text: z.string(),
+  align: z.enum(["right", "center", "justify"]).optional(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
 });
 
 const freeformDocumentSchema = z.object({

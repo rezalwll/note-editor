@@ -1,62 +1,46 @@
-import Link from "next/link";
-import { StickyNote } from "lucide-react";
+import { UserRound } from "lucide-react";
 
-import {
-  logoutAction,
-} from "@/app/actions";
-import { getSidebarData } from "@/lib/queries";
+import { logoutAction } from "@/app/actions";
+import { EditorToolbar } from "@/components/editor-toolbar";
 import { PagesSidebar } from "@/components/pages-sidebar";
 import { SectionTabs } from "@/components/section-tabs";
-
-const ribbonItems = ["File", "Home", "Insert", "Draw", "History", "Review", "View"];
+import { getSidebarData } from "@/lib/queries";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const { notebooks } = await getSidebarData();
 
   return (
     <div className="min-h-screen bg-[#f6f6f6] text-[#2b2b2b]">
-      <header className="border-b border-[#6e2c68] bg-[#7e3c7a] text-white">
-        <div className="flex h-11 items-center justify-between px-4 text-sm">
+      <header className="border-b border-[#d6dee8] bg-[#e8edf5]">
+        <div className="flex items-center justify-between gap-4 px-4 py-2.5">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-full px-2 py-1 text-lg leading-none text-white/90 transition hover:bg-white/10"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-2 py-1 text-lg leading-none text-white/90 transition hover:bg-white/10"
-            >
-              ↶
-            </button>
+            <EditorToolbar />
           </div>
-          <div className="truncate text-center text-sm font-medium text-white/95">
-            OneNote database
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="hidden sm:inline">Mohammadreza Aziz</span>
+
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 rounded-2xl border border-[#d6dee8] bg-white px-3 py-1.5 shadow-[0_3px_10px_rgba(15,23,42,0.08)]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1098c5] text-white">
+                <UserRound className="h-4.5 w-4.5" />
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold leading-5 text-[#1f2a37]">
+                  Mohammadreza Aziz
+                </div>
+                <div className="text-[11px] leading-4 text-[#708090]">
+                  Personal notebook
+                </div>
+              </div>
+            </div>
+
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="rounded border border-white/25 px-2 py-1 transition hover:bg-white/10"
+                className="rounded-xl border border-[#d6dee8] bg-white px-3 py-2 text-xs font-medium text-[#4b5a6b] shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition hover:bg-[#f7fbff]"
               >
                 Sign out
               </button>
             </form>
           </div>
-        </div>
-
-        <div className="flex items-center gap-6 bg-[#7e3c7a] px-4 pb-2 text-[13px] text-white/95">
-          {ribbonItems.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className="transition hover:text-white"
-            >
-              {item}
-            </button>
-          ))}
         </div>
       </header>
 
@@ -70,7 +54,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <div className="h-[4px] bg-[#9fca72]" />
       </div>
 
-      <div className="flex min-h-[calc(100vh-99px)]">
+      <div className="flex min-h-[calc(100vh-83px)]">
         <main className="min-w-0 flex-1 bg-white">{children}</main>
         <PagesSidebar
           notebooks={notebooks.map((notebook) => ({
