@@ -24,13 +24,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[#f6f6f6] text-[#2b2b2b]">
       <MobileShell notebooks={shellNotebooks} />
 
-      <div className="sticky top-0 z-40 hidden md:block">
+      <div className="sticky top-0 z-40 hidden xl:block">
         <header className="border-b border-[#d6dee8] bg-[#e8edf5]/95 backdrop-blur">
           <div className="flex items-center justify-between gap-4 px-4 py-2.5">
             <div className="flex items-center gap-3">
               <BrandLogo
-                frameClassName="h-9 w-[118px] min-w-[118px]"
-                imageClassName="scale-[1.78]"
+                frameClassName="h-7 w-[110px] min-w-[110px]"
                 priority
                 showWordmark={false}
               />
@@ -75,8 +74,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="flex min-h-screen items-start md:min-h-[calc(100vh-83px)]">
-        <main className="min-w-0 flex-1 bg-white pb-20 md:pb-0">{children}</main>
+      <div className="flex min-h-screen items-start xl:min-h-[calc(100vh-83px)]">
+        <main className="min-w-0 flex-1 bg-white pb-20 xl:pb-0">{children}</main>
         <PagesSidebar notebooks={shellNotebooks} />
       </div>
     </div>

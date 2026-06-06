@@ -6,12 +6,31 @@ import { bootstrapOfflineState, processSyncQueue } from "@/lib/sync/client";
 
 export function PwaRuntime() {
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js");
-    }
+    const isDevelopment = process.env.NODE_ENV !== "production";
+
+    const setupServiceWorker = async () => {
+      if (!("serviceWorker" in navigator)) {
+        return;
+      }
+
+      if (isDevelopment) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+
+        if ("caches" in window) {
+          const cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+        }
+
+        return;
+      }
+
+      await navigator.serviceWorker.register("/sw.js");
+    };
 
     const bootstrap = async () => {
       try {
+        await setupServiceWorker();
         await bootstrapOfflineState();
         await processSyncQueue();
       } catch {

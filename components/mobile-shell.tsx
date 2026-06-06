@@ -127,7 +127,7 @@ export function MobileShell({ notebooks }: MobileShellProps) {
   }
 
   return (
-    <div className="md:hidden">
+    <div className="xl:hidden">
       <div className="sticky top-0 z-40 border-b border-[#d6dee8] bg-[#e8edf5]/95 backdrop-blur">
         <div className="flex items-center justify-between gap-3 px-3 py-2">
           <button
@@ -144,8 +144,7 @@ export function MobileShell({ notebooks }: MobileShellProps) {
           </button>
 
           <BrandLogo
-            frameClassName="h-8 w-[108px]"
-            imageClassName="scale-[1.78]"
+            frameClassName="h-7 w-[100px]"
             showWordmark={false}
           />
 

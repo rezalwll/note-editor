@@ -22,14 +22,15 @@ export function BrandLogo({
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <div
-        className={`relative h-11 w-[138px] overflow-hidden ${frameClassName}`}
+        className={`relative h-8 w-[124px] ${frameClassName}`}
       >
         <Image
           src="/brand/notava-logo.png"
           alt="notava"
           fill
           priority={priority}
-          className={`object-cover object-center scale-[1.72] ${imageClassName}`}
+          sizes="124px"
+          className={`object-contain object-left ${imageClassName}`}
         />
       </div>
       {showWordmark ? (

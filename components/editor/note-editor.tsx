@@ -229,6 +229,8 @@ export function NoteEditor({
     : isSavingLocally
       ? "Saving locally..."
       : toStatusLabel(syncStatus, isOnline);
+  const shouldShowStatus =
+    !isHydrated || isSavingLocally || syncStatus !== "synced" || !isOnline;
 
   function getCanvasBoundedX(
     canvasWidth: number,
@@ -867,7 +869,7 @@ export function NoteEditor({
         <div
           ref={pageRef}
           onClick={handlePageClick}
-          className="mt-0 min-h-[calc(100vh-136px)] overflow-hidden border bg-white pb-[60vh] md:mt-4 md:rounded-[10px]"
+          className="mt-0 min-h-[calc(100vh-136px)] overflow-hidden border-x-0 border-y bg-white pb-[60vh] md:mt-4 md:rounded-[10px] md:border"
           style={{
             borderColor: notebookTheme.editorBorder,
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,
@@ -885,9 +887,11 @@ export function NoteEditor({
               </div>
             </div>
 
-            <div className="mt-3 text-left text-[11px] text-[#6d7c8e]" dir="ltr">
-              {statusMessage}
-            </div>
+            {shouldShowStatus ? (
+              <div className="mt-3 text-left text-[11px] text-[#6d7c8e]" dir="ltr">
+                {statusMessage}
+              </div>
+            ) : null}
           </div>
 
           <div
