@@ -31,9 +31,11 @@ export default async function PageView({ params }: PageViewProps) {
     <div className="min-h-[calc(100vh-99px)] bg-white">
       <div className="mx-auto max-w-[1400px]">
         <NoteEditor
+          notebookId={page.notebook.id}
           pageId={page.id}
           initialTitle={page.title}
           initialHtml={page.bodyHtml}
+          initialUpdatedAt={page.updatedAt.toISOString()}
           attachments={page.attachments.map((attachment) => ({
             id: attachment.id,
             fileName: attachment.fileName,

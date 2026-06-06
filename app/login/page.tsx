@@ -1,5 +1,6 @@
 import { LockKeyhole, Sparkles } from "lucide-react";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { LoginForm } from "@/components/forms/login-form";
 
 export default function LoginPage() {
@@ -11,9 +12,16 @@ export default function LoginPage() {
             <Sparkles className="h-4 w-4" />
             Private entrance
           </div>
+          <BrandLogo
+            className="mb-8"
+            frameClassName="h-[84px] w-[280px]"
+            imageClassName="scale-[1.7] brightness-[1.08] contrast-[1.04]"
+            priority
+            showWordmark={false}
+          />
           <div className="space-y-5">
             <h1 className="max-w-2xl font-serif text-5xl tracking-tight text-white lg:text-7xl">
-              Your private web notebook.
+              Notava, your private web notebook.
             </h1>
             <p className="max-w-xl text-base leading-8 text-stone-300 lg:text-lg">
               Open the domain, unlock with your password, and keep writing. Notes, study drafts, ideas, and practical life records live in one place.
@@ -28,7 +36,7 @@ export default function LoginPage() {
           </div>
           <div className="mb-8 space-y-3">
             <h2 className="font-serif text-4xl tracking-tight text-stone-950">
-              Unlock
+              Unlock notava
             </h2>
             <p className="text-sm leading-7 text-stone-600">
               The initial password is seeded from environment configuration. Change it from Security settings after first login.

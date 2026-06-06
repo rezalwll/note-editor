@@ -6,6 +6,7 @@ import { CirclePlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { createPageInlineAction } from "@/app/actions";
+import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
 type NotebookSummary = {
@@ -23,6 +24,9 @@ type PagesSidebarProps = {
 };
 
 export function PagesSidebar({ notebooks }: PagesSidebarProps) {
+  const sidebarTopOffset = "111px";
+  const sidebarHeight = "calc(100vh - 111px)";
+  const sidebarListHeight = "calc(100vh - 154px)";
   const pathname = usePathname();
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
@@ -47,6 +51,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
     return notebooks[0];
   }, [notebooks, pathname]);
+  const activeTheme = activeNotebook
+    ? getNotebookTheme(activeNotebook.id)
+    : null;
 
   useEffect(() => {
     if (isCreating) {
@@ -87,74 +94,105 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
   if (!activeNotebook) {
     return (
-      <aside className="hidden w-[300px] shrink-0 border-l border-[#b8d794] bg-[#eef6df] xl:block" />
+      <aside className="hidden w-[300px] shrink-0 xl:block">
+        <div
+          className="fixed right-0 w-[300px] border-l"
+          style={{ top: sidebarTopOffset, height: sidebarHeight }}
+        />
+      </aside>
     );
   }
 
   return (
-    <aside className="hidden w-[300px] shrink-0 border-l border-[#b8d794] bg-[#eef6df] xl:block">
-      <div className="border-b border-[#b8d794] bg-[#b9dc8f] px-3 py-2 text-right">
-        <button
-          type="button"
-          onClick={beginCreate}
-          className="inline-flex items-center gap-2 text-[13px] text-[#4b5d33]"
+    <aside className="hidden w-[300px] shrink-0 xl:block">
+      <div
+        className="fixed right-0 w-[300px] border-l"
+        style={{
+          top: sidebarTopOffset,
+          height: sidebarHeight,
+          borderColor: activeTheme?.sidebarBorder,
+          backgroundColor: activeTheme?.sidebarBg,
+        }}
+      >
+        <div
+          className="border-b px-3 py-2 text-right"
+          style={{
+            borderColor: activeTheme?.sidebarBorder,
+            backgroundColor: activeTheme?.sidebarHeaderBg,
+          }}
         >
-          <CirclePlus className="h-4 w-4" />
-          Add Page
-        </button>
-      </div>
-
-      {isCreating ? (
-        <div className="border-b border-[#d8e8c8] bg-white px-3 py-2 text-right">
-          <input
-            ref={inputRef}
-            value={draftTitle}
-            onChange={(event) => setDraftTitle(event.target.value)}
-            onBlur={submitCreate}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submitCreate();
-              }
-
-              if (event.key === "Escape") {
-                event.preventDefault();
-                cancelCreate();
-              }
-            }}
-            disabled={isPending}
-            placeholder="Untitled Page"
-            className="w-full border-none bg-transparent text-right text-sm text-[#313131] outline-none"
-            dir="rtl"
-          />
+          <button
+            type="button"
+            onClick={beginCreate}
+            className="inline-flex items-center gap-2 text-[13px]"
+            style={{ color: activeTheme?.sidebarText }}
+          >
+            <CirclePlus className="h-4 w-4" />
+            Add Page
+          </button>
         </div>
-      ) : null}
 
-      <div className="overflow-y-auto text-right">
-        {activeNotebook.pages.map((page) => {
-          const isActive = pathname === `/pages/${page.id}`;
+        {isCreating ? (
+          <div
+            className="border-b bg-white px-3 py-2 text-right"
+            style={{ borderColor: activeTheme?.sidebarBorder }}
+          >
+            <input
+              ref={inputRef}
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onBlur={submitCreate}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitCreate();
+                }
 
-          return (
-            <Link
-              key={page.id}
-              href={`/pages/${page.id}`}
-              className={`block border-b border-[#d8e8c8] px-3 py-3 transition ${
-                isActive ? "bg-white" : "hover:bg-[#e4f0d2]"
-              }`}
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelCreate();
+                }
+              }}
+              disabled={isPending}
+              placeholder="Untitled Page"
+              className="w-full border-none bg-transparent text-right text-sm text-[#313131] outline-none"
               dir="rtl"
-            >
-              <div className="truncate text-sm text-[#313131]">{page.title}</div>
-              <div className="mt-1 text-[11px] text-[#6c7c57]">
-                {formatDate(new Date(page.updatedAt))}
-              </div>
-            </Link>
-          );
-        })}
-        {activeNotebook.pages.length === 0 ? (
-          <div className="px-3 py-4 text-right text-xs text-stone-500">
-            No pages yet.
+            />
           </div>
         ) : null}
+
+        <div className="overflow-y-auto text-right" style={{ height: sidebarListHeight }}>
+          {activeNotebook.pages.map((page) => {
+            const isActive = pathname === `/pages/${page.id}`;
+
+            return (
+              <Link
+                key={page.id}
+                href={`/pages/${page.id}`}
+                className="block border-b px-3 py-3 transition"
+                style={{
+                  borderColor: activeTheme?.sidebarBorder,
+                  backgroundColor: isActive
+                    ? activeTheme?.sidebarActive
+                    : "transparent",
+                }}
+                dir="rtl"
+              >
+                <div className="truncate text-sm" style={{ color: activeTheme?.sidebarText }}>
+                  {page.title}
+                </div>
+                <div className="mt-1 text-[11px]" style={{ color: activeTheme?.sidebarMuted }}>
+                  {formatDate(new Date(page.updatedAt))}
+                </div>
+              </Link>
+            );
+          })}
+          {activeNotebook.pages.length === 0 ? (
+            <div className="px-3 py-4 text-right text-xs text-stone-500">
+              No pages yet.
+            </div>
+          ) : null}
+        </div>
       </div>
     </aside>
   );

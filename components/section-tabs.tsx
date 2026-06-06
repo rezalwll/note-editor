@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { createNotebookInlineAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import { getNotebookTheme } from "@/lib/notebook-theme";
 
 type NotebookTab = {
   id: string;
@@ -17,21 +18,16 @@ type SectionTabsProps = {
   notebooks: NotebookTab[];
 };
 
-const sectionColors = [
-  "bg-[#8fb3e2]",
-  "bg-[#d6b48c]",
-  "bg-[#d7df73]",
-  "bg-[#9dcb64]",
-  "bg-[#d3c0ea]",
-  "bg-[#f0ba7f]",
-] as const;
-
 export function SectionTabs({ notebooks }: SectionTabsProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const activeNotebookId =
+    pathname.match(/^\/notebooks\/([^/]+)/)?.[1] ??
+    notebooks.find((notebook) => pathname.includes(notebook.id))?.id;
 
   useEffect(() => {
     if (isCreating) {
@@ -72,18 +68,30 @@ export function SectionTabs({ notebooks }: SectionTabsProps) {
 
   return (
     <div className="flex flex-wrap items-end gap-1 px-3 pt-2">
-      {notebooks.map((notebook, index) => (
-        <Link
-          key={notebook.id}
-          href={`/notebooks/${notebook.id}`}
-          className={cn(
-            sectionColors[index % sectionColors.length],
-            "inline-flex h-6 items-center rounded-t-md px-4 text-xs text-[#333] shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)]",
-          )}
-        >
-          {notebook.name}
-        </Link>
-      ))}
+      {notebooks.map((notebook) => {
+        const theme = getNotebookTheme(notebook.id);
+        const isActive = activeNotebookId === notebook.id;
+
+        return (
+          <Link
+            key={notebook.id}
+            href={`/notebooks/${notebook.id}`}
+            className={cn(
+              "inline-flex h-6 items-center rounded-t-md px-4 text-xs shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] transition",
+              isActive ? "translate-y-[1px]" : "hover:-translate-y-px",
+            )}
+            style={{
+              backgroundColor: theme.tab,
+              color: theme.tabText,
+              boxShadow: isActive
+                ? `inset 0 0 0 1px ${theme.tabBorder}, inset 0 -1px 0 rgba(0,0,0,0.08)`
+                : "inset 0 -1px 0 rgba(0,0,0,0.08)",
+            }}
+          >
+            {notebook.name}
+          </Link>
+        );
+      })}
 
       {isCreating ? (
         <div className="inline-flex h-6 items-center rounded-t-md border border-stone-300 bg-white px-2 shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)]">

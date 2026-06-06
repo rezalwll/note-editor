@@ -6,6 +6,8 @@ import {
   AlignRight,
   Bold,
   Italic,
+  List,
+  ListTodo,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -16,6 +18,8 @@ type EditorCommand =
   | "redo"
   | "toggle-bold"
   | "toggle-italic"
+  | "toggle-bullet-list"
+  | "toggle-todo-list"
   | "align-right"
   | "align-center"
   | "align-justify";
@@ -154,6 +158,23 @@ export function EditorToolbar() {
         onClick={() => dispatchEditorCommand("toggle-bold")}
       >
         <Bold className="h-4 w-4" />
+      </ToolbarButton>
+
+      <div className="mx-1 h-7 w-px bg-[#c9d5e1]" />
+
+      <ToolbarButton
+        label="Bullet list"
+        disabled={!toolbarState.hasActiveBlock}
+        onClick={() => dispatchEditorCommand("toggle-bullet-list")}
+      >
+        <List className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        label="Todo list"
+        disabled={!toolbarState.hasActiveBlock}
+        onClick={() => dispatchEditorCommand("toggle-todo-list")}
+      >
+        <ListTodo className="h-4 w-4" />
       </ToolbarButton>
     </div>
   );

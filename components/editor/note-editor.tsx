@@ -1,19 +1,22 @@
 "use client";
 
 import { GripVertical } from "lucide-react";
-import {
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
+  enqueuePageUpsert,
+  getLocalPage,
+  upsertLocalPage,
+} from "@/lib/offline-db/client";
+import type { LocalPage, SyncStatus } from "@/lib/offline-db/types";
+import {
   type FreeformBlock,
+  extractFreeformPlainText,
   parseFreeformDocument,
   serializeFreeformDocument,
 } from "@/lib/notes";
+import { getNotebookTheme } from "@/lib/notebook-theme";
+import { processSyncQueue } from "@/lib/sync/client";
 
 type Attachment = {
   id: string;
@@ -23,9 +26,11 @@ type Attachment = {
 };
 
 type NoteEditorProps = {
+  notebookId: string;
   pageId: string;
   initialTitle: string;
   initialHtml: string;
+  initialUpdatedAt: string;
   attachments: Attachment[];
 };
 
@@ -34,6 +39,8 @@ type EditorCommand =
   | "redo"
   | "toggle-bold"
   | "toggle-italic"
+  | "toggle-bullet-list"
+  | "toggle-todo-list"
   | "align-right"
   | "align-center"
   | "align-justify";
@@ -46,9 +53,28 @@ const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
 const BLOCK_RIGHT_GUTTER = 0;
 const BLOCK_RTL_CLICK_ANCHOR = 12;
+const BULLET_PREFIX = "\u25CF ";
+const TODO_PREFIX = "\u2610 ";
+const TODO_DONE_PREFIX = "\u2611 ";
 
 function createId() {
   return `block-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function toStatusLabel(syncStatus: SyncStatus, isOnline: boolean) {
+  if (syncStatus === "conflict") {
+    return "Conflict";
+  }
+
+  if (syncStatus === "failed") {
+    return "Sync failed";
+  }
+
+  if (syncStatus === "pending") {
+    return isOnline ? "Syncing" : "Saved locally";
+  }
+
+  return isOnline ? "Synced" : "Offline";
 }
 
 function getBlockWidth(text: string) {
@@ -91,12 +117,46 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   ];
 }
 
+function toSnapshot(block: FreeformBlock): BlockSnapshot {
+  return {
+    text: block.text,
+    align: block.align ?? "right",
+    bold: block.bold ?? false,
+    italic: block.italic ?? false,
+  };
+}
+
+function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
+  return {
+    ...block,
+    text: snapshotValue.text,
+    align: snapshotValue.align ?? "right",
+    bold: snapshotValue.bold ?? false,
+    italic: snapshotValue.italic ?? false,
+  };
+}
+
+function getCurrentLineRange(text: string, position: number) {
+  const lineStart = text.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
+  const nextBreak = text.indexOf("\n", position);
+  const lineEnd = nextBreak === -1 ? text.length : nextBreak;
+
+  return {
+    lineStart,
+    lineEnd,
+    lineText: text.slice(lineStart, lineEnd),
+  };
+}
+
 export function NoteEditor({
+  notebookId,
   pageId,
   initialTitle,
   initialHtml,
+  initialUpdatedAt,
   attachments: _initialAttachments,
 }: NoteEditorProps) {
+  const notebookTheme = getNotebookTheme(notebookId);
   const now = new Date();
   const dateParts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
     day: "numeric",
@@ -112,13 +172,19 @@ export function NoteEditor({
     minute: "2-digit",
     hour12: false,
   });
+
   const [title, setTitle] = useState(initialTitle);
-  const [status, setStatus] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<FreeformBlock[]>(() =>
     getInitialBlocks(initialHtml),
   );
-  const [isAutosaving, setIsAutosaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  const [isSavingLocally, setIsSavingLocally] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -130,10 +196,15 @@ export function NoteEditor({
   const historyRef = useRef<
     Record<string, { past: BlockSnapshot[]; future: BlockSnapshot[] }>
   >({});
-  const initializedRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef("");
   const lastFocusedBlockIdRef = useRef<string | null>(null);
+  const lastSyncedAtRef = useRef(initialUpdatedAt);
+  const selectionRestoreRef = useRef<{
+    id: string;
+    start: number;
+    end: number;
+  } | null>(null);
 
   const serializedDocument = useMemo(
     () =>
@@ -144,33 +215,33 @@ export function NoteEditor({
     [blocks],
   );
 
+  const bodyText = useMemo(() => {
+    const freeformDocument = parseFreeformDocument(serializedDocument);
+    return freeformDocument
+      ? extractFreeformPlainText(freeformDocument)
+      : "";
+  }, [serializedDocument]);
+
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
+  const statusMessage = !isHydrated
+    ? "Loading..."
+    : isSavingLocally
+      ? "Saving locally..."
+      : toStatusLabel(syncStatus, isOnline);
 
-  function getCanvasBoundedX(canvasWidth: number, desiredX: number, blockWidth: number) {
+  function getCanvasBoundedX(
+    canvasWidth: number,
+    desiredX: number,
+    blockWidth: number,
+  ) {
     return Math.min(
       Math.max(PAGE_SIDE_PADDING, desiredX),
-      Math.max(PAGE_SIDE_PADDING, canvasWidth - blockWidth - BLOCK_RIGHT_GUTTER),
+      Math.max(
+        PAGE_SIDE_PADDING,
+        canvasWidth - blockWidth - BLOCK_RIGHT_GUTTER,
+      ),
     );
-  }
-
-  function toSnapshot(block: FreeformBlock): BlockSnapshot {
-    return {
-      text: block.text,
-      align: block.align ?? "right",
-      bold: block.bold ?? false,
-      italic: block.italic ?? false,
-    };
-  }
-
-  function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
-    return {
-      ...block,
-      text: snapshotValue.text,
-      align: snapshotValue.align ?? "right",
-      bold: snapshotValue.bold ?? false,
-      italic: snapshotValue.italic ?? false,
-    };
   }
 
   function pushHistoryEntry(block: FreeformBlock) {
@@ -184,58 +255,166 @@ export function NoteEditor({
   }
 
   useEffect(() => {
-    if (!activeBlockId) return;
-    if (lastFocusedBlockIdRef.current === activeBlockId) return;
+    const handleConnectionChange = () => {
+      setIsOnline(navigator.onLine);
+    };
+
+    window.addEventListener("online", handleConnectionChange);
+    window.addEventListener("offline", handleConnectionChange);
+
+    return () => {
+      window.removeEventListener("online", handleConnectionChange);
+      window.removeEventListener("offline", handleConnectionChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function hydrateFromOfflineStore() {
+      const localPage = await getLocalPage(pageId);
+      const serverUpdatedAt = new Date(initialUpdatedAt).getTime();
+      const localUpdatedAt = localPage ? new Date(localPage.updatedAt).getTime() : 0;
+      const shouldPreferLocal =
+        Boolean(localPage) &&
+        ((localPage?.syncStatus ?? "synced") !== "synced" ||
+          localUpdatedAt >= serverUpdatedAt);
+
+      const serverPage: LocalPage = {
+        id: pageId,
+        notebookId,
+        title: initialTitle,
+        bodyHtml: initialHtml,
+        bodyText:
+          parseFreeformDocument(initialHtml)?.blocks
+            .map((block) => block.text.trim())
+            .filter(Boolean)
+            .join(" ") ?? "",
+        archived: false,
+        updatedAt: initialUpdatedAt,
+        lastSyncedAt: initialUpdatedAt,
+        deletedAt: null,
+        syncStatus: "synced",
+      };
+
+      if (shouldPreferLocal && localPage && !isCancelled) {
+        setTitle(localPage.title);
+        setBlocks(getInitialBlocks(localPage.bodyHtml));
+        setSyncStatus(localPage.syncStatus);
+        lastSyncedAtRef.current =
+          localPage.lastSyncedAt ?? localPage.updatedAt ?? initialUpdatedAt;
+        lastSavedSnapshotRef.current = `${localPage.title}::${localPage.bodyHtml}`;
+      } else {
+        await upsertLocalPage(serverPage);
+
+        if (!isCancelled) {
+          setSyncStatus("synced");
+          lastSyncedAtRef.current = initialUpdatedAt;
+          lastSavedSnapshotRef.current = `${initialTitle}::${initialHtml}`;
+        }
+      }
+
+      if (!isCancelled) {
+        setIsHydrated(true);
+      }
+    }
+
+    void hydrateFromOfflineStore();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId]);
+
+  useEffect(() => {
+    if (!isHydrated || !activeBlockId) {
+      return;
+    }
+
+    if (lastFocusedBlockIdRef.current === activeBlockId) {
+      return;
+    }
+
     const element = blockRefs.current[activeBlockId];
-    if (!element) return;
+    if (!element) {
+      return;
+    }
+
     lastFocusedBlockIdRef.current = activeBlockId;
     element.focus();
     const end = element.value.length;
     element.setSelectionRange(end, end);
-  }, [activeBlockId]);
+  }, [activeBlockId, isHydrated]);
 
   useEffect(() => {
     Object.values(blockRefs.current).forEach((element) => {
-      if (!element) return;
+      if (!element) {
+        return;
+      }
+
       element.style.height = "0px";
       element.style.height = `${Math.max(element.scrollHeight, 28)}px`;
     });
-  }, [blocks]);
 
-  const saveNote = useEffectEvent(async (isAuto = false) => {
-    if (isAuto) {
-      setIsAutosaving(true);
-    } else {
-      setStatus("Saving...");
-    }
-
-    const response = await fetch(`/api/pages/${pageId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        bodyHtml: serializedDocument,
-      }),
-    });
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as
-        | { error?: string }
-        | null;
-      setStatus(payload?.error ?? "Save failed.");
-      setIsAutosaving(false);
+    if (!selectionRestoreRef.current) {
       return;
     }
 
-    lastSavedSnapshotRef.current = `${title}::${serializedDocument}`;
-    setStatus("Saved");
-    setIsAutosaving(false);
+    const restore = selectionRestoreRef.current;
+    const element = blockRefs.current[restore.id];
+    selectionRestoreRef.current = null;
+
+    if (!element) {
+      return;
+    }
+
+    element.focus();
+    element.setSelectionRange(restore.start, restore.end);
+  }, [blocks]);
+
+  const saveNoteLocally = useEffectEvent(async () => {
+    try {
+      const updatedAt = new Date().toISOString();
+      const localPage: LocalPage = {
+        id: pageId,
+        notebookId,
+        title,
+        bodyHtml: serializedDocument,
+        bodyText,
+        archived: false,
+        updatedAt,
+        lastSyncedAt: lastSyncedAtRef.current ?? initialUpdatedAt,
+        deletedAt: null,
+        syncStatus: "pending",
+      };
+
+      await upsertLocalPage(localPage);
+      await enqueuePageUpsert(localPage, lastSyncedAtRef.current ?? initialUpdatedAt);
+
+      lastSavedSnapshotRef.current = snapshot;
+      setSyncStatus("pending");
+      setIsSavingLocally(false);
+
+      if (navigator.onLine) {
+        await processSyncQueue();
+        const refreshed = await getLocalPage(pageId);
+
+        if (refreshed?.lastSyncedAt) {
+          lastSyncedAtRef.current = refreshed.lastSyncedAt;
+        }
+
+        if (refreshed?.syncStatus) {
+          setSyncStatus(refreshed.syncStatus);
+        }
+      }
+    } catch {
+      setIsSavingLocally(false);
+      setSyncStatus("failed");
+    }
   });
 
   useEffect(() => {
-    if (!initializedRef.current) {
-      lastSavedSnapshotRef.current = snapshot;
-      initializedRef.current = true;
+    if (!isHydrated) {
       return;
     }
 
@@ -243,22 +422,45 @@ export function NoteEditor({
       return;
     }
 
-    setStatus("Saving...");
+    setIsSavingLocally(true);
 
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
 
     autosaveTimerRef.current = setTimeout(() => {
-      void saveNote(true);
-    }, 800);
+      void saveNoteLocally();
+    }, 500);
 
     return () => {
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [snapshot]);
+  }, [isHydrated, snapshot]);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        type?: string;
+        pageId?: string;
+        syncStatus?: SyncStatus;
+        lastSyncedAt?: string | null;
+      }>;
+
+      if (customEvent.detail?.pageId !== pageId || !customEvent.detail.syncStatus) {
+        return;
+      }
+
+      setSyncStatus(customEvent.detail.syncStatus);
+      if (customEvent.detail.lastSyncedAt) {
+        lastSyncedAtRef.current = customEvent.detail.lastSyncedAt;
+      }
+    };
+
+    window.addEventListener("notava-sync", listener);
+    return () => window.removeEventListener("notava-sync", listener);
+  }, [pageId]);
 
   function addBlockAt(x: number, y: number) {
     const block: FreeformBlock = {
@@ -279,7 +481,7 @@ export function NoteEditor({
     }
 
     const target = event.target as HTMLElement;
-    if (target.closest("textarea")) {
+    if (target.closest("textarea") || target.closest("button")) {
       return;
     }
 
@@ -287,10 +489,7 @@ export function NoteEditor({
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const x = getCanvasBoundedX(
       canvasRect.width,
-      event.clientX -
-        canvasRect.left -
-        BLOCK_DEFAULT_WIDTH +
-        BLOCK_RTL_CLICK_ANCHOR,
+      event.clientX - canvasRect.left - BLOCK_DEFAULT_WIDTH + BLOCK_RTL_CLICK_ANCHOR,
       BLOCK_DEFAULT_WIDTH,
     );
     const canvasOffsetTop = canvasRect.top - pageRect.top;
@@ -328,11 +527,17 @@ export function NoteEditor({
       const previousWidth = getBlockWidth(block.text);
       const nextWidth = getBlockWidth(text);
       const widthDelta = nextWidth - previousWidth;
+      const canvasWidth = canvasRef.current?.getBoundingClientRect().width ?? BLOCK_MAX_WIDTH;
+      const nextX = getCanvasBoundedX(
+        canvasWidth,
+        widthDelta === 0 ? block.x : block.x - widthDelta,
+        nextWidth,
+      );
 
       return {
         ...block,
         text,
-        x: widthDelta === 0 ? block.x : block.x - widthDelta,
+        x: nextX,
       };
     });
   }
@@ -353,6 +558,140 @@ export function NoteEditor({
     });
   }
 
+  function handleBlockKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+    block: FreeformBlock,
+  ) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    const element = event.currentTarget;
+    const selectionStart = element.selectionStart ?? 0;
+    const selectionEnd = element.selectionEnd ?? selectionStart;
+
+    if (selectionStart !== selectionEnd) {
+      return;
+    }
+
+    const { lineText } = getCurrentLineRange(block.text, selectionStart);
+    const bulletMatch = lineText.match(/^([ \t]*)\u25CF\s/);
+    const todoMatch = lineText.match(/^([ \t]*)(\u2610|\u2611)\s/);
+
+    if (!bulletMatch && !todoMatch) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const prefix = bulletMatch
+      ? `${bulletMatch[1]}${BULLET_PREFIX}`
+      : `${todoMatch?.[1] ?? ""}${TODO_PREFIX}`;
+    const beforeCursor = block.text.slice(0, selectionStart);
+    const afterCursor = block.text.slice(selectionStart);
+    const nextText = `${beforeCursor}\n${prefix}${afterCursor}`;
+    const nextCursorPosition = selectionStart + 1 + prefix.length;
+
+    selectionRestoreRef.current = {
+      id: block.id,
+      start: nextCursorPosition,
+      end: nextCursorPosition,
+    };
+
+    updateBlockText(block.id, nextText);
+  }
+
+  function toggleSelectedLines(
+    blockId: string,
+    prefix: string,
+    alternatePrefixes: string[] = [],
+  ) {
+    const element = blockRefs.current[blockId];
+
+    if (!element) {
+      return;
+    }
+
+    const currentText = element.value;
+    const selectionStart = element.selectionStart ?? 0;
+    const selectionEnd = element.selectionEnd ?? selectionStart;
+    const lineStart = currentText.lastIndexOf("\n", selectionStart - 1) + 1;
+    const lineEndIndex = currentText.indexOf("\n", selectionEnd);
+    const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
+    const segment = currentText.slice(lineStart, lineEnd);
+    const lines = segment.split("\n");
+    const removablePrefixes = [prefix, ...alternatePrefixes];
+    const shouldRemove = lines.every((line) =>
+      removablePrefixes.some((candidate) => line.startsWith(candidate)),
+    );
+
+    const transformedLines = lines.map((line) => {
+      if (shouldRemove) {
+        const removable = removablePrefixes.find((candidate) =>
+          line.startsWith(candidate),
+        );
+        return removable ? line.slice(removable.length) : line;
+      }
+
+      return `${prefix}${line}`;
+    });
+
+    const nextSegment = transformedLines.join("\n");
+    const nextText =
+      currentText.slice(0, lineStart) + nextSegment + currentText.slice(lineEnd);
+    const lengthDelta = nextSegment.length - segment.length;
+
+    selectionRestoreRef.current = {
+      id: blockId,
+      start: selectionStart,
+      end: selectionEnd + lengthDelta,
+    };
+
+    updateBlockText(blockId, nextText);
+  }
+
+  function cycleTodoLines(blockId: string) {
+    const element = blockRefs.current[blockId];
+
+    if (!element) {
+      return;
+    }
+
+    const currentText = element.value;
+    const selectionStart = element.selectionStart ?? 0;
+    const selectionEnd = element.selectionEnd ?? selectionStart;
+    const lineStart = currentText.lastIndexOf("\n", selectionStart - 1) + 1;
+    const lineEndIndex = currentText.indexOf("\n", selectionEnd);
+    const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
+    const segment = currentText.slice(lineStart, lineEnd);
+    const lines = segment.split("\n");
+
+    const transformedLines = lines.map((line) => {
+      if (line.startsWith(TODO_PREFIX)) {
+        return `${TODO_DONE_PREFIX}${line.slice(TODO_PREFIX.length)}`;
+      }
+
+      if (line.startsWith(TODO_DONE_PREFIX)) {
+        return line.slice(TODO_DONE_PREFIX.length);
+      }
+
+      return `${TODO_PREFIX}${line}`;
+    });
+
+    const nextSegment = transformedLines.join("\n");
+    const nextText =
+      currentText.slice(0, lineStart) + nextSegment + currentText.slice(lineEnd);
+    const lengthDelta = nextSegment.length - segment.length;
+
+    selectionRestoreRef.current = {
+      id: blockId,
+      start: selectionStart,
+      end: selectionEnd + lengthDelta,
+    };
+
+    updateBlockText(blockId, nextText);
+  }
+
   const handleBlockDrag = useEffectEvent((event: PointerEvent) => {
     if (!canvasRef.current || !dragStateRef.current) {
       return;
@@ -368,7 +707,10 @@ export function NoteEditor({
       event.clientX - rect.left - dragStateRef.current.pointerOffsetX,
       blockWidth,
     );
-    const nextY = Math.max(24, event.clientY - rect.top - dragStateRef.current.pointerOffsetY);
+    const nextY = Math.max(
+      24,
+      event.clientY - rect.top - dragStateRef.current.pointerOffsetY,
+    );
 
     setBlocks((current) =>
       current.map((block) =>
@@ -458,6 +800,12 @@ export function NoteEditor({
           italic: !(block.italic ?? false),
         }));
         return;
+      case "toggle-bullet-list":
+        toggleSelectedLines(activeBlockId, BULLET_PREFIX);
+        return;
+      case "toggle-todo-list":
+        cycleTodoLines(activeBlockId);
+        return;
       case "align-right":
         updateBlock(activeBlockId, (block) => ({ ...block, align: "right" }));
         return;
@@ -515,25 +863,36 @@ export function NoteEditor({
 
   return (
     <div className="h-full bg-white">
-      <div className="min-h-[calc(100vh-160px)] w-full pr-0">
+      <div className="min-h-[calc(100vh-120px)] w-full">
         <div
           ref={pageRef}
           onClick={handlePageClick}
-          className="ml-0 mr-0 mt-4 min-h-[calc(100vh-176px)] overflow-hidden rounded-[10px] border border-[#e3e3e3] bg-white pb-[60vh] shadow-[0_1px_0_rgba(0,0,0,0.04)]"
+          className="mt-0 min-h-[calc(100vh-136px)] overflow-hidden border bg-white pb-[60vh] md:mt-4 md:rounded-[10px]"
+          style={{
+            borderColor: notebookTheme.editorBorder,
+            boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,
+          }}
         >
-          <div className="px-[48px] pt-6 text-right" dir="rtl">
-            <div className="inline-block min-w-[360px] max-w-[560px] border-b border-[#9b9b9b] pb-3 align-top">
+          <div className="px-4 pt-5 text-right md:px-[48px] md:pt-6" dir="rtl">
+            <div
+              className="inline-block min-w-[260px] max-w-[560px] border-b pb-3 align-top"
+              style={{ borderColor: notebookTheme.accent }}
+            >
               <h1 className="mb-2 text-[22px] font-normal text-[#111]">{title}</h1>
-              <div className="flex gap-8 text-[12px] text-[#6f6f6f]">
-                <span>{persianDateLabel}</span>
+              <div className="flex flex-row-reverse gap-8 text-[12px] text-[#6f6f6f]">
                 <span>{persianTimeLabel}</span>
+                <span>{persianDateLabel}</span>
               </div>
+            </div>
+
+            <div className="mt-3 text-left text-[11px] text-[#6d7c8e]" dir="ltr">
+              {statusMessage}
             </div>
           </div>
 
           <div
             ref={canvasRef}
-            className="freeform-canvas relative min-h-[calc(100vh-260px)] bg-white"
+            className="freeform-canvas relative min-h-[calc(100vh-240px)] bg-white"
           >
             <input
               value={title}
@@ -556,44 +915,44 @@ export function NoteEditor({
                   }}
                   className="group absolute"
                 >
-                <button
-                  type="button"
-                  onPointerDown={(event) => startDraggingBlock(event, block)}
-                  className="absolute -right-8 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100"
-                  aria-label="Move block"
-                >
-                  <GripVertical className="h-3.5 w-3.5" />
-                </button>
+                  <button
+                    type="button"
+                    onPointerDown={(event) => startDraggingBlock(event, block)}
+                    className="absolute -right-8 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100"
+                    aria-label="Move block"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </button>
 
-                <textarea
-                  ref={(element) => {
-                    blockRefs.current[block.id] = element;
-                  }}
-                  value={block.text}
-                  onChange={(event) => updateBlockText(block.id, event.target.value)}
-                  onFocus={() => setActiveBlockId(block.id)}
-                  onBlur={() => removeBlockIfEmpty(block.id)}
-                  onClick={(event) => event.stopPropagation()}
-                  style={{
-                    textAlign: block.align ?? "right",
-                    fontWeight: block.bold ? 700 : 400,
-                    fontStyle: block.italic ? "italic" : "normal",
-                  }}
-                  className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
-                  dir="rtl"
-                />
-              </div>
+                  <textarea
+                    ref={(element) => {
+                      blockRefs.current[block.id] = element;
+                    }}
+                    value={block.text}
+                    onChange={(event) => updateBlockText(block.id, event.target.value)}
+                    onKeyDown={(event) => handleBlockKeyDown(event, block)}
+                    onFocus={() => setActiveBlockId(block.id)}
+                    onBlur={() => removeBlockIfEmpty(block.id)}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      textAlign: block.align ?? "right",
+                      fontWeight: block.bold ? 700 : 400,
+                      fontStyle: block.italic ? "italic" : "normal",
+                    }}
+                    className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
+                    dir="rtl"
+                  />
+                </div>
               );
             })}
 
             {blocks.length === 0 ? (
-              <div className="px-[48px] py-8 text-right text-sm text-[#8b8b8b]">
+              <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">
                 Click anywhere on the page and start writing.
               </div>
             ) : null}
           </div>
         </div>
-
       </div>
     </div>
   );
