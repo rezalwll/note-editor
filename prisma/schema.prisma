@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  passwordHash       String   @map("password_hash")
+  mustChangePassword Boolean  @default(true) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Notebook {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  pages       Page[]
+
+  @@map("notebooks")
+}
+
+model Page {
+  id         String       @id @default(cuid())
+  notebookId String       @map("notebook_id")
+  title      String
+  bodyHtml   String       @db.Text @map("body_html")
+  bodyText   String       @db.Text @map("body_text")
+  archived   Boolean      @default(false)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  notebook   Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  tags       PageTag[]
+  attachments Attachment[]
+
+  @@index([notebookId, archived])
+  @@map("pages")
+}
+
+model PageTag {
+  pageId String @map("page_id")
+  value  String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@id([pageId, value])
+  @@index([value])
+  @@map("page_tags")
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  pageId      String   @map("page_id")
+  fileName    String   @map("file_name")
+  mimeType    String   @map("mime_type")
+  sizeBytes   Int      @map("size_bytes")
+  storageKey  String   @unique @map("storage_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@map("attachments")
+}
