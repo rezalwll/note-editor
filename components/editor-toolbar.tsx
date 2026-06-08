@@ -12,24 +12,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-type EditorCommand =
-  | "undo"
-  | "redo"
-  | "toggle-bold"
-  | "toggle-italic"
-  | "toggle-bullet-list"
-  | "toggle-todo-list"
-  | "align-right"
-  | "align-center"
-  | "align-justify";
-
-type ToolbarState = {
-  hasActiveBlock: boolean;
-  align: "right" | "center" | "justify";
-  bold: boolean;
-  italic: boolean;
-};
+import { dispatchEditorCommand, type ToolbarState } from "@/lib/editor-events";
 
 const defaultState: ToolbarState = {
   hasActiveBlock: false,
@@ -68,14 +51,6 @@ function ToolbarButton({
     >
       {children}
     </button>
-  );
-}
-
-function dispatchEditorCommand(command: EditorCommand) {
-  window.dispatchEvent(
-    new CustomEvent("note-editor-command", {
-      detail: { command },
-    }),
   );
 }
 

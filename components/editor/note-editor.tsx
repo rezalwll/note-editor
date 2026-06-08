@@ -3,6 +3,11 @@
 import { GripVertical } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
+import { useContextMenu } from "@/components/context-menu";
+import {
+  dispatchEditorCommand,
+  type EditorCommand,
+} from "@/lib/editor-events";
 import {
   enqueuePageUpsert,
   getLocalPage,
@@ -33,17 +38,6 @@ type NoteEditorProps = {
   initialUpdatedAt: string;
   attachments: Attachment[];
 };
-
-type EditorCommand =
-  | "undo"
-  | "redo"
-  | "toggle-bold"
-  | "toggle-italic"
-  | "toggle-bullet-list"
-  | "toggle-todo-list"
-  | "align-right"
-  | "align-center"
-  | "align-justify";
 
 type BlockSnapshot = Pick<FreeformBlock, "text" | "align" | "bold" | "italic">;
 
@@ -156,6 +150,7 @@ export function NoteEditor({
   initialUpdatedAt,
   attachments: _initialAttachments,
 }: NoteEditorProps) {
+  const { openMenu } = useContextMenu();
   const notebookTheme = getNotebookTheme(notebookId);
   const now = new Date();
   const dateParts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
@@ -184,6 +179,7 @@ export function NoteEditor({
   const [isSavingLocally, setIsSavingLocally] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -224,6 +220,7 @@ export function NoteEditor({
 
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
+  const selectedBlocks = blocks.filter((block) => selectedBlockIds.includes(block.id));
   const statusMessage = !isHydrated
     ? "Loading..."
     : isSavingLocally
@@ -475,29 +472,42 @@ export function NoteEditor({
 
     setBlocks((current) => [...current, block]);
     setActiveBlockId(block.id);
+    setSelectedBlockIds([block.id]);
   }
 
-  function handlePageClick(event: React.MouseEvent<HTMLDivElement>) {
+  function getCanvasCoordinates(
+    clientX: number,
+    clientY: number,
+    blockWidth = BLOCK_DEFAULT_WIDTH,
+  ) {
     if (!canvasRef.current || !pageRef.current) {
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-    if (target.closest("textarea") || target.closest("button")) {
-      return;
+      return null;
     }
 
     const pageRect = pageRef.current.getBoundingClientRect();
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const x = getCanvasBoundedX(
       canvasRect.width,
-      event.clientX - canvasRect.left - BLOCK_DEFAULT_WIDTH + BLOCK_RTL_CLICK_ANCHOR,
-      BLOCK_DEFAULT_WIDTH,
+      clientX - canvasRect.left - blockWidth + BLOCK_RTL_CLICK_ANCHOR,
+      blockWidth,
     );
     const canvasOffsetTop = canvasRect.top - pageRect.top;
-    const y = Math.max(24, event.clientY - pageRect.top - canvasOffsetTop);
+    const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
-    addBlockAt(x, y);
+    return { x, y };
+  }
+
+  function handlePageClick(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("textarea") || target.closest("button")) {
+      return;
+    }
+
+    const coordinates = getCanvasCoordinates(event.clientX, event.clientY);
+
+    if (coordinates) {
+      addBlockAt(coordinates.x, coordinates.y);
+    }
   }
 
   function updateBlock(
@@ -508,6 +518,30 @@ export function NoteEditor({
     setBlocks((current) =>
       current.map((block) => {
         if (block.id !== id) {
+          return block;
+        }
+
+        const next = updater(block);
+        if (
+          trackHistory &&
+          JSON.stringify(toSnapshot(block)) !== JSON.stringify(toSnapshot(next))
+        ) {
+          pushHistoryEntry(block);
+        }
+
+        return next;
+      }),
+    );
+  }
+
+  function updateBlocksByIds(
+    ids: string[],
+    updater: (block: FreeformBlock) => FreeformBlock,
+    trackHistory = true,
+  ) {
+    setBlocks((current) =>
+      current.map((block) => {
+        if (!ids.includes(block.id)) {
           return block;
         }
 
@@ -558,6 +592,35 @@ export function NoteEditor({
 
       return current.filter((block) => block.id !== id);
     });
+    setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
+  }
+
+  function deleteBlock(id: string) {
+    setBlocks((current) => current.filter((block) => block.id !== id));
+    setActiveBlockId((current) => (current === id ? null : current));
+    setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
+  }
+
+  function deleteBlocks(ids: string[]) {
+    setBlocks((current) => current.filter((block) => !ids.includes(block.id)));
+    setActiveBlockId((current) =>
+      current && ids.includes(current) ? null : current,
+    );
+    setSelectedBlockIds([]);
+  }
+
+  function toggleBlockSelection(blockId: string) {
+    setSelectedBlockIds((current) =>
+      current.includes(blockId)
+        ? current.filter((id) => id !== blockId)
+        : [...current, blockId],
+    );
+    setActiveBlockId(blockId);
+  }
+
+  function selectSingleBlock(blockId: string) {
+    setSelectedBlockIds([blockId]);
+    setActiveBlockId(blockId);
   }
 
   function handleBlockKeyDown(
@@ -776,46 +839,67 @@ export function NoteEditor({
   }
 
   const handleEditorCommand = useEffectEvent((command: EditorCommand) => {
-    if (!activeBlockId) {
+    const targetIds =
+      selectedBlockIds.length > 0
+        ? selectedBlockIds
+        : activeBlockId
+          ? [activeBlockId]
+          : [];
+
+    if (targetIds.length === 0) {
       return;
     }
 
-    const activeElement = blockRefs.current[activeBlockId];
+    const primaryBlockId = activeBlockId ?? targetIds[0];
+    const activeElement = primaryBlockId
+      ? blockRefs.current[primaryBlockId]
+      : null;
     activeElement?.focus();
 
     switch (command) {
       case "undo":
-        undoBlock(activeBlockId);
+        if (primaryBlockId) {
+          undoBlock(primaryBlockId);
+        }
         return;
       case "redo":
-        redoBlock(activeBlockId);
+        if (primaryBlockId) {
+          redoBlock(primaryBlockId);
+        }
         return;
       case "toggle-bold":
-        updateBlock(activeBlockId, (block) => ({
+        updateBlocksByIds(targetIds, (block) => ({
           ...block,
           bold: !(block.bold ?? false),
         }));
         return;
       case "toggle-italic":
-        updateBlock(activeBlockId, (block) => ({
+        updateBlocksByIds(targetIds, (block) => ({
           ...block,
           italic: !(block.italic ?? false),
         }));
         return;
       case "toggle-bullet-list":
-        toggleSelectedLines(activeBlockId, BULLET_PREFIX);
+        if (primaryBlockId) {
+          toggleSelectedLines(primaryBlockId, BULLET_PREFIX);
+        }
         return;
       case "toggle-todo-list":
-        cycleTodoLines(activeBlockId);
+        if (primaryBlockId) {
+          cycleTodoLines(primaryBlockId);
+        }
         return;
       case "align-right":
-        updateBlock(activeBlockId, (block) => ({ ...block, align: "right" }));
+        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "right" }));
         return;
       case "align-center":
-        updateBlock(activeBlockId, (block) => ({ ...block, align: "center" }));
+        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "center" }));
         return;
       case "align-justify":
-        updateBlock(activeBlockId, (block) => ({ ...block, align: "justify" }));
+        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "justify" }));
+        return;
+      case "delete-block":
+        deleteBlocks(targetIds);
         return;
     }
   });
@@ -838,10 +922,11 @@ export function NoteEditor({
           align: activeBlock?.align ?? "right",
           bold: activeBlock?.bold ?? false,
           italic: activeBlock?.italic ?? false,
+          selectionCount: selectedBlockIds.length,
         },
       }),
     );
-  }, [activeBlock]);
+  }, [activeBlock, selectedBlockIds.length]);
 
   function startDraggingBlock(
     event: React.PointerEvent<HTMLButtonElement>,
@@ -853,7 +938,7 @@ export function NoteEditor({
 
     event.preventDefault();
     event.stopPropagation();
-    setActiveBlockId(block.id);
+    selectSingleBlock(block.id);
 
     const rect = canvasRef.current.getBoundingClientRect();
     dragStateRef.current = {
@@ -897,6 +982,58 @@ export function NoteEditor({
           <div
             ref={canvasRef}
             className="freeform-canvas relative min-h-[calc(100vh-240px)] bg-white"
+            onContextMenu={(event) => {
+              const target = event.target as HTMLElement;
+
+              if (target.closest("textarea") || target.closest("button")) {
+                return;
+              }
+
+              const coordinates = getCanvasCoordinates(
+                event.clientX,
+                event.clientY,
+              );
+
+              if (!coordinates) {
+                return;
+              }
+
+              event.preventDefault();
+              openMenu(event, {
+                title:
+                  selectedBlockIds.length > 1
+                    ? `${selectedBlockIds.length} blocks selected`
+                    : "Editor",
+                items:
+                  selectedBlockIds.length > 1
+                    ? [
+                        {
+                          id: "new-block",
+                          label: "Add text block here",
+                          onSelect: () => addBlockAt(coordinates.x, coordinates.y),
+                        },
+                        { id: "separator-1", separator: true },
+                        {
+                          id: "delete-selected-blocks",
+                          label: "Delete selected blocks",
+                          danger: true,
+                          onSelect: () => deleteBlocks(selectedBlockIds),
+                        },
+                        {
+                          id: "clear-selection",
+                          label: "Clear selection",
+                          onSelect: () => setSelectedBlockIds([]),
+                        },
+                      ]
+                    : [
+                        {
+                          id: "new-block",
+                          label: "Add text block here",
+                          onSelect: () => addBlockAt(coordinates.x, coordinates.y),
+                        },
+                      ],
+              });
+            }}
           >
             <input
               value={title}
@@ -908,6 +1045,7 @@ export function NoteEditor({
 
             {blocks.map((block) => {
               const blockWidth = getBlockWidth(block.text);
+              const isSelected = selectedBlockIds.includes(block.id);
 
               return (
                 <div
@@ -917,7 +1055,7 @@ export function NoteEditor({
                     top: `${block.y}px`,
                     width: `${blockWidth}px`,
                   }}
-                  className="group absolute"
+                  className="group absolute rounded-md"
                 >
                   <button
                     type="button"
@@ -935,13 +1073,161 @@ export function NoteEditor({
                     value={block.text}
                     onChange={(event) => updateBlockText(block.id, event.target.value)}
                     onKeyDown={(event) => handleBlockKeyDown(event, block)}
-                    onFocus={() => setActiveBlockId(block.id)}
+                    onFocus={() => selectSingleBlock(block.id)}
                     onBlur={() => removeBlockIfEmpty(block.id)}
-                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => {
+                      if (event.ctrlKey || event.metaKey) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleBlockSelection(block.id);
+                      }
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+
+                      if (event.ctrlKey || event.metaKey) {
+                        return;
+                      }
+
+                      selectSingleBlock(block.id);
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!selectedBlockIds.includes(block.id)) {
+                        selectSingleBlock(block.id);
+                      }
+
+                      const selectedIds =
+                        selectedBlockIds.includes(block.id) &&
+                        selectedBlockIds.length > 1
+                          ? selectedBlockIds
+                          : [block.id];
+
+                      openMenu(event, {
+                        title:
+                          selectedIds.length > 1
+                            ? `${selectedIds.length} blocks selected`
+                            : "Text block",
+                        items:
+                          selectedIds.length > 1
+                            ? [
+                                {
+                                  id: "align-right",
+                                  label: "Align right",
+                                  onSelect: () => dispatchEditorCommand("align-right"),
+                                },
+                                {
+                                  id: "align-center",
+                                  label: "Align center",
+                                  onSelect: () => dispatchEditorCommand("align-center"),
+                                },
+                                {
+                                  id: "align-justify",
+                                  label: "Justify",
+                                  onSelect: () => dispatchEditorCommand("align-justify"),
+                                },
+                                { id: "separator-1", separator: true },
+                                {
+                                  id: "italic",
+                                  label: "Toggle italic on selected",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("toggle-italic"),
+                                },
+                                {
+                                  id: "bold",
+                                  label: "Toggle bold on selected",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("toggle-bold"),
+                                },
+                                { id: "separator-2", separator: true },
+                                {
+                                  id: "delete-selected",
+                                  label: "Delete selected blocks",
+                                  danger: true,
+                                  onSelect: () =>
+                                    dispatchEditorCommand("delete-block"),
+                                },
+                                {
+                                  id: "clear-selection",
+                                  label: "Clear selection",
+                                  onSelect: () => setSelectedBlockIds([]),
+                                },
+                              ]
+                            : [
+                                {
+                                  id: "undo",
+                                  label: "Undo",
+                                  onSelect: () => dispatchEditorCommand("undo"),
+                                },
+                                {
+                                  id: "redo",
+                                  label: "Redo",
+                                  onSelect: () => dispatchEditorCommand("redo"),
+                                },
+                                { id: "separator-1", separator: true },
+                                {
+                                  id: "align-right",
+                                  label: "Align right",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("align-right"),
+                                },
+                                {
+                                  id: "align-center",
+                                  label: "Align center",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("align-center"),
+                                },
+                                {
+                                  id: "align-justify",
+                                  label: "Justify",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("align-justify"),
+                                },
+                                { id: "separator-2", separator: true },
+                                {
+                                  id: "italic",
+                                  label: block.italic ? "Remove italic" : "Italic",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("toggle-italic"),
+                                },
+                                {
+                                  id: "bold",
+                                  label: block.bold ? "Remove bold" : "Bold",
+                                  onSelect: () => dispatchEditorCommand("toggle-bold"),
+                                },
+                                { id: "separator-3", separator: true },
+                                {
+                                  id: "bullet-list",
+                                  label: "Toggle bullet list",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("toggle-bullet-list"),
+                                },
+                                {
+                                  id: "todo-list",
+                                  label: "Toggle todo list",
+                                  onSelect: () =>
+                                    dispatchEditorCommand("toggle-todo-list"),
+                                },
+                                { id: "separator-4", separator: true },
+                                {
+                                  id: "delete-block",
+                                  label: "Delete block",
+                                  danger: true,
+                                  onSelect: () =>
+                                    dispatchEditorCommand("delete-block"),
+                                },
+                              ],
+                      });
+                    }}
                     style={{
                       textAlign: block.align ?? "right",
                       fontWeight: block.bold ? 700 : 400,
                       fontStyle: block.italic ? "italic" : "normal",
+                      boxShadow: isSelected
+                        ? `0 0 0 2px ${notebookTheme.accent}`
+                        : "none",
+                      borderRadius: "6px",
                     }}
                     className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
                     dir="rtl"

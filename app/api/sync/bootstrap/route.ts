@@ -25,6 +25,7 @@ export async function GET() {
     fetchedAt: new Date().toISOString(),
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
+      groupId: notebook.groupId,
       name: notebook.name,
       description: notebook.description,
       archived: notebook.archived,

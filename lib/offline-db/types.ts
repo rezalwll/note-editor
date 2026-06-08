@@ -2,6 +2,7 @@ export type SyncStatus = "synced" | "pending" | "failed" | "conflict";
 
 export type LocalNotebook = {
   id: string;
+  groupId?: string | null;
   name: string;
   description?: string | null;
   archived: boolean;

@@ -22,6 +22,8 @@ import { formatDate } from "@/lib/utils";
 type MobileNotebook = {
   id: string;
   name: string;
+  groupId: string | null;
+  groupName: string | null;
   pages: Array<{
     id: string;
     title: string;
@@ -29,15 +31,22 @@ type MobileNotebook = {
   }>;
 };
 
+type MobileGroup = {
+  id: string;
+  name: string;
+  notebookCount: number;
+};
+
 type MobileShellProps = {
   notebooks: MobileNotebook[];
+  groups: MobileGroup[];
 };
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
 };
 
-export function MobileShell({ notebooks }: MobileShellProps) {
+export function MobileShell({ notebooks, groups }: MobileShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [sectionsOpen, setSectionsOpen] = useState(false);
@@ -125,6 +134,19 @@ export function MobileShell({ notebooks }: MobileShellProps) {
     setPagesOpen(false);
     setProfileOpen(false);
   }
+
+  const groupedNotebooks = [
+    ...groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      notebooks: notebooks.filter((notebook) => notebook.groupId === group.id),
+    })),
+    {
+      id: "ungrouped",
+      name: "Ungrouped",
+      notebooks: notebooks.filter((notebook) => notebook.groupId === null),
+    },
+  ].filter((group) => group.notebooks.length > 0);
 
   return (
     <div className="xl:hidden">
@@ -222,25 +244,34 @@ export function MobileShell({ notebooks }: MobileShellProps) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid gap-2 p-4">
-              {notebooks.map((notebook) => {
-                const theme = getNotebookTheme(notebook.id);
-                return (
-                  <Link
-                    key={notebook.id}
-                    href={`/notebooks/${notebook.id}`}
-                    onClick={closeAll}
-                    className="rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                    style={{
-                      backgroundColor: theme.accentSoft,
-                      borderColor: theme.editorBorder,
-                      color: theme.sidebarText,
-                    }}
-                  >
-                    {notebook.name}
-                  </Link>
-                );
-              })}
+            <div className="grid gap-4 p-4">
+              {groupedNotebooks.map((group) => (
+                <div key={group.id}>
+                  <div className="mb-2 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6b7f93]">
+                    {group.name}
+                  </div>
+                  <div className="grid gap-2">
+                    {group.notebooks.map((notebook) => {
+                      const theme = getNotebookTheme(notebook.id);
+                      return (
+                        <Link
+                          key={notebook.id}
+                          href={`/notebooks/${notebook.id}`}
+                          onClick={closeAll}
+                          className="rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                          style={{
+                            backgroundColor: theme.accentSoft,
+                            borderColor: theme.editorBorder,
+                            color: theme.sidebarText,
+                          }}
+                        >
+                          {notebook.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

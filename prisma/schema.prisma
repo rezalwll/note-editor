@@ -19,14 +19,27 @@ model User {
 
 model Notebook {
   id          String   @id @default(cuid())
+  groupId     String?  @map("group_id")
   name        String
   description String?
   archived    Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  group       NotebookGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   pages       Page[]
 
+  @@index([groupId, archived])
   @@map("notebooks")
+}
+
+model NotebookGroup {
+  id        String     @id @default(cuid())
+  name      String
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  notebooks Notebook[]
+
+  @@map("notebook_groups")
 }
 
 model Page {

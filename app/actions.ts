@@ -35,6 +35,10 @@ const notebookSchema = z.object({
   description: z.string().trim().max(180).optional(),
 });
 
+const notebookGroupSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
 const pageSchema = z.object({
   notebookId: z.string().cuid(),
   title: z.string().trim().min(1).max(160),
@@ -154,24 +158,131 @@ export async function createNotebookAction(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function createNotebookInlineAction(name: string) {
+export async function createNotebookInlineAction(
+  name: string,
+  groupId?: string | null,
+) {
   await requireUser();
 
-  const parsed = notebookSchema.safeParse({
-    name,
-    description: undefined,
-  });
-
-  if (!parsed.success) {
-    return { error: "Section name is required." };
-  }
-
   const notebook = await prisma.notebook.create({
-    data: parsed.data,
+    data: {
+      name: name.trim(),
+      description: undefined,
+      groupId: groupId ?? null,
+    },
   });
 
   revalidatePath("/");
   return { id: notebook.id };
+}
+
+export async function createNotebookGroupInlineAction(name: string) {
+  await requireUser();
+
+  const parsed = notebookGroupSchema.safeParse({ name });
+
+  if (!parsed.success) {
+    return { error: "Category name is required." };
+  }
+
+  const group = await prisma.notebookGroup.create({
+    data: {
+      name: parsed.data.name,
+    },
+  });
+
+  revalidatePath("/");
+  return { id: group.id };
+}
+
+export async function renameNotebookGroupInlineAction(id: string, name: string) {
+  await requireUser();
+
+  const groupId = z.string().cuid().safeParse(id);
+  const groupName = z.string().trim().max(80).safeParse(name);
+
+  if (!groupId.success || !groupName.success) {
+    return { error: "Invalid category name." };
+  }
+
+  await prisma.notebookGroup.update({
+    where: { id: groupId.data },
+    data: { name: groupName.data || "Untitled Category" },
+  });
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function deleteNotebookGroupInlineAction(id: string) {
+  await requireUser();
+
+  const groupId = z.string().cuid().safeParse(id);
+
+  if (!groupId.success) {
+    return { error: "Invalid category." };
+  }
+
+  await prisma.$transaction([
+    prisma.notebook.updateMany({
+      where: { groupId: groupId.data },
+      data: { groupId: null },
+    }),
+    prisma.notebookGroup.delete({
+      where: { id: groupId.data },
+    }),
+  ]);
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function assignNotebookGroupInlineAction(
+  notebookIds: string[],
+  groupId: string | null,
+) {
+  await requireUser();
+
+  const parsedNotebookIds = z.array(z.string().cuid()).safeParse(notebookIds);
+  const parsedGroupId = groupId === null ? { success: true, data: null } : z.string().cuid().safeParse(groupId);
+
+  if (!parsedNotebookIds.success || !parsedGroupId.success) {
+    return { error: "Invalid category assignment." };
+  }
+
+  await prisma.notebook.updateMany({
+    where: {
+      id: {
+        in: parsedNotebookIds.data,
+      },
+    },
+    data: {
+      groupId: parsedGroupId.data,
+    },
+  });
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function renameNotebookInlineAction(id: string, name: string) {
+  await requireUser();
+
+  const notebookId = z.string().cuid().safeParse(id);
+  const notebookName = z.string().trim().max(80).safeParse(name);
+
+  if (!notebookId.success || !notebookName.success) {
+    return { error: "Invalid section name." };
+  }
+
+  await prisma.notebook.update({
+    where: { id: notebookId.data },
+    data: { name: notebookName.data },
+  });
+
+  revalidatePath("/");
+  revalidatePath(`/notebooks/${notebookId.data}`);
+  return { success: true };
 }
 
 export async function updateNotebookAction(formData: FormData) {
@@ -211,6 +322,23 @@ export async function archiveNotebookAction(formData: FormData) {
 
   revalidatePath("/");
   redirect("/");
+}
+
+export async function archiveNotebookInlineAction(id: string) {
+  await requireUser();
+  const notebookId = z.string().cuid().safeParse(id);
+
+  if (!notebookId.success) {
+    return { error: "Invalid section." };
+  }
+
+  await prisma.notebook.update({
+    where: { id: notebookId.data },
+    data: { archived: true },
+  });
+
+  revalidatePath("/");
+  return { success: true };
 }
 
 export async function createPageAction(formData: FormData) {
@@ -280,6 +408,26 @@ export async function archivePageAction(formData: FormData) {
 
   revalidatePath(`/notebooks/${page.notebookId}`);
   redirect(`/notebooks/${page.notebookId}`);
+}
+
+export async function archivePageInlineAction(pageId: string) {
+  await requireUser();
+  const parsedPageId = z.string().cuid().safeParse(pageId);
+
+  if (!parsedPageId.success) {
+    return { error: "Invalid page." };
+  }
+
+  const page = await prisma.page.update({
+    where: { id: parsedPageId.data },
+    data: { archived: true },
+    select: { notebookId: true },
+  });
+
+  revalidatePath(`/notebooks/${page.notebookId}`);
+  revalidatePath(`/pages/${parsedPageId.data}`);
+  revalidatePath("/");
+  return { success: true, notebookId: page.notebookId };
 }
 
 export async function updateTagsAction(formData: FormData) {

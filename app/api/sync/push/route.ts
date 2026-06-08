@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 
 const notebookPayloadSchema = z.object({
   id: z.string(),
+  groupId: z.string().nullable().optional(),
   name: z.string(),
   description: z.string().nullable().optional(),
   archived: z.boolean(),
@@ -51,6 +52,7 @@ const pushSchema = z.object({
 
 function toNotebookResponse(notebook: {
   id: string;
+  groupId: string | null;
   name: string;
   description: string | null;
   archived: boolean;
@@ -58,6 +60,7 @@ function toNotebookResponse(notebook: {
 }): LocalNotebook {
   return {
     id: notebook.id,
+    groupId: notebook.groupId,
     name: notebook.name,
     description: notebook.description,
     archived: notebook.archived,
@@ -132,6 +135,7 @@ export async function POST(request: Request) {
         ? await prisma.notebook.update({
             where: { id: payload.id },
             data: {
+              groupId: payload.groupId ?? null,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,
@@ -140,6 +144,7 @@ export async function POST(request: Request) {
         : await prisma.notebook.create({
             data: {
               id: payload.id,
+              groupId: payload.groupId ?? null,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,
