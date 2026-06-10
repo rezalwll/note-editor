@@ -16,6 +16,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   archiveNotebookInlineAction,
   assignNotebookGroupInlineAction,
+  createPageInlineAction,
   createNotebookGroupInlineAction,
   createNotebookInlineAction,
   deleteNotebookGroupInlineAction,
@@ -45,6 +46,36 @@ type SectionTabsProps = {
 };
 
 const UNGROUPED_KEY = "__ungrouped__";
+const GROUP_PILL_PALETTE = [
+  {
+    bg: "#9FA1FF",
+    border: "#858BFF",
+    text: "#ffffff",
+    badgeBg: "rgba(255,255,255,0.22)",
+    badgeText: "#ffffff",
+  },
+  {
+    bg: "#B5BAFF",
+    border: "#9DA6FF",
+    text: "#2f3864",
+    badgeBg: "rgba(255,255,255,0.52)",
+    badgeText: "#2f3864",
+  },
+  {
+    bg: "#AEE2FF",
+    border: "#8FD4FF",
+    text: "#24465B",
+    badgeBg: "rgba(255,255,255,0.56)",
+    badgeText: "#24465B",
+  },
+  {
+    bg: "#D9F9DF",
+    border: "#BAEEC4",
+    text: "#2E5440",
+    badgeBg: "rgba(255,255,255,0.6)",
+    badgeText: "#2E5440",
+  },
+] as const;
 
 export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const pathname = usePathname();
@@ -177,6 +208,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     [activeGroupKey, items],
   );
 
+  const activeGroupNotebookSignature = useMemo(
+    () =>
+      activeGroupNotebooks
+        .map((notebook) => `${notebook.id}:${notebook.name}:${notebook.groupId ?? ""}`)
+        .join("|"),
+    [activeGroupNotebooks],
+  );
+
   useLayoutEffect(() => {
     const container = measureRef.current;
 
@@ -189,7 +228,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     );
 
     if (notebookElements.length === 0) {
-      setOverflowNotebookIds([]);
+      setOverflowNotebookIds((current) => (current.length === 0 ? current : []));
       return;
     }
 
@@ -223,7 +262,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     setOverflowNotebookIds((current) =>
       current.join(",") === overflowIds.join(",") ? current : overflowIds,
     );
-  }, [activeGroupNotebooks, editingNotebookId]);
+  }, [activeGroupNotebookSignature, editingNotebookId]);
 
   const visibleNotebooks = useMemo(() => {
     const hiddenIds = new Set(overflowNotebookIds);
@@ -253,6 +292,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     ];
   }, [groupItems, items]);
 
+  function getGroupPillTheme(index: number) {
+    return GROUP_PILL_PALETTE[index % GROUP_PILL_PALETTE.length];
+  }
+
   function beginCreateNotebook() {
     if (isPending) {
       return;
@@ -279,6 +322,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         setEditingNotebookId(result.id);
         setDraftName("");
         setSelectedNotebookIds([result.id]);
+      }
+    });
+  }
+
+  function beginCreatePage() {
+    if (isPending || !activeNotebookId) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await createPageInlineAction(activeNotebookId, "Untitled Page");
+
+      if ("id" in result && result.id) {
+        router.push(`/pages/${result.id}`);
+        router.refresh();
       }
     });
   }
@@ -460,7 +518,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   return (
-    <div className="relative border-b border-[#d9e2ec] bg-white/95 px-3 pb-2 pt-2 backdrop-blur">
+    <div className="relative border-b border-[var(--border-soft)] bg-white/95 px-3 pb-2 pt-2 backdrop-blur">
       <div
         ref={measureRef}
         className="invisible absolute left-0 right-0 top-0 -z-10 flex flex-wrap items-end gap-1 px-3 pt-2"
@@ -488,9 +546,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {groupTabs.map((group) => {
+        {groupTabs.map((group, index) => {
           const isActive = activeGroupKey === group.id;
           const isEditing = editingGroupId === group.id;
+          const pillTheme = getGroupPillTheme(index);
 
           return (
             <div
@@ -524,12 +583,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   ],
                 });
               }}
-              className={cn(
-                "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition",
-                isActive
-                  ? "border-[#0d94c2] bg-[#1098c5] text-white"
-                  : "border-[#cfd9e3] bg-[#f7fafc] text-[#41576b] hover:bg-white",
-              )}
+              className="inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition hover:-translate-y-px"
+              style={{
+                borderColor: pillTheme.border,
+                backgroundColor: pillTheme.bg,
+                color: pillTheme.text,
+                boxShadow: isActive
+                  ? `0 0 0 2px rgba(255,255,255,0.65), 0 10px 26px ${pillTheme.border}55`
+                  : `0 6px 18px ${pillTheme.border}33`,
+                opacity: isActive ? 1 : 0.92,
+              }}
             >
               {isEditing ? (
                 <input
@@ -550,8 +613,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   }}
                   className="w-24 border-none bg-transparent text-xs outline-none"
                   style={{
-                    color: isActive ? "#fff" : "#24384c",
-                    caretColor: isActive ? "#fff" : "#24384c",
+                    color: pillTheme.text,
+                    caretColor: pillTheme.text,
                   }}
                 />
               ) : (
@@ -561,16 +624,15 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   className="inline-flex items-center gap-2"
                 >
                   <span>{group.name}</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px]",
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-[#e3ebf3] text-[#53697d]",
-                    )}
-                  >
-                    {group.notebookCount}
-                  </span>
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[10px]"
+                      style={{
+                        backgroundColor: pillTheme.badgeBg,
+                        color: pillTheme.badgeText,
+                      }}
+                    >
+                      {group.notebookCount}
+                    </span>
                 </button>
               )}
             </div>
@@ -578,7 +640,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         })}
 
         {editingGroupId === "__new__" ? (
-          <div className="inline-flex h-8 items-center rounded-full border border-[#cfd9e3] bg-white px-3 text-xs">
+          <div className="inline-flex h-8 items-center rounded-full border border-[var(--border-soft)] bg-white px-3 text-xs">
             <input
               ref={groupInputRef}
               value={draftGroupName}
@@ -595,14 +657,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   cancelGroupEdit();
                 }
               }}
-              className="w-24 border-none bg-transparent text-xs text-[#24384c] outline-none"
+              className="w-24 border-none bg-transparent text-xs text-[var(--text-strong)] outline-none"
             />
           </div>
         ) : (
           <button
             type="button"
             onClick={beginCreateGroup}
-            className="inline-flex h-8 items-center gap-2 rounded-full border border-dashed border-[#bdd0df] bg-[#f8fbfe] px-3 text-xs text-[#436179] transition hover:bg-white"
+            className="inline-flex h-8 items-center gap-2 rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)] transition hover:brightness-[1.03]"
           >
             <FolderPlus className="h-3.5 w-3.5" />
             New category
@@ -647,6 +709,19 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           });
         }}
       >
+        {activeNotebookId ? (
+          <button
+            type="button"
+            onClick={beginCreatePage}
+            disabled={isPending}
+            className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_20px_rgba(159,161,255,0.18)] transition hover:brightness-[1.03] disabled:cursor-wait disabled:opacity-60"
+            title="Add page"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Page
+          </button>
+        ) : null}
+
         {visibleNotebooks.map((notebook) => {
           const theme = getNotebookTheme(notebook.id);
           const isActive = activeNotebookId === notebook.id;
@@ -782,15 +857,15 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             <button
               type="button"
               onClick={() => setIsOverflowOpen((current) => !current)}
-              className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[#cfd9e3] bg-[#f8fbfe] px-3 text-xs text-[#3d556d] transition hover:bg-white"
+              className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[var(--border-soft)] bg-[var(--bg-softer)] px-3 text-xs text-[var(--text-main)] transition hover:bg-white"
             >
               More
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
 
             {isOverflowOpen ? (
-              <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-2xl border border-[#d6dee8] bg-white p-2 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
-                <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b8b9a]">
+              <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-2xl border border-[var(--border-soft)] bg-white p-2 shadow-[var(--shadow-soft)]">
+                <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
                   Hidden sections
                 </div>
                 <div className="grid gap-1">
@@ -803,7 +878,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                         setManualGroupKey(notebook.groupId ?? UNGROUPED_KEY);
                         setIsOverflowOpen(false);
                       }}
-                      className="rounded-xl px-3 py-2 text-xs text-[#24384c] transition hover:bg-[#f4f8fc]"
+                      className="rounded-xl px-3 py-2 text-xs text-[var(--text-strong)] transition hover:bg-[var(--bg-softer)]"
                     >
                       {notebook.name || "Untitled Section"}
                     </Link>

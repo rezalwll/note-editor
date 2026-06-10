@@ -149,18 +149,18 @@ function ContextMenuOverlay({
     <div className="pointer-events-none fixed inset-0 z-[200]">
       <div
         ref={menuRef}
-        className="pointer-events-auto fixed min-w-[220px] rounded-2xl border border-[#d6dee8] bg-white/98 p-1.5 shadow-[0_18px_60px_rgba(15,23,42,0.18)] backdrop-blur"
+        className="pointer-events-auto fixed min-w-[220px] rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
         style={{ left, top }}
       >
         {menu.title ? (
-          <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7b8b9a]">
+          <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
             {menu.title}
           </div>
         ) : null}
 
         {menu.items.map((item) =>
           isSeparator(item) ? (
-            <div key={item.id} className="my-1 h-px bg-[#e2e8f0]" />
+            <div key={item.id} className="my-1 h-px bg-[var(--bg-soft)]" />
           ) : (
             <button
               key={item.id}
@@ -180,7 +180,7 @@ function ContextMenuOverlay({
                   ? "cursor-not-allowed text-[#a3afbb]"
                   : item.danger
                     ? "text-[#b42318] hover:bg-[#fff1f1]"
-                    : "text-[#24384c] hover:bg-[#f4f8fc]",
+                    : "text-[var(--text-strong)] hover:bg-[var(--bg-softer)]",
               ].join(" ")}
             >
               <span>{item.label}</span>

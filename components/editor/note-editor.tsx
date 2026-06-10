@@ -50,25 +50,10 @@ const BLOCK_RTL_CLICK_ANCHOR = 12;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
+let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 function createId() {
   return `block-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function toStatusLabel(syncStatus: SyncStatus, isOnline: boolean) {
-  if (syncStatus === "conflict") {
-    return "Conflict";
-  }
-
-  if (syncStatus === "failed") {
-    return "Sync failed";
-  }
-
-  if (syncStatus === "pending") {
-    return isOnline ? "Syncing" : "Saved locally";
-  }
-
-  return isOnline ? "Synced" : "Offline";
 }
 
 function getBlockWidth(text: string) {
@@ -83,6 +68,35 @@ function getBlockWidth(text: string) {
   return Math.min(
     BLOCK_MAX_WIDTH,
     Math.max(BLOCK_MIN_WIDTH, longestLineLength * 11 + 56),
+  );
+}
+
+function measureBlockWidth(text: string) {
+  if (typeof document === "undefined") {
+    return getBlockWidth(text);
+  }
+
+  if (!textMeasureContext) {
+    const canvas = document.createElement("canvas");
+    textMeasureContext = canvas.getContext("2d");
+  }
+
+  if (!textMeasureContext) {
+    return getBlockWidth(text);
+  }
+
+  textMeasureContext.font = "400 15px Segoe UI, Tahoma, Geneva, Verdana, sans-serif";
+  const longestLineWidth = text
+    .split("\n")
+    .reduce((max, line) => Math.max(max, textMeasureContext!.measureText(line || " ").width), 0);
+
+  if (longestLineWidth === 0) {
+    return BLOCK_DEFAULT_WIDTH;
+  }
+
+  return Math.min(
+    BLOCK_MAX_WIDTH,
+    Math.max(BLOCK_MIN_WIDTH, Math.ceil(longestLineWidth) + 40),
   );
 }
 
@@ -221,13 +235,6 @@ export function NoteEditor({
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
   const selectedBlocks = blocks.filter((block) => selectedBlockIds.includes(block.id));
-  const statusMessage = !isHydrated
-    ? "Loading..."
-    : isSavingLocally
-      ? "Saving locally..."
-      : toStatusLabel(syncStatus, isOnline);
-  const shouldShowStatus =
-    !isHydrated || isSavingLocally || syncStatus !== "synced" || !isOnline;
 
   function getCanvasBoundedX(
     canvasWidth: number,
@@ -560,8 +567,8 @@ export function NoteEditor({
 
   function updateBlockText(id: string, text: string) {
     updateBlock(id, (block) => {
-      const previousWidth = getBlockWidth(block.text);
-      const nextWidth = getBlockWidth(text);
+      const previousWidth = measureBlockWidth(block.text);
+      const nextWidth = measureBlockWidth(text);
       const widthDelta = nextWidth - previousWidth;
       const canvasWidth = canvasRef.current?.getBoundingClientRect().width ?? BLOCK_MAX_WIDTH;
       const nextX = getCanvasBoundedX(
@@ -972,11 +979,6 @@ export function NoteEditor({
               </div>
             </div>
 
-            {shouldShowStatus ? (
-              <div className="mt-3 text-left text-[11px] text-[#6d7c8e]" dir="ltr">
-                {statusMessage}
-              </div>
-            ) : null}
           </div>
 
           <div
@@ -1044,7 +1046,7 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
-              const blockWidth = getBlockWidth(block.text);
+              const blockWidth = measureBlockWidth(block.text);
               const isSelected = selectedBlockIds.includes(block.id);
 
               return (

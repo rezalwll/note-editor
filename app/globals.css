@@ -2,6 +2,22 @@
 
 :root {
   color-scheme: light;
+  --color-lavender: #9fa1ff;
+  --color-periwinkle: #b5baff;
+  --color-sky: #aee2ff;
+  --color-mint: #d9f9df;
+  --bg-app: #f7f7ff;
+  --bg-shell: #f4f6ff;
+  --bg-panel: rgba(255, 255, 255, 0.92);
+  --bg-soft: #eef1ff;
+  --bg-softer: #f7fbff;
+  --bg-mint: #f1fcf4;
+  --border-soft: #d8ddff;
+  --border-strong: #b5baff;
+  --text-strong: #2d3561;
+  --text-main: #3d4b73;
+  --text-muted: #7080a3;
+  --shadow-soft: 0 18px 60px rgba(159, 161, 255, 0.16);
 }
 
 * {
@@ -10,15 +26,15 @@
 
 html {
   min-height: 100%;
-  background: #f6f6f6;
+  background: var(--bg-app);
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  color: #1c1917;
+  color: var(--text-strong);
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f6f6f6;
+  background: var(--bg-app);
 }
 
 a {
@@ -39,5 +55,5 @@ label[for] {
 }
 
 .freeform-note::placeholder {
-  color: #9a9a9a;
+  color: #93a0bd;
 }

@@ -41,12 +41,12 @@ function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-9 w-9 items-center justify-center rounded-lg border text-[#1299c8] shadow-[0_2px_8px_rgba(15,23,42,0.08)] transition",
+        "inline-flex h-9 w-9 items-center justify-center rounded-xl border text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)] transition",
         disabled
-          ? "cursor-not-allowed border-[#dbe3ec] bg-[#f7f9fc] text-[#9fb7c2] shadow-none"
+          ? "cursor-not-allowed border-white/35 bg-white/45 text-[#8e97bd] shadow-none"
           : active
-            ? "border-[#1098c5] bg-[#1098c5] text-white"
-            : "border-[#d6dee8] bg-white hover:bg-[#f7fbff]",
+            ? "border-[#8f97ff] bg-[linear-gradient(135deg,#9FA1FF_0%,#B5BAFF_100%)] text-white"
+            : "border-white/60 bg-white/82 hover:bg-white",
       ].join(" ")}
     >
       {children}
@@ -73,7 +73,7 @@ export function EditorToolbar() {
   }, []);
 
   return (
-    <div className="flex items-center gap-2 rounded-2xl bg-[#dde6ef] px-2.5 py-2">
+    <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
       <ToolbarButton
         label="Undo"
         disabled={!toolbarState.hasActiveBlock}
@@ -89,7 +89,7 @@ export function EditorToolbar() {
         <Redo2 className="h-4 w-4" />
       </ToolbarButton>
 
-      <div className="mx-1 h-7 w-px bg-[#c9d5e1]" />
+      <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
         label="Align right"
@@ -116,7 +116,7 @@ export function EditorToolbar() {
         <AlignJustify className="h-4 w-4" />
       </ToolbarButton>
 
-      <div className="mx-1 h-7 w-px bg-[#c9d5e1]" />
+      <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
         label="Italic"
@@ -135,7 +135,7 @@ export function EditorToolbar() {
         <Bold className="h-4 w-4" />
       </ToolbarButton>
 
-      <div className="mx-1 h-7 w-px bg-[#c9d5e1]" />
+      <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
         label="Bullet list"

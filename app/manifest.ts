@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Offline-ready private notebook for personal notes and study pages.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f6f6f6",
-    theme_color: "#e8edf5",
+    background_color: "#f7f7ff",
+    theme_color: "#b5baff",
     icons: [
       {
         src: "/brand/notava-icon-192.png",

@@ -25,9 +25,9 @@ type PagesSidebarProps = {
 };
 
 export function PagesSidebar({ notebooks }: PagesSidebarProps) {
-  const sidebarTopOffset = "111px";
-  const sidebarHeight = "calc(100vh - 111px)";
-  const sidebarListHeight = "calc(100vh - 154px)";
+  const sidebarTopOffset = "185px";
+  const sidebarHeight = "calc(100vh - 150px)";
+  const sidebarListHeight = "calc(100vh - 198px)";
   const pathname = usePathname();
   const router = useRouter();
   const { openMenu } = useContextMenu();
@@ -214,7 +214,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         }}
       >
         <div
-          className="border-b px-3 py-2 text-right"
+          className="flex items-center justify-between border-b px-3 py-2"
           style={{
             borderColor: activeTheme?.sidebarBorder,
             backgroundColor: activeTheme?.sidebarHeaderBg,
@@ -223,11 +223,23 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
           <button
             type="button"
             onClick={beginCreate}
-            className="inline-flex items-center gap-2 text-[13px]"
-            style={{ color: activeTheme?.sidebarText }}
+            className="inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[13px] font-medium shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition hover:brightness-[1.03]"
+            style={{
+              color: activeTheme?.sidebarText,
+              borderColor: activeTheme?.sidebarBorder,
+              backgroundColor: "rgba(255,255,255,0.82)",
+            }}
           >
             <CirclePlus className="h-4 w-4" />
             Add Page
+          </button>
+
+          <button
+            type="button"
+            className="text-sm font-semibold"
+            style={{ color: activeTheme?.sidebarText }}
+          >
+            {activeNotebook.name}
           </button>
         </div>
 
@@ -347,8 +359,10 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             );
           })}
           {activeNotebook.pages.length === 0 ? (
-            <div className="px-3 py-4 text-right text-xs text-stone-500">
-              No pages yet.
+            <div className="px-3 py-5 text-right">
+              <div className="text-xs" style={{ color: activeTheme?.sidebarMuted }}>
+                No pages yet.
+              </div>
             </div>
           ) : null}
         </div>
