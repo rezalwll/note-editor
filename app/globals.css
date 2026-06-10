@@ -26,6 +26,14 @@ a {
   text-decoration: none;
 }
 
+button:not(:disabled),
+a[href],
+[role="button"],
+summary,
+label[for] {
+  cursor: pointer;
+}
+
 .freeform-canvas {
   cursor: text;
 }

@@ -233,7 +233,7 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
       </div>
 
       {sectionsOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={closeAll}>
+        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
           <div
             className="absolute inset-x-0 top-0 max-h-[72vh] overflow-hidden rounded-b-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
             onClick={(event) => event.stopPropagation()}
@@ -278,7 +278,7 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
       ) : null}
 
       {pagesOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={closeAll}>
+        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
           <div
             className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-hidden rounded-t-[28px] shadow-[0_-24px_80px_rgba(15,23,42,0.22)]"
             style={{ backgroundColor: activeTheme.sidebarBg }}
@@ -360,7 +360,7 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
       ) : null}
 
       {profileOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={closeAll}>
+        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
           <div
             className="absolute right-3 top-16 w-[260px] rounded-3xl border border-[#d9e1eb] bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
             onClick={(event) => event.stopPropagation()}
