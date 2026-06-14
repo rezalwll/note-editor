@@ -287,7 +287,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       ...grouped,
       {
         id: UNGROUPED_KEY,
-        name: "Ungrouped",
+        name: "بدون دسته",
         notebookCount: ungroupedCount,
       },
     ];
@@ -333,7 +333,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     }
 
     startTransition(async () => {
-      const result = await createPageInlineAction(activeNotebookId, "Untitled Page");
+      const result = await createPageInlineAction(activeNotebookId, "صفحه بدون عنوان");
 
       if ("id" in result && result.id) {
         router.push(`/pages/${result.id}`);
@@ -386,7 +386,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     }
 
     const targetNotebookId = editingNotebookId;
-    const nextName = draftName.trim() || "Untitled Section";
+    const nextName = draftName.trim() || "دفتر بدون عنوان";
 
     setEditingNotebookId(null);
     setDraftName("");
@@ -408,7 +408,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function submitGroupRename() {
-    const nextName = draftGroupName.trim() || "Untitled Category";
+    const nextName = draftGroupName.trim() || "دسته بدون عنوان";
 
     if (editingGroupId === "__new__") {
       setEditingGroupId(null);
@@ -537,7 +537,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 color: theme.tabText,
               }}
             >
-              {notebook.name || "Untitled Section"}
+              {notebook.name || "دفتر بدون عنوان"}
             </div>
           );
         })}
@@ -566,18 +566,18 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   items: [
                     {
                       id: "open-group",
-                      label: "Open category",
+                      label: "باز کردن دسته",
                       onSelect: () => setManualGroupKey(group.id),
                     },
                     {
                       id: "rename-group",
-                      label: "Rename category",
+                      label: "تغییر نام دسته",
                       onSelect: () => beginRenameGroup(group.id, group.name),
                     },
                     { id: "separator-1", separator: true },
                     {
                       id: "delete-group",
-                      label: "Delete category",
+                      label: "حذف دسته",
                       danger: true,
                       onSelect: () => deleteGroup(group.id),
                     },
@@ -668,7 +668,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             className="inline-flex h-8 items-center gap-2 rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)] transition hover:brightness-[1.03]"
           >
             <FolderPlus className="h-3.5 w-3.5" />
-            New category
+            دسته جدید
           </button>
         )}
       </div>
@@ -684,16 +684,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
           event.preventDefault();
           openMenu(event, {
-            title: "Sections",
+            title: "دفترها",
             items: [
               {
                 id: "new-section",
-                label: "New section",
+                label: "دفتر جدید",
                 onSelect: beginCreateNotebook,
               },
               {
                 id: "new-category",
-                label: "New category",
+                label: "دسته جدید",
                 onSelect: beginCreateGroup,
               },
               ...(selectedNotebookIds.length > 0
@@ -701,7 +701,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     { id: "separator-1", separator: true as const },
                     {
                       id: "clear-selection",
-                      label: `Clear ${selectedNotebookIds.length} selected section(s)`,
+                      label: `پاک کردن انتخاب ${selectedNotebookIds.length} دفتر`,
                       onSelect: () => setSelectedNotebookIds([]),
                     },
                   ]
@@ -716,10 +716,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             onClick={beginCreatePage}
             disabled={isPending}
             className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_20px_rgba(159,161,255,0.18)] transition hover:brightness-[1.03] disabled:cursor-wait disabled:opacity-60"
-            title="Add page"
+            title="صفحه جدید"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Page
+            صفحه جدید
           </button>
         ) : null}
 
@@ -750,19 +750,19 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 openMenu(event, {
                   title:
                     selectionIds.length > 1
-                      ? `${selectionIds.length} sections selected`
-                      : notebook.name || "Untitled Section",
+                      ? `${selectionIds.length} دفتر انتخاب شده`
+                      : notebook.name || "دفتر بدون عنوان",
                   items: [
                     ...(selectionIds.length === 1
                       ? [
                           {
                             id: "open",
-                            label: "Open section",
+                            label: "باز کردن دفتر",
                             onSelect: () => router.push(`/notebooks/${notebook.id}`),
                           },
                           {
                             id: "rename",
-                            label: "Rename section",
+                            label: "تغییر نام دفتر",
                             onSelect: () => beginRenameNotebook(notebook),
                           },
                           { id: "separator-open", separator: true as const },
@@ -770,14 +770,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       : []),
                     {
                       id: "move-ungrouped",
-                      label: "Move to Ungrouped",
+                      label: "انتقال به بدون دسته",
                       onSelect: () => moveNotebooksToGroup(selectionIds, null),
                     },
                     ...groupItems
                       .filter((group) => group.id !== notebook.groupId)
                       .map((group) => ({
                         id: `move-${group.id}`,
-                        label: `Move to ${group.name}`,
+                        label: `انتقال به ${group.name}`,
                         onSelect: () => moveNotebooksToGroup(selectionIds, group.id),
                       })),
                     { id: "separator-delete", separator: true as const },
@@ -785,8 +785,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       id: "delete",
                       label:
                         selectionIds.length > 1
-                          ? "Delete selected sections"
-                          : "Delete section",
+                          ? "حذف دفترهای انتخاب‌شده"
+                          : "حذف دفتر",
                       danger: true,
                       onSelect: () => archiveNotebooks(selectionIds),
                     },
@@ -846,7 +846,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     setIsOverflowOpen(false);
                   }}
                 >
-                  {notebook.name || "Untitled Section"}
+                  {notebook.name || "دفتر بدون عنوان"}
                 </Link>
               )}
             </div>
@@ -860,14 +860,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               onClick={() => setIsOverflowOpen((current) => !current)}
               className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[var(--border-soft)] bg-[var(--bg-softer)] px-3 text-xs text-[var(--text-main)] transition hover:bg-white"
             >
-              More
+              بیشتر
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
 
             {isOverflowOpen ? (
               <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-2xl border border-[var(--border-soft)] bg-white p-2 shadow-[var(--shadow-soft)]">
                 <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                  Hidden sections
+                  دفترهای پنهان
                 </div>
                 <div className="grid gap-1">
                   {overflowNotebooks.map((notebook) => (
@@ -881,7 +881,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       }}
                       className="rounded-xl px-3 py-2 text-xs text-[var(--text-strong)] transition hover:bg-[var(--bg-softer)]"
                     >
-                      {notebook.name || "Untitled Section"}
+                      {notebook.name || "دفتر بدون عنوان"}
                     </Link>
                   ))}
                 </div>
@@ -895,7 +895,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           onClick={beginCreateNotebook}
           disabled={isPending}
           className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-100 disabled:cursor-wait disabled:opacity-60"
-          title="New section"
+          title="دفتر جدید"
         >
           <Plus className="h-4 w-4" />
         </button>

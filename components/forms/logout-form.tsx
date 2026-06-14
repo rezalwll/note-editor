@@ -7,10 +7,10 @@ export function LogoutForm() {
   return (
     <form action={logoutAction}>
       <SubmitButton
-        pendingText="Signing out..."
+        pendingText="در حال خروج..."
         className="w-full justify-center bg-stone-100 py-2 text-stone-900 hover:bg-stone-200"
       >
-        Sign out
+        خروج از حساب
       </SubmitButton>
     </form>
   );

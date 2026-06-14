@@ -27,7 +27,7 @@ export async function PUT(request: Request, { params }: RouteProps) {
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Title is required and must stay under 160 characters." },
+      { error: "عنوان الزامی است و باید کمتر از ۱۶۰ کاراکتر باشد." },
       { status: 400 },
     );
   }
@@ -44,7 +44,7 @@ export async function PUT(request: Request, { params }: RouteProps) {
   });
 
   if (!page) {
-    return NextResponse.json({ error: "Page not found." }, { status: 404 });
+    return NextResponse.json({ error: "صفحه پیدا نشد." }, { status: 404 });
   }
 
   await prisma.page.update({

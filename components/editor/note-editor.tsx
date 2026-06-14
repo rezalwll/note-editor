@@ -1016,33 +1016,33 @@ export function NoteEditor({
               openMenu(event, {
                 title:
                   selectedBlockIds.length > 1
-                    ? `${selectedBlockIds.length} blocks selected`
-                    : "Editor",
+                    ? `${selectedBlockIds.length} بلوک انتخاب شده`
+                    : "ویرایشگر",
                 items:
                   selectedBlockIds.length > 1
                     ? [
                         {
                           id: "new-block",
-                          label: "Add text block here",
+                          label: "افزودن بلوک متن در اینجا",
                           onSelect: () => addBlockAt(coordinates.x, coordinates.y),
                         },
                         { id: "separator-1", separator: true },
                         {
                           id: "delete-selected-blocks",
-                          label: "Delete selected blocks",
+                          label: "حذف بلوک‌های انتخاب‌شده",
                           danger: true,
                           onSelect: () => deleteBlocks(selectedBlockIds),
                         },
                         {
                           id: "clear-selection",
-                          label: "Clear selection",
+                          label: "پاک کردن انتخاب",
                           onSelect: () => setSelectedBlockIds([]),
                         },
                       ]
                     : [
                         {
                           id: "new-block",
-                          label: "Add text block here",
+                          label: "افزودن بلوک متن در اینجا",
                           onSelect: () => addBlockAt(coordinates.x, coordinates.y),
                         },
                       ],
@@ -1077,7 +1077,7 @@ export function NoteEditor({
                     type="button"
                     onPointerDown={(event) => startDraggingBlock(event, block)}
                     className="absolute -right-8 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100"
-                    aria-label="Move block"
+                    aria-label="جابجایی بلوک"
                   >
                     <GripVertical className="h-3.5 w-3.5" />
                   </button>
@@ -1123,112 +1123,112 @@ export function NoteEditor({
                       openMenu(event, {
                         title:
                           selectedIds.length > 1
-                            ? `${selectedIds.length} blocks selected`
-                            : "Text block",
+                            ? `${selectedIds.length} بلوک انتخاب شده`
+                            : "بلوک متن",
                         items:
                           selectedIds.length > 1
                             ? [
                                 {
                                   id: "align-right",
-                                  label: "Align right",
+                                  label: "تراز راست",
                                   onSelect: () => dispatchEditorCommand("align-right"),
                                 },
                                 {
                                   id: "align-center",
-                                  label: "Align center",
+                                  label: "تراز وسط",
                                   onSelect: () => dispatchEditorCommand("align-center"),
                                 },
                                 {
                                   id: "align-justify",
-                                  label: "Justify",
+                                  label: "تراز کامل",
                                   onSelect: () => dispatchEditorCommand("align-justify"),
                                 },
                                 { id: "separator-1", separator: true },
                                 {
                                   id: "italic",
-                                  label: "Toggle italic on selected",
+                                  label: "مورب کردن انتخاب",
                                   onSelect: () =>
                                     dispatchEditorCommand("toggle-italic"),
                                 },
                                 {
                                   id: "bold",
-                                  label: "Toggle bold on selected",
+                                  label: "پررنگ کردن انتخاب",
                                   onSelect: () =>
                                     dispatchEditorCommand("toggle-bold"),
                                 },
                                 { id: "separator-2", separator: true },
                                 {
                                   id: "delete-selected",
-                                  label: "Delete selected blocks",
+                                  label: "حذف بلوک‌های انتخاب‌شده",
                                   danger: true,
                                   onSelect: () =>
                                     dispatchEditorCommand("delete-block"),
                                 },
                                 {
                                   id: "clear-selection",
-                                  label: "Clear selection",
+                                  label: "پاک کردن انتخاب",
                                   onSelect: () => setSelectedBlockIds([]),
                                 },
                               ]
                             : [
                                 {
                                   id: "undo",
-                                  label: "Undo",
+                                  label: "واگرد",
                                   onSelect: () => dispatchEditorCommand("undo"),
                                 },
                                 {
                                   id: "redo",
-                                  label: "Redo",
+                                  label: "انجام دوباره",
                                   onSelect: () => dispatchEditorCommand("redo"),
                                 },
                                 { id: "separator-1", separator: true },
                                 {
                                   id: "align-right",
-                                  label: "Align right",
+                                  label: "تراز راست",
                                   onSelect: () =>
                                     dispatchEditorCommand("align-right"),
                                 },
                                 {
                                   id: "align-center",
-                                  label: "Align center",
+                                  label: "تراز وسط",
                                   onSelect: () =>
                                     dispatchEditorCommand("align-center"),
                                 },
                                 {
                                   id: "align-justify",
-                                  label: "Justify",
+                                  label: "تراز کامل",
                                   onSelect: () =>
                                     dispatchEditorCommand("align-justify"),
                                 },
                                 { id: "separator-2", separator: true },
                                 {
                                   id: "italic",
-                                  label: block.italic ? "Remove italic" : "Italic",
+                                  label: block.italic ? "برداشتن حالت مورب" : "مورب",
                                   onSelect: () =>
                                     dispatchEditorCommand("toggle-italic"),
                                 },
                                 {
                                   id: "bold",
-                                  label: block.bold ? "Remove bold" : "Bold",
+                                  label: block.bold ? "برداشتن حالت پررنگ" : "پررنگ",
                                   onSelect: () => dispatchEditorCommand("toggle-bold"),
                                 },
                                 { id: "separator-3", separator: true },
                                 {
                                   id: "bullet-list",
-                                  label: "Toggle bullet list",
+                                  label: "تبدیل به فهرست نشانه‌دار",
                                   onSelect: () =>
                                     dispatchEditorCommand("toggle-bullet-list"),
                                 },
                                 {
                                   id: "todo-list",
-                                  label: "Toggle todo list",
+                                  label: "تبدیل به فهرست کارها",
                                   onSelect: () =>
                                     dispatchEditorCommand("toggle-todo-list"),
                                 },
                                 { id: "separator-4", separator: true },
                                 {
                                   id: "delete-block",
-                                  label: "Delete block",
+                                  label: "حذف بلوک",
                                   danger: true,
                                   onSelect: () =>
                                     dispatchEditorCommand("delete-block"),
@@ -1254,7 +1254,7 @@ export function NoteEditor({
 
             {blocks.length === 0 ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">
-                Click anywhere on the page and start writing.
+                روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید.
               </div>
             ) : null}
           </div>

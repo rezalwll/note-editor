@@ -15,7 +15,7 @@ export function SignupForm() {
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
         <label htmlFor="displayName" className="text-sm font-medium text-stone-700">
-          Display name
+          نام نمایشی
         </label>
         <input
           id="displayName"
@@ -24,12 +24,12 @@ export function SignupForm() {
           required
           autoComplete="name"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-          placeholder="Your name"
+          placeholder="نام شما"
         />
       </div>
       <div className="space-y-2">
         <label htmlFor="username" className="text-sm font-medium text-stone-700">
-          Username
+          نام کاربری
         </label>
         <input
           id="username"
@@ -38,6 +38,7 @@ export function SignupForm() {
           required
           autoComplete="username"
           autoCapitalize="none"
+          dir="ltr"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
           placeholder="lowercase_username"
         />
@@ -45,7 +46,7 @@ export function SignupForm() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="password" className="text-sm font-medium text-stone-700">
-            Password
+            رمز عبور
           </label>
           <input
             id="password"
@@ -55,12 +56,12 @@ export function SignupForm() {
             autoComplete="new-password"
             minLength={8}
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-            placeholder="At least 8 characters"
+            placeholder="حداقل ۸ کاراکتر"
           />
         </div>
         <div className="space-y-2">
           <label htmlFor="confirmPassword" className="text-sm font-medium text-stone-700">
-            Confirm password
+            تکرار رمز عبور
           </label>
           <input
             id="confirmPassword"
@@ -70,7 +71,7 @@ export function SignupForm() {
             autoComplete="new-password"
             minLength={8}
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-            placeholder="Repeat the password"
+            placeholder="رمز عبور را دوباره وارد کنید"
           />
         </div>
       </div>
@@ -79,13 +80,13 @@ export function SignupForm() {
           {state.error}
         </p>
       ) : null}
-      <SubmitButton pendingText="Creating..." className="w-full">
-        Create account
+      <SubmitButton pendingText="در حال ساخت حساب..." className="w-full">
+        ثبت‌نام
       </SubmitButton>
       <p className="text-center text-sm text-stone-600">
-        Already have an account?{" "}
+        از قبل حساب دارید؟{" "}
         <Link href="/login" className="font-medium text-amber-700 hover:text-amber-800">
-          Sign in
+          وارد شوید
         </Link>
       </p>
     </form>

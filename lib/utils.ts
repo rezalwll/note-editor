@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

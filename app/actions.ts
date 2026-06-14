@@ -55,7 +55,7 @@ const usernameSchema = z
   .trim()
   .min(3)
   .max(32)
-  .regex(/^[a-z0-9_]+$/, "Username can only include lowercase letters, numbers, and underscores.")
+  .regex(/^[a-z0-9_]+$/, "نام کاربری فقط می‌تواند شامل حروف کوچک انگلیسی، عدد و زیرخط باشد.")
   .transform(normalizeUsername);
 
 const displayNameSchema = z.string().trim().min(2).max(80);
@@ -121,7 +121,7 @@ export async function loginAction(
     });
 
   if (!parsed.success) {
-    return { error: "Username and password are required." };
+    return { error: "نام کاربری و رمز عبور الزامی است." };
   }
 
   const headerList = await headers();
@@ -135,7 +135,7 @@ export async function loginAction(
   if (rateLimit.blocked) {
     const retryMinutes = Math.ceil(rateLimit.retryAfterMs / 60000);
     return {
-      error: `Too many attempts. Try again in ${retryMinutes} minute(s).`,
+      error: `تعداد تلاش‌ها بیش از حد مجاز بوده است. ${retryMinutes} دقیقه‌ی دیگر دوباره تلاش کنید.`,
     };
   }
 
@@ -147,20 +147,20 @@ export async function loginAction(
     return {
       error:
         getFriendlyDatabaseError(error) ??
-        "Login failed because the database is not ready.",
+        "ورود انجام نشد چون پایگاه داده هنوز آماده نیست.",
     };
   }
 
   if (!user) {
     recordFailedAttempt(key);
-    return { error: "Incorrect username or password." };
+    return { error: "نام کاربری یا رمز عبور نادرست است." };
   }
 
   const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
 
   if (!isValid) {
     recordFailedAttempt(key);
-    return { error: "Incorrect username or password." };
+    return { error: "نام کاربری یا رمز عبور نادرست است." };
   }
 
   clearAttempts(key);
@@ -187,11 +187,11 @@ export async function signupAction(
     });
 
   if (!parsed.success) {
-    return { error: "Use a valid name, username, and password." };
+    return { error: "یک نام، نام کاربری و رمز عبور معتبر وارد کنید." };
   }
 
   if (parsed.data.password !== parsed.data.confirmPassword) {
-    return { error: "Password confirmation does not match." };
+    return { error: "تکرار رمز عبور با رمز اصلی یکسان نیست." };
   }
 
   try {
@@ -207,13 +207,13 @@ export async function signupAction(
     await createSession(user.id);
   } catch (error) {
     if (isDuplicateUsernameError(error)) {
-      return { error: "That username is already taken." };
+      return { error: "این نام کاربری قبلاً استفاده شده است." };
     }
 
     return {
       error:
         getFriendlyDatabaseError(error) ??
-        "Could not create the account right now.",
+        "در حال حاضر ساخت حساب ممکن نیست.",
     };
   }
 
@@ -241,7 +241,7 @@ export async function updateProfileAction(
     });
 
   if (!parsed.success) {
-    return { error: "Use a valid display name and username." };
+    return { error: "نام نمایشی و نام کاربری معتبر وارد کنید." };
   }
 
   try {
@@ -254,19 +254,19 @@ export async function updateProfileAction(
     });
   } catch (error) {
     if (isDuplicateUsernameError(error)) {
-      return { error: "That username is already taken." };
+      return { error: "این نام کاربری قبلاً استفاده شده است." };
     }
 
     return {
       error:
         getFriendlyDatabaseError(error) ??
-        "Could not update the profile right now.",
+        "در حال حاضر به‌روزرسانی پروفایل ممکن نیست.",
     };
   }
 
   revalidatePath("/");
   revalidatePath("/settings");
-  return { success: "Profile updated successfully." };
+  return { success: "پروفایل با موفقیت به‌روزرسانی شد." };
 }
 
 export async function changePasswordAction(
@@ -286,7 +286,7 @@ export async function changePasswordAction(
     });
 
   if (!parsed.success) {
-    return { error: "Use a new password with at least 8 characters." };
+    return { error: "یک رمز عبور جدید با حداقل ۸ کاراکتر وارد کنید." };
   }
 
   const matches = await argon2.verify(
@@ -295,7 +295,7 @@ export async function changePasswordAction(
   );
 
   if (!matches) {
-    return { error: "Current password is incorrect." };
+    return { error: "رمز عبور فعلی نادرست است." };
   }
 
   await prisma.user.update({
@@ -308,7 +308,7 @@ export async function changePasswordAction(
 
   revalidatePath("/settings");
   revalidatePath("/settings/security");
-  return { success: "Password updated successfully." };
+  return { success: "رمز عبور با موفقیت تغییر کرد." };
 }
 
 export async function createNotebookAction(formData: FormData) {
@@ -343,7 +343,7 @@ export async function createNotebookInlineAction(
     const group = await getOwnedGroup(user.id, groupId);
 
     if (!group) {
-      return { error: "Invalid category." };
+      return { error: "دسته معتبر نیست." };
     }
   }
 
@@ -366,7 +366,7 @@ export async function createNotebookGroupInlineAction(name: string) {
   const parsed = notebookGroupSchema.safeParse({ name });
 
   if (!parsed.success) {
-    return { error: "Category name is required." };
+    return { error: "نام دسته الزامی است." };
   }
 
   const group = await prisma.notebookGroup.create({
@@ -387,18 +387,18 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
   const groupName = z.string().trim().max(80).safeParse(name);
 
   if (!groupId.success || !groupName.success) {
-    return { error: "Invalid category name." };
+    return { error: "نام دسته معتبر نیست." };
   }
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
   if (!group) {
-    return { error: "Category not found." };
+    return { error: "دسته پیدا نشد." };
   }
 
   await prisma.notebookGroup.update({
     where: { id: group.id },
-    data: { name: groupName.data || "Untitled Category" },
+    data: { name: groupName.data || "دسته بدون عنوان" },
   });
 
   revalidatePath("/");
@@ -411,13 +411,13 @@ export async function deleteNotebookGroupInlineAction(id: string) {
   const groupId = z.string().cuid().safeParse(id);
 
   if (!groupId.success) {
-    return { error: "Invalid category." };
+    return { error: "دسته معتبر نیست." };
   }
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
   if (!group) {
-    return { error: "Category not found." };
+    return { error: "دسته پیدا نشد." };
   }
 
   await prisma.$transaction([
@@ -447,14 +447,14 @@ export async function assignNotebookGroupInlineAction(
       : z.string().cuid().safeParse(groupId);
 
   if (!parsedNotebookIds.success || !parsedGroupId.success) {
-    return { error: "Invalid category assignment." };
+    return { error: "انتخاب دسته معتبر نیست." };
   }
 
   if (parsedGroupId.data) {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
     if (!group) {
-      return { error: "Category not found." };
+      return { error: "دسته پیدا نشد." };
     }
   }
 
@@ -481,13 +481,13 @@ export async function renameNotebookInlineAction(id: string, name: string) {
   const notebookName = z.string().trim().max(80).safeParse(name);
 
   if (!notebookId.success || !notebookName.success) {
-    return { error: "Invalid section name." };
+    return { error: "نام دفتر معتبر نیست." };
   }
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
   if (!notebook) {
-    return { error: "Section not found." };
+    return { error: "دفتر پیدا نشد." };
   }
 
   await prisma.notebook.update({
@@ -556,13 +556,13 @@ export async function archiveNotebookInlineAction(id: string) {
   const notebookId = z.string().cuid().safeParse(id);
 
   if (!notebookId.success) {
-    return { error: "Invalid section." };
+    return { error: "دفتر معتبر نیست." };
   }
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
   if (!notebook) {
-    return { error: "Section not found." };
+    return { error: "دفتر پیدا نشد." };
   }
 
   await prisma.notebook.update({
@@ -615,13 +615,13 @@ export async function createPageInlineAction(notebookId: string, title: string) 
   });
 
   if (!parsed.success) {
-    return { error: "Page title is required." };
+    return { error: "عنوان صفحه الزامی است." };
   }
 
   const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
 
   if (!notebook || notebook.archived) {
-    return { error: "Section not found." };
+    return { error: "دفتر پیدا نشد." };
   }
 
   const page = await prisma.page.create({
@@ -670,7 +670,7 @@ export async function archivePageInlineAction(pageId: string) {
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
-    return { error: "Invalid page." };
+    return { error: "صفحه معتبر نیست." };
   }
 
   const page = await prisma.page.findFirst({
@@ -679,7 +679,7 @@ export async function archivePageInlineAction(pageId: string) {
   });
 
   if (!page) {
-    return { error: "Page not found." };
+    return { error: "صفحه پیدا نشد." };
   }
 
   await prisma.page.update({

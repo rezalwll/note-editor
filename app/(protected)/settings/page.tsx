@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserAccent, getUserInitials } from "@/lib/users";
 
 function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
@@ -45,7 +45,7 @@ export default async function SettingsPage() {
         <div className="space-y-4">
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-700">
-              Profile
+              پروفایل
             </p>
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
               <div
@@ -58,21 +58,21 @@ export default async function SettingsPage() {
                 <h1 className="font-serif text-4xl tracking-tight text-stone-950">
                   {user.displayName}
                 </h1>
-                <p className="text-sm text-stone-600">@{user.username}</p>
+                <p className="text-sm text-stone-600" dir="ltr">@{user.username}</p>
                 <p className="text-xs text-stone-500">
-                  Account created {formatDate(user.createdAt)}
+                  تاریخ ساخت حساب: {formatDate(user.createdAt)}
                 </p>
               </div>
             </div>
             {user.mustChangePassword ? (
               <div className="mt-4 rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                This account is still using the bootstrap password path. Change the password below before sharing the workspace.
+                این حساب هنوز از مسیر رمز اولیه استفاده می‌کند. قبل از استفاده‌ی اشتراکی، رمز عبور را از بخش پایین تغییر دهید.
               </div>
             ) : null}
           </section>
 
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">Account</h2>
+            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">حساب کاربری</h2>
             <ProfileForm
               username={user.username}
               displayName={user.displayName}
@@ -80,30 +80,30 @@ export default async function SettingsPage() {
           </section>
 
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">Security</h2>
+            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">امنیت</h2>
             <PasswordForm />
           </section>
         </div>
 
         <div className="space-y-4">
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="font-serif text-[2rem] text-stone-950">Workspace</h2>
+            <h2 className="font-serif text-[2rem] text-stone-950">فضای کاری</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-[18px] border border-stone-200 bg-stone-50/70 p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">
-                  Notebooks
+                  دفترها
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-stone-950">{notebookCount}</p>
               </div>
               <div className="rounded-[18px] border border-stone-200 bg-stone-50/70 p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">
-                  Pages
+                  صفحه‌ها
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-stone-950">{pageCount}</p>
               </div>
               <div className="rounded-[18px] border border-stone-200 bg-stone-50/70 p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">
-                  Attachments
+                  فایل‌ها
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-stone-950">
                   {attachmentCount}
@@ -111,19 +111,19 @@ export default async function SettingsPage() {
               </div>
             </div>
             <p className="mt-4 text-sm text-stone-600">
-              Last workspace activity: {formatDate(lastUpdated)}
+              آخرین فعالیت: {formatDate(lastUpdated)}
             </p>
           </section>
 
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">Portability</h2>
+            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">درون‌ریزی و برون‌بری</h2>
             <WorkspacePortabilityCard />
           </section>
 
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="mb-2 font-serif text-[2rem] text-stone-950">Session</h2>
+            <h2 className="mb-2 font-serif text-[2rem] text-stone-950">نشست</h2>
             <p className="mb-4 text-sm leading-6 text-stone-600">
-              Sign out on shared devices to keep each workspace private.
+              روی دستگاه‌های مشترک از حساب خارج شوید تا فضای کاری هر نفر خصوصی بماند.
             </p>
             <LogoutForm />
           </section>

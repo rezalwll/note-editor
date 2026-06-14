@@ -19,7 +19,7 @@ export function LoginForm() {
       <input type="hidden" name="next" value={next} />
       <div className="space-y-2">
         <label htmlFor="username" className="text-sm font-medium text-stone-700">
-          Username
+          نام کاربری
         </label>
         <input
           id="username"
@@ -28,13 +28,14 @@ export function LoginForm() {
           required
           autoComplete="username"
           autoCapitalize="none"
+          dir="ltr"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-          placeholder="Enter your username"
+          placeholder="نام کاربری خود را وارد کنید"
         />
       </div>
       <div className="space-y-2">
         <label htmlFor="password" className="text-sm font-medium text-stone-700">
-          Password
+          رمز عبور
         </label>
         <input
           id="password"
@@ -44,7 +45,7 @@ export function LoginForm() {
           autoComplete="current-password"
           autoFocus
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-          placeholder="Enter your password"
+          placeholder="رمز عبور خود را وارد کنید"
         />
       </div>
       {state.error ? (
@@ -52,13 +53,13 @@ export function LoginForm() {
           {state.error}
         </p>
       ) : null}
-      <SubmitButton pendingText="Unlocking..." className="w-full">
-        Unlock Notebook
+      <SubmitButton pendingText="در حال ورود..." className="w-full">
+        ورود
       </SubmitButton>
       <p className="text-center text-sm text-stone-600">
-        New here?{" "}
+        حساب ندارید؟{" "}
         <Link href="/signup" className="font-medium text-amber-700 hover:text-amber-800">
-          Create an account
+          ثبت‌نام کنید
         </Link>
       </p>
     </form>

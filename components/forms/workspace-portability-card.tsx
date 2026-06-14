@@ -26,13 +26,11 @@ export function WorkspacePortabilityCard() {
       };
 
       if (!response.ok) {
-        throw new Error(payload.error || "Import failed.");
+        throw new Error(payload.error || "درون‌ریزی انجام نشد.");
       }
 
       setSuccess(
-        `Imported ${payload.imported?.notebooks ?? 0} notebooks and ${
-          payload.imported?.pages ?? 0
-        } pages into this account.`,
+        `${payload.imported?.notebooks ?? 0} دفتر و ${payload.imported?.pages ?? 0} صفحه با موفقیت به این حساب درون‌ریزی شد.`,
       );
       formRef.current?.reset();
       router.refresh();
@@ -40,7 +38,7 @@ export function WorkspacePortabilityCard() {
       setError(
         submissionError instanceof Error
           ? submissionError.message
-          : "Import failed.",
+          : "درون‌ریزی انجام نشد.",
       );
     } finally {
       setPending(false);
@@ -50,15 +48,15 @@ export function WorkspacePortabilityCard() {
   return (
     <div className="space-y-4">
       <div className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4">
-        <p className="text-sm font-medium text-stone-800">Export your workspace</p>
+        <p className="text-sm font-medium text-stone-800">برون‌بری فضای کاری</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          Download one ZIP archive containing your notebooks, pages, tags, and attachments.
+          یک فایل ZIP شامل دفترها، صفحه‌ها، برچسب‌ها و فایل‌های پیوست خود دانلود کنید.
         </p>
         <a
           href="/api/profile/export"
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)]"
         >
-          Export all notes
+          برون‌بری همه یادداشت‌ها
         </a>
       </div>
 
@@ -71,12 +69,12 @@ export function WorkspacePortabilityCard() {
           await handleSubmit(formData);
         }}
       >
-        <p className="text-sm font-medium text-stone-800">Import into this workspace</p>
+        <p className="text-sm font-medium text-stone-800">درون‌ریزی به این فضا</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          Import merges into the current account. Matching IDs are updated, new IDs are added, and importing the same archive twice will not duplicate your notes.
+          درون‌ریزی با حساب فعلی ادغام می‌شود. شناسه‌های یکسان به‌روزرسانی می‌شوند، شناسه‌های جدید اضافه می‌شوند و درون‌ریزی دوباره‌ی همان فایل باعث تکرار یادداشت‌ها نمی‌شود.
         </p>
         <label className="mt-3 block space-y-1.5">
-          <span className="text-sm font-medium text-stone-700">Archive file</span>
+          <span className="text-sm font-medium text-stone-700">فایل آرشیو</span>
           <input
             name="archive"
             type="file"
@@ -101,7 +99,7 @@ export function WorkspacePortabilityCard() {
           disabled={pending}
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Importing..." : "Import archive"}
+          {pending ? "در حال درون‌ریزی..." : "درون‌ریزی آرشیو"}
         </button>
       </form>
     </div>

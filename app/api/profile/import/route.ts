@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
   if (!(archive instanceof File)) {
     return NextResponse.json(
-      { error: "Choose a workspace archive to import." },
+      { error: "یک آرشیو برای درون‌ریزی انتخاب کنید." },
       { status: 400 },
     );
   }
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "The workspace archive could not be read.",
+            : "خواندن آرشیو فضای کاری ممکن نشد.",
       },
       { status: 400 },
     );
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error(`A category in this archive already belongs to another account.`);
+          throw new Error("یکی از دسته‌های این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error(`A notebook in this archive already belongs to another account.`);
+          throw new Error("یکی از دفترهای این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error(`A page in this archive already belongs to another account.`);
+          throw new Error("یکی از صفحه‌های این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error(`An attachment in this archive already belongs to another account.`);
+          throw new Error("یکی از فایل‌های این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
       const bytes = attachmentFiles.get(attachment.id);
 
       if (!bytes) {
-        throw new Error(`Missing file data for "${attachment.fileName}".`);
+        throw new Error(`داده‌ی فایل «${attachment.fileName}» پیدا نشد.`);
       }
 
       await writeUploadBuffer(attachment.storageKey, bytes);
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "The workspace archive could not be imported.",
+            : "درون‌ریزی آرشیو فضای کاری انجام نشد.",
       },
       { status: 400 },
     );

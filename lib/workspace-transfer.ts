@@ -74,14 +74,14 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
   try {
     zip = await JSZip.loadAsync(bytes);
   } catch {
-    throw new Error("This file is not a valid notebook archive.");
+    throw new Error("این فایل یک آرشیو معتبر برای دفترچه نیست.");
   }
 
   const manifestFile = zip.file("manifest.json");
   const workspaceFile = zip.file("workspace.json");
 
   if (!manifestFile || !workspaceFile) {
-    throw new Error("The archive is missing manifest.json or workspace.json.");
+    throw new Error("فایل manifest.json یا workspace.json در آرشیو وجود ندارد.");
   }
 
   const manifest = manifestSchema.safeParse(
@@ -92,15 +92,15 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
   );
 
   if (!manifest.success || !workspace.success) {
-    throw new Error("The archive format is malformed.");
+    throw new Error("ساختار آرشیو نامعتبر است.");
   }
 
   if (manifest.data.app !== WORKSPACE_ARCHIVE_APP) {
-    throw new Error("This archive was not created by this app.");
+    throw new Error("این آرشیو توسط همین برنامه ساخته نشده است.");
   }
 
   if (manifest.data.formatVersion !== WORKSPACE_ARCHIVE_FORMAT_VERSION) {
-    throw new Error("This archive version is not supported.");
+    throw new Error("نسخه‌ی این آرشیو پشتیبانی نمی‌شود.");
   }
 
   const groupIds = new Set(workspace.data.groups.map((group) => group.id));
@@ -110,31 +110,31 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
 
   for (const notebook of workspace.data.notebooks) {
     if (notebook.groupId && !groupIds.has(notebook.groupId)) {
-      throw new Error("The archive contains a notebook with a missing group.");
+      throw new Error("در آرشیو دفتری وجود دارد که دسته‌ی آن پیدا نشد.");
     }
   }
 
   for (const page of workspace.data.pages) {
     if (!notebookIds.has(page.notebookId)) {
-      throw new Error("The archive contains a page with a missing notebook.");
+      throw new Error("در آرشیو صفحه‌ای وجود دارد که دفتر آن پیدا نشد.");
     }
   }
 
   for (const attachment of workspace.data.attachments) {
     if (!pageIds.has(attachment.pageId)) {
-      throw new Error("The archive contains an attachment with a missing page.");
+      throw new Error("در آرشیو فایلی وجود دارد که صفحه‌ی مربوط به آن پیدا نشد.");
     }
 
     const file = zip.file(`attachments/${attachment.id}`);
 
     if (!file) {
-      throw new Error(`The archive is missing the file for attachment "${attachment.fileName}".`);
+      throw new Error(`فایل پیوست «${attachment.fileName}» در آرشیو وجود ندارد.`);
     }
 
     const bytes = await file.async("uint8array");
 
     if (bytes.byteLength !== attachment.sizeBytes) {
-      throw new Error(`Attachment "${attachment.fileName}" does not match its recorded size.`);
+      throw new Error(`حجم فایل «${attachment.fileName}» با مقدار ثبت‌شده هم‌خوانی ندارد.`);
     }
 
     attachmentFiles.set(attachment.id, bytes);

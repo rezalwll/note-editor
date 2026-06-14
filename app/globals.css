@@ -33,8 +33,9 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--text-strong);
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-sans), "Segoe UI", Tahoma, sans-serif;
   background: var(--bg-app);
+  text-align: right;
 }
 
 a {

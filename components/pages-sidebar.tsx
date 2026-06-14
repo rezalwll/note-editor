@@ -76,7 +76,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   }
 
   function submitCreate() {
-    const nextTitle = draftTitle.trim() || "Untitled Page";
+    const nextTitle = draftTitle.trim() || "صفحه بدون عنوان";
 
     if (!activeNotebook) {
       cancelCreate();
@@ -193,20 +193,20 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 ? [
                     {
                       id: "new-page",
-                      label: "New page",
+                      label: "صفحه جدید",
                       onSelect: beginCreate,
                     },
                     { id: "separator-1", separator: true },
                     {
                       id: "clear-selection",
-                      label: `Clear ${selectedPageIds.length} selected page(s)`,
+                      label: `پاک کردن انتخاب ${selectedPageIds.length} صفحه`,
                       onSelect: () => setSelectedPageIds([]),
                     },
                   ]
                 : [
                     {
                       id: "new-page",
-                      label: "New page",
+                      label: "صفحه جدید",
                       onSelect: beginCreate,
                     },
                   ],
@@ -231,7 +231,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             }}
           >
             <CirclePlus className="h-4 w-4" />
-            Add Page
+            صفحه جدید
           </button>
 
           <button
@@ -265,7 +265,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 }
               }}
               disabled={isPending}
-              placeholder="Untitled Page"
+              placeholder="صفحه بدون عنوان"
               className="w-full border-none bg-transparent text-right text-sm text-[#313131] outline-none"
               dir="rtl"
             />
@@ -303,35 +303,35 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                   }
 
                   openMenu(event, {
-                    title:
-                      selectedIds.length > 1
-                        ? `${selectedIds.length} pages selected`
-                        : page.title,
+                  title:
+                    selectedIds.length > 1
+                      ? `${selectedIds.length} صفحه انتخاب شده`
+                      : page.title,
                     items:
                       selectedIds.length > 1
                         ? [
                             {
                               id: "delete-pages",
-                              label: "Delete selected pages",
+                              label: "حذف صفحه‌های انتخاب‌شده",
                               danger: true,
                               onSelect: () => archivePages(selectedIds),
                             },
                             {
                               id: "clear-selection",
-                              label: "Clear selection",
+                              label: "پاک کردن انتخاب",
                               onSelect: () => setSelectedPageIds([]),
                             },
                           ]
                         : [
                             {
                               id: "open-page",
-                              label: "Open page",
+                              label: "باز کردن صفحه",
                               onSelect: () => router.push(`/pages/${page.id}`),
                             },
                             { id: "separator-1", separator: true },
                             {
                               id: "delete-page",
-                              label: "Delete page",
+                              label: "حذف صفحه",
                               danger: true,
                               onSelect: () => archivePage(page.id),
                             },
@@ -361,7 +361,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
           {activeNotebook.pages.length === 0 ? (
             <div className="px-3 py-5 text-right">
               <div className="text-xs" style={{ color: activeTheme?.sidebarMuted }}>
-                No pages yet.
+                هنوز صفحه‌ای وجود ندارد.
               </div>
             </div>
           ) : null}

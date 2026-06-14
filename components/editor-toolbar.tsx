@@ -75,14 +75,14 @@ export function EditorToolbar() {
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
       <ToolbarButton
-        label="Undo"
+        label="واگرد"
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("undo")}
       >
         <Undo2 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        label="Redo"
+        label="انجام دوباره"
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("redo")}
       >
@@ -92,7 +92,7 @@ export function EditorToolbar() {
       <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
-        label="Align right"
+        label="تراز راست"
         active={toolbarState.align === "right"}
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("align-right")}
@@ -100,7 +100,7 @@ export function EditorToolbar() {
         <AlignRight className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        label="Align center"
+        label="تراز وسط"
         active={toolbarState.align === "center"}
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("align-center")}
@@ -108,7 +108,7 @@ export function EditorToolbar() {
         <AlignCenter className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        label="Justify"
+        label="تراز کامل"
         active={toolbarState.align === "justify"}
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("align-justify")}
@@ -119,7 +119,7 @@ export function EditorToolbar() {
       <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
-        label="Italic"
+        label="مورب"
         active={toolbarState.italic}
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("toggle-italic")}
@@ -127,7 +127,7 @@ export function EditorToolbar() {
         <Italic className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        label="Bold"
+        label="پررنگ"
         active={toolbarState.bold}
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("toggle-bold")}
@@ -138,14 +138,14 @@ export function EditorToolbar() {
       <div className="mx-1 h-7 w-px bg-white/55" />
 
       <ToolbarButton
-        label="Bullet list"
+        label="فهرست نشانه‌دار"
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("toggle-bullet-list")}
       >
         <List className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        label="Todo list"
+        label="فهرست کارها"
         disabled={!toolbarState.hasActiveBlock}
         onClick={() => dispatchEditorCommand("toggle-todo-list")}
       >

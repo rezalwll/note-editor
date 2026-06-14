@@ -1,22 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Newsreader } from "next/font/google";
+import { Noto_Naskh_Arabic, Noto_Sans_Arabic } from "next/font/google";
 
 import { PwaRuntime } from "@/components/pwa-runtime";
 import "./globals.css";
 
-const manrope = Manrope({
+const notoSansArabic = Noto_Sans_Arabic({
   variable: "--font-sans",
-  subsets: ["latin"],
+  subsets: ["arabic"],
 });
 
-const newsreader = Newsreader({
+const notoNaskhArabic = Noto_Naskh_Arabic({
   variable: "--font-serif",
-  subsets: ["latin"],
+  subsets: ["arabic"],
 });
 
 export const metadata: Metadata = {
   title: "notava",
-  description: "notava is a private notebook for personal notes and study pages.",
+  description: "notava یک دفترچه خصوصی برای یادداشت‌ها و صفحه‌های مطالعه‌ی شخصی است.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -45,8 +45,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${manrope.variable} ${newsreader.variable}`}>
+    <html lang="fa" dir="rtl">
+      <body className={`${notoSansArabic.variable} ${notoNaskhArabic.variable}`}>
         <PwaRuntime />
         {children}
       </body>

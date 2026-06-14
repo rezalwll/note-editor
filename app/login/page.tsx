@@ -11,14 +11,14 @@ export default function LoginPage() {
         <section className="rounded-[36px] border border-stone-200 bg-white/88 p-8 shadow-[0_24px_80px_rgba(28,25,23,0.12)] backdrop-blur">
           <div className="mb-6 inline-flex items-center gap-3 rounded-full bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
             <LockKeyhole className="h-4 w-4" />
-            Password required
+            ورود با رمز عبور
           </div>
           <div className="mb-8 space-y-3">
             <h2 className="font-serif text-4xl tracking-tight text-[var(--text-strong)]">
-              Unlock notava
+              ورود به notava
             </h2>
             <p className="text-sm leading-7 text-stone-600">
-              Sign in with your username and password to open your private workspace.
+              با نام کاربری و رمز عبور وارد شوید تا فضای کاری خصوصی‌تان باز شود.
             </p>
           </div>
           <LoginForm />

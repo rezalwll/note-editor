@@ -11,14 +11,14 @@ export default function SignupPage() {
         <section className="rounded-[36px] border border-stone-200 bg-white/88 p-8 shadow-[0_24px_80px_rgba(28,25,23,0.12)] backdrop-blur">
           <div className="mb-6 inline-flex items-center gap-3 rounded-full bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
             <UserRoundPlus className="h-4 w-4" />
-            Create your account
+            ساخت حساب کاربری
           </div>
           <div className="mb-8 space-y-3">
             <h2 className="font-serif text-4xl tracking-tight text-stone-950">
-              Start your workspace
+              شروع فضای کاری شما
             </h2>
             <p className="text-sm leading-7 text-stone-600">
-              Pick a username and password, then your notes will stay private to your account.
+              یک نام کاربری و رمز عبور انتخاب کنید تا یادداشت‌هایتان فقط برای حساب خودتان باقی بماند.
             </p>
           </div>
           <SignupForm />

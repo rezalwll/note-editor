@@ -27,19 +27,19 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
 
   if (!page || page.archived || page.notebook.archived) {
-    return NextResponse.json({ error: "Page not found." }, { status: 404 });
+    return NextResponse.json({ error: "صفحه پیدا نشد." }, { status: 404 });
   }
 
   const formData = await request.formData();
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file was uploaded." }, { status: 400 });
+    return NextResponse.json({ error: "هیچ فایلی بارگذاری نشده است." }, { status: 400 });
   }
 
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json(
-      { error: "Only images and PDF files are allowed." },
+      { error: "فقط فایل‌های تصویری و PDF مجاز هستند." },
       { status: 400 },
     );
   }
@@ -48,7 +48,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   if (file.size > maxBytes) {
     return NextResponse.json(
-      { error: `File exceeds ${env.MAX_UPLOAD_SIZE_MB} MB.` },
+      { error: `حجم فایل از ${env.MAX_UPLOAD_SIZE_MB} مگابایت بیشتر است.` },
       { status: 400 },
     );
   }

@@ -22,7 +22,7 @@ export function ProfileForm({ username, displayName }: ProfileFormProps) {
     <form action={formAction} className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-stone-700">Display name</span>
+          <span className="text-sm font-medium text-stone-700">نام نمایشی</span>
           <input
             name="displayName"
             type="text"
@@ -33,7 +33,7 @@ export function ProfileForm({ username, displayName }: ProfileFormProps) {
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-stone-700">Username</span>
+          <span className="text-sm font-medium text-stone-700">نام کاربری</span>
           <input
             name="username"
             type="text"
@@ -41,6 +41,7 @@ export function ProfileForm({ username, displayName }: ProfileFormProps) {
             defaultValue={username}
             autoComplete="username"
             autoCapitalize="none"
+            dir="ltr"
             className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition focus:border-amber-500"
           />
         </label>
@@ -55,7 +56,7 @@ export function ProfileForm({ username, displayName }: ProfileFormProps) {
           {state.success}
         </p>
       ) : null}
-      <SubmitButton pendingText="Saving...">Save profile</SubmitButton>
+      <SubmitButton pendingText="در حال ذخیره...">ذخیره پروفایل</SubmitButton>
     </form>
   );
 }

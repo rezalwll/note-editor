@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "notava",
     short_name: "notava",
-    description: "Offline-ready private notebook for personal notes and study pages.",
+    description: "دفترچه خصوصی notava برای یادداشت‌ها و صفحه‌های مطالعه، آماده برای استفاده آفلاین.",
     start_url: "/",
     display: "standalone",
     background_color: "#f7f7ff",

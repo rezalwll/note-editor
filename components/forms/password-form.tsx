@@ -17,7 +17,7 @@ export function PasswordForm() {
     <form action={formAction} className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-stone-700">Current password</span>
+          <span className="text-sm font-medium text-stone-700">رمز عبور فعلی</span>
           <input
             name="currentPassword"
             type="password"
@@ -27,7 +27,7 @@ export function PasswordForm() {
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-stone-700">New password</span>
+          <span className="text-sm font-medium text-stone-700">رمز عبور جدید</span>
           <input
             name="newPassword"
             type="password"
@@ -48,7 +48,7 @@ export function PasswordForm() {
           {state.success}
         </p>
       ) : null}
-      <SubmitButton pendingText="Updating...">Change Password</SubmitButton>
+      <SubmitButton pendingText="در حال به‌روزرسانی...">تغییر رمز عبور</SubmitButton>
     </form>
   );
 }

@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: RouteProps) {
   });
 
   if (!attachment) {
-    return NextResponse.json({ error: "Attachment not found." }, { status: 404 });
+    return NextResponse.json({ error: "فایل پیدا نشد." }, { status: 404 });
   }
 
   const bytes = await readUpload(attachment.storageKey);

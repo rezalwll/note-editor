@@ -146,7 +146,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }, [profileOpen]);
 
   function submitCreate() {
-    const nextTitle = draftTitle.trim() || "Untitled Page";
+    const nextTitle = draftTitle.trim() || "صفحه بدون عنوان";
 
     if (!activeNotebook) {
       setDraftTitle("");
@@ -190,7 +190,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     })),
     {
       id: "ungrouped",
-      name: "Ungrouped",
+      name: "بدون دسته",
       notebooks: notebooks.filter((notebook) => notebook.groupId === null),
     },
   ].filter((group) => group.notebooks.length > 0);
@@ -207,7 +207,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               setProfileOpen(false);
             }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            aria-label="Open sections"
+            aria-label="باز کردن دسته‌ها"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -226,7 +226,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               setPagesOpen(false);
             }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            aria-label="Open profile"
+            aria-label="باز کردن پروفایل"
           >
             <UserRound className="h-5 w-5" />
           </button>
@@ -251,7 +251,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
           >
             <NotebookTabs className="h-5 w-5" />
-            Sections
+            دسته‌ها
           </button>
           <button
             type="button"
@@ -263,7 +263,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
           >
             <FileText className="h-5 w-5" />
-            Pages
+            صفحه‌ها
           </button>
           <button
             type="button"
@@ -275,7 +275,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
           >
             <UserRound className="h-5 w-5" />
-            Profile
+            پروفایل
           </button>
         </div>
       </div>
@@ -287,7 +287,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border-soft)] px-4 py-3">
-              <div className="text-sm font-semibold text-[var(--text-strong)]">Sections</div>
+              <div className="text-sm font-semibold text-[var(--text-strong)]">دسته‌ها</div>
               <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
                 <X className="h-5 w-5" />
               </button>
@@ -349,7 +349,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                 style={{ color: activeTheme.sidebarText }}
               >
                 <CirclePlus className="h-4 w-4" />
-                Add Page
+                صفحه جدید
               </button>
               <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
                 <X className="h-5 w-5" />
@@ -370,7 +370,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                     }
                   }}
                   disabled={isPending}
-                  placeholder="Untitled Page"
+                  placeholder="صفحه بدون عنوان"
                   className="w-full border-none bg-transparent text-right text-sm outline-none"
                   dir="rtl"
                 />
@@ -422,7 +422,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             <div className="truncate text-sm font-semibold text-[#1f2a37]">
               {currentUser.displayName}
             </div>
-            <div className="truncate text-[11px] text-[#708090]">@{currentUser.username}</div>
+            <div className="truncate text-[11px] text-[#708090]" dir="ltr">@{currentUser.username}</div>
           </div>
 
           {installEvent ? (
@@ -431,7 +431,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               onClick={handleInstall}
               className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
             >
-              Install app
+              نصب برنامه
             </button>
           ) : null}
 
@@ -440,7 +440,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             onClick={closeAll}
             className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
           >
-            Settings
+            تنظیمات
           </Link>
 
           <form action="/api/auth/logout" method="post">
@@ -448,7 +448,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               type="submit"
               className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
             >
-              Sign out
+              خروج از حساب
             </button>
           </form>
           </div>

@@ -89,7 +89,7 @@ export function DesktopProfileMenu({
         >
           {userInitials}
         </div>
-        <div className="max-w-[78px] truncate text-[12px] font-medium text-[#1f2a37]">
+        <div className="max-w-[78px] truncate text-[12px] font-medium text-[#1f2a37]" dir="ltr">
           @{currentUser.username}
         </div>
         <ChevronDown className="h-3.5 w-3.5 text-[#708090]" />
@@ -111,7 +111,7 @@ export function DesktopProfileMenu({
                   <div className="truncate text-sm font-semibold text-[#1f2a37]">
                     {currentUser.displayName}
                   </div>
-                  <div className="truncate text-[11px] text-[#708090]">
+                  <div className="truncate text-[11px] text-[#708090]" dir="ltr">
                     @{currentUser.username}
                   </div>
                 </div>
@@ -121,7 +121,7 @@ export function DesktopProfileMenu({
                   onClick={() => setOpen(false)}
                   className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[#32406d] transition hover:bg-[#f7fbff]"
                 >
-                  Settings
+                  تنظیمات
                 </Link>
 
                 <form action={logoutAction}>
@@ -129,7 +129,7 @@ export function DesktopProfileMenu({
                     type="submit"
                     className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
                   >
-                    Sign out
+                    خروج از حساب
                   </button>
                 </form>
               </div>
