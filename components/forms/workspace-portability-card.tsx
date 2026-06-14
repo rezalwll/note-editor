@@ -48,15 +48,15 @@ export function WorkspacePortabilityCard() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-[28px] border border-stone-200 bg-stone-50/80 p-5">
+    <div className="space-y-4">
+      <div className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4">
         <p className="text-sm font-medium text-stone-800">Export your workspace</p>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-1.5 text-sm leading-6 text-stone-600">
           Download one ZIP archive containing your notebooks, pages, tags, and attachments.
         </p>
         <a
           href="/api/profile/export"
-          className="mt-4 inline-flex items-center justify-center rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-stone-50 transition hover:bg-stone-800"
+          className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)]"
         >
           Export all notes
         </a>
@@ -64,7 +64,7 @@ export function WorkspacePortabilityCard() {
 
       <form
         ref={formRef}
-        className="rounded-[28px] border border-stone-200 bg-stone-50/80 p-5"
+        className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4"
         onSubmit={async (event) => {
           event.preventDefault();
           const formData = new FormData(event.currentTarget);
@@ -72,10 +72,10 @@ export function WorkspacePortabilityCard() {
         }}
       >
         <p className="text-sm font-medium text-stone-800">Import into this workspace</p>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-1.5 text-sm leading-6 text-stone-600">
           Import merges into the current account. Matching IDs are updated, new IDs are added, and importing the same archive twice will not duplicate your notes.
         </p>
-        <label className="mt-4 block space-y-2">
+        <label className="mt-3 block space-y-1.5">
           <span className="text-sm font-medium text-stone-700">Archive file</span>
           <input
             name="archive"
@@ -83,23 +83,23 @@ export function WorkspacePortabilityCard() {
             accept=".zip,application/zip"
             required
             disabled={pending}
-            className="block w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900"
+            className="block w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900"
           />
         </label>
         {error ? (
-          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
             {error}
           </p>
         ) : null}
         {success ? (
-          <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">
             {success}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={pending}
-          className="mt-4 inline-flex items-center justify-center rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? "Importing..." : "Import archive"}
         </button>

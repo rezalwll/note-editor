@@ -2,8 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getSessionCookieName, verifySession } from "@/lib/auth";
 
+const isDevelopment = process.env.NODE_ENV !== "production";
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  if (isDevelopment) {
+    return NextResponse.next();
+  }
 
   if (pathname === "/login" || pathname === "/signup") {
     const session = await verifySession(

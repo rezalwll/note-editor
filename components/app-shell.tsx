@@ -1,9 +1,6 @@
-import { UserRound } from "lucide-react";
-import Link from "next/link";
-
-import { logoutAction } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { ContextMenuProvider } from "@/components/context-menu";
+import { DesktopProfileMenu } from "@/components/desktop-profile-menu";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { MobileShell } from "@/components/mobile-shell";
 import { PagesSidebar } from "@/components/pages-sidebar";
@@ -50,7 +47,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
           currentUser={currentUser}
         />
 
-        <div className="sticky top-0 z-40 hidden xl:block">
+        <div className="sticky top-0 z-40 hidden overflow-visible xl:block">
           <header className="border-b border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_32%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
               <div className="flex items-center gap-3">
@@ -62,37 +59,11 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                 <EditorToolbar />
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <Link
-                  href="/settings"
-                  className="flex items-center gap-2.5 rounded-2xl border border-[#d6dee8] bg-white px-3 py-1.5 shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition hover:bg-[#f7fbff]"
-                >
-                  <div
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white"
-                    style={{ backgroundColor: userAccent }}
-                  >
-                    {userInitials}
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold leading-5 text-[#1f2a37]">
-                      {currentUser.displayName}
-                    </div>
-                    <div className="text-[11px] leading-4 text-[#708090]">
-                      @{currentUser.username}
-                    </div>
-                  </div>
-                  <UserRound className="h-4.5 w-4.5 text-[#4b5a6b]" />
-                </Link>
-
-                <form action={logoutAction}>
-                  <button
-                    type="submit"
-                    className="rounded-xl border border-white/60 bg-white/76 px-3 py-2 text-xs font-medium text-[#32406d] shadow-[0_12px_35px_rgba(116,125,255,0.2)] transition hover:bg-white"
-                  >
-                    Sign out
-                  </button>
-                </form>
-              </div>
+              <DesktopProfileMenu
+                currentUser={currentUser}
+                userAccent={userAccent}
+                userInitials={userInitials}
+              />
             </div>
           </header>
 

@@ -60,7 +60,10 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [draftTitle, setDraftTitle] = useState("");
   const [isPending, startTransition] = useTransition();
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
+  const [profilePanelPosition, setProfilePanelPosition] = useState({ top: 0, right: 0 });
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const activeNotebook = useMemo(() => {
     const notebookMatch = pathname.match(/^\/notebooks\/([^/]+)/);
@@ -101,6 +104,46 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     return () =>
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
+
+  useEffect(() => {
+    if (!profileOpen) {
+      return;
+    }
+
+    const updatePanelPosition = () => {
+      const rect = profileTriggerRef.current?.getBoundingClientRect();
+
+      if (!rect) {
+        return;
+      }
+
+      setProfilePanelPosition({
+        top: rect.bottom + 10,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
+    };
+
+    updatePanelPosition();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+
+      if (profileMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setProfileOpen(false);
+    };
+
+    window.addEventListener("resize", updatePanelPosition);
+    window.addEventListener("scroll", updatePanelPosition, true);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [profileOpen]);
 
   function submitCreate() {
     const nextTitle = draftTitle.trim() || "Untitled Page";
@@ -175,6 +218,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
           />
 
           <button
+            ref={profileTriggerRef}
             type="button"
             onClick={() => {
               setProfileOpen((current) => !current);
@@ -364,52 +408,51 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       ) : null}
 
       {profileOpen ? (
-        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
+        <>
+          <div className="fixed inset-0 z-[120] bg-black/10" />
           <div
-            className="absolute right-3 top-16 w-[260px] rounded-3xl border border-[var(--border-soft)] bg-white p-4 shadow-[var(--shadow-soft)]"
-            onClick={(event) => event.stopPropagation()}
+            ref={profileMenuRef}
+            className="fixed z-[130] flex w-[176px] flex-col rounded-[18px] border border-[var(--border-soft)] bg-white p-1.5 shadow-[0_22px_54px_rgba(15,23,42,0.16)]"
+            style={{
+              top: `${profilePanelPosition.top}px`,
+              right: `${profilePanelPosition.right}px`,
+            }}
           >
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-lavender)] text-white">
-                <UserRound className="h-5 w-5" />
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-[#1f2a37]">
-                  {currentUser.displayName}
-                </div>
-                <div className="text-[11px] text-[#708090]">@{currentUser.username}</div>
-              </div>
+          <div className="border-b border-[var(--border-soft)] px-2.5 py-2 text-center">
+            <div className="truncate text-sm font-semibold text-[#1f2a37]">
+              {currentUser.displayName}
             </div>
-
-            {installEvent ? (
-              <button
-                type="button"
-                onClick={handleInstall}
-                className="mb-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--bg-softer)] px-3 py-2 text-sm text-[var(--text-main)]"
-              >
-                <Download className="h-4 w-4" />
-                Install app
-              </button>
-            ) : null}
-
-            <Link
-              href="/settings"
-              onClick={closeAll}
-              className="mb-2 block rounded-2xl border border-[var(--border-soft)] px-3 py-2 text-center text-sm text-[var(--text-main)]"
-            >
-              Profile settings
-            </Link>
-
-            <form action="/api/auth/logout" method="post">
-              <button
-                type="submit"
-                className="block w-full rounded-2xl border border-[var(--border-soft)] px-3 py-2 text-sm text-[var(--text-main)]"
-              >
-                Sign out
-              </button>
-            </form>
+            <div className="truncate text-[11px] text-[#708090]">@{currentUser.username}</div>
           </div>
-        </div>
+
+          {installEvent ? (
+            <button
+              type="button"
+              onClick={handleInstall}
+              className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+            >
+              Install app
+            </button>
+          ) : null}
+
+          <Link
+            href="/settings"
+            onClick={closeAll}
+            className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+          >
+            Settings
+          </Link>
+
+          <form action="/api/auth/logout" method="post">
+            <button
+              type="submit"
+              className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
+            >
+              Sign out
+            </button>
+          </form>
+          </div>
+        </>
       ) : null}
     </div>
   );

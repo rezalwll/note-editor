@@ -8,7 +8,7 @@ export function LogoutForm() {
     <form action={logoutAction}>
       <SubmitButton
         pendingText="Signing out..."
-        className="w-full justify-center bg-stone-100 text-stone-900 hover:bg-stone-200"
+        className="w-full justify-center bg-stone-100 py-2 text-stone-900 hover:bg-stone-200"
       >
         Sign out
       </SubmitButton>

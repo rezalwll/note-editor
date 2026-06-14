@@ -215,14 +215,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     [activeGroupNotebooks],
   );
 
-  const activeGroupNotebookSignature = useMemo(
-    () =>
-      activeGroupNotebooks
-        .map((notebook) => `${notebook.id}:${notebook.name}:${notebook.groupId ?? ""}`)
-        .join("|"),
-    [activeGroupNotebooks],
-  );
-
   useLayoutEffect(() => {
     const container = measureRef.current;
 

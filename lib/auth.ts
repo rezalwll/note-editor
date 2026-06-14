@@ -11,6 +11,7 @@ import { normalizeUsername } from "@/lib/users";
 const SESSION_COOKIE = "notebook_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 14;
 const secret = new TextEncoder().encode(env.SESSION_SECRET);
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 type SessionPayload = {
   userId: string;
@@ -123,6 +124,14 @@ export async function requireUser() {
   const user = await getCurrentUser();
 
   if (!user) {
+    if (isDevelopment) {
+      const bootstrapUser = await createBootstrapOwnerIfNeeded();
+
+      if (bootstrapUser) {
+        return bootstrapUser;
+      }
+    }
+
     redirect("/login");
   }
 

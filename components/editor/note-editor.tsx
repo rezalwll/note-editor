@@ -168,17 +168,20 @@ export function NoteEditor({
 }: NoteEditorProps) {
   const { openMenu } = useContextMenu();
   const notebookTheme = getNotebookTheme(notebookId);
-  const now = new Date();
+  const displayTimestamp = useMemo(
+    () => new Date(initialUpdatedAt),
+    [initialUpdatedAt],
+  );
   const dateParts = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).formatToParts(now);
+  }).formatToParts(displayTimestamp);
   const day = dateParts.find((part) => part.type === "day")?.value ?? "";
   const month = dateParts.find((part) => part.type === "month")?.value ?? "";
   const year = dateParts.find((part) => part.type === "year")?.value ?? "";
   const persianDateLabel = `${day} ${month} ${year}`;
-  const persianTimeLabel = now.toLocaleTimeString("fa-IR", {
+  const persianTimeLabel = displayTimestamp.toLocaleTimeString("fa-IR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -1055,7 +1058,9 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
-              const blockWidth = measureBlockWidth(block.text);
+              const blockWidth = isHydrated
+                ? measureBlockWidth(block.text)
+                : getBlockWidth(block.text);
               const isSelected = selectedBlockIds.includes(block.id);
 
               return (
