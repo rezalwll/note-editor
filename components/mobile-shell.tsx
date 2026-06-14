@@ -99,9 +99,9 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
   }, []);
 
   function submitCreate() {
-    const nextTitle = draftTitle.trim();
+    const nextTitle = draftTitle.trim() || "Untitled Page";
 
-    if (!nextTitle || !activeNotebook) {
+    if (!activeNotebook) {
       setDraftTitle("");
       setIsCreating(false);
       return;

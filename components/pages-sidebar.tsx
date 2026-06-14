@@ -76,9 +76,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   }
 
   function submitCreate() {
-    const nextTitle = draftTitle.trim();
+    const nextTitle = draftTitle.trim() || "Untitled Page";
 
-    if (!nextTitle || !activeNotebook) {
+    if (!activeNotebook) {
       cancelCreate();
       return;
     }
