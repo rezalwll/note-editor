@@ -16,7 +16,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   archiveNotebookInlineAction,
   assignNotebookGroupInlineAction,
-  createPageInlineAction,
   createNotebookGroupInlineAction,
   createNotebookInlineAction,
   deleteNotebookGroupInlineAction,
@@ -327,20 +326,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     });
   }
 
-  function beginCreatePage() {
-    if (isPending || !activeNotebookId) {
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await createPageInlineAction(activeNotebookId, "صفحه بدون عنوان");
-
-      if ("id" in result && result.id) {
-        router.push(`/pages/${result.id}`);
-        router.refresh();
-      }
-    });
-  }
 
   function beginCreateGroup() {
     setEditingGroupId("__new__");
@@ -641,7 +626,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         })}
 
         {editingGroupId === "__new__" ? (
-          <div className="inline-flex h-8 items-center rounded-full border border-[var(--border-soft)] bg-white px-3 text-xs">
+          <div className="inline-flex h-8 items-center rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)]">
             <input
               ref={groupInputRef}
               value={draftGroupName}
@@ -658,7 +643,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   cancelGroupEdit();
                 }
               }}
-              className="w-24 border-none bg-transparent text-xs text-[var(--text-strong)] outline-none"
+              placeholder="دسته جدید"
+              className="w-24 border-none bg-transparent text-xs text-[#30416c] outline-none placeholder:text-[#30416c]/70"
+              style={{ caretColor: "#30416c" }}
             />
           </div>
         ) : (
@@ -710,18 +697,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           });
         }}
       >
-        {activeNotebookId ? (
-          <button
-            type="button"
-            onClick={beginCreatePage}
-            disabled={isPending}
-            className="inline-flex h-6 items-center gap-1 rounded-t-md border border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_20px_rgba(159,161,255,0.18)] transition hover:brightness-[1.03] disabled:cursor-wait disabled:opacity-60"
-            title="صفحه جدید"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            صفحه جدید
-          </button>
-        ) : null}
 
         {visibleNotebooks.map((notebook) => {
           const theme = getNotebookTheme(notebook.id);

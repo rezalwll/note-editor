@@ -60,7 +60,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [draftTitle, setDraftTitle] = useState("");
   const [isPending, startTransition] = useTransition();
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
-  const [profilePanelPosition, setProfilePanelPosition] = useState({ top: 0, right: 0 });
+  const [profilePanelPosition, setProfilePanelPosition] = useState({ top: 0, left: 0 });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -112,6 +112,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     const updatePanelPosition = () => {
       const rect = profileTriggerRef.current?.getBoundingClientRect();
+      const panelWidth = 176;
 
       if (!rect) {
         return;
@@ -119,7 +120,10 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
       setProfilePanelPosition({
         top: rect.bottom + 10,
-        right: Math.max(12, window.innerWidth - rect.right),
+        left: Math.min(
+          Math.max(12, rect.right - panelWidth),
+          window.innerWidth - panelWidth - 12,
+        ),
       });
     };
 
@@ -415,7 +419,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="fixed z-[130] flex w-[176px] flex-col rounded-[18px] border border-[var(--border-soft)] bg-white p-1.5 shadow-[0_22px_54px_rgba(15,23,42,0.16)]"
             style={{
               top: `${profilePanelPosition.top}px`,
-              right: `${profilePanelPosition.right}px`,
+              left: `${profilePanelPosition.left}px`,
             }}
           >
           <div className="border-b border-[var(--border-soft)] px-2.5 py-2 text-center">

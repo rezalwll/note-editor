@@ -22,7 +22,7 @@ export function DesktopProfileMenu({
   userInitials,
 }: DesktopProfileMenuProps) {
   const [open, setOpen] = useState(false);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -33,6 +33,7 @@ export function DesktopProfileMenu({
 
     const updatePanelPosition = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
+      const panelWidth = 176;
 
       if (!rect) {
         return;
@@ -40,7 +41,10 @@ export function DesktopProfileMenu({
 
       setPanelPosition({
         top: rect.bottom + 10,
-        right: Math.max(12, window.innerWidth - rect.right),
+        left: Math.min(
+          Math.max(12, rect.right - panelWidth),
+          window.innerWidth - panelWidth - 12,
+        ),
       });
     };
 
@@ -104,7 +108,7 @@ export function DesktopProfileMenu({
                 className="fixed z-[150] flex w-[176px] flex-col rounded-[18px] border border-[#d6dee8] bg-white p-1.5 shadow-[0_22px_54px_rgba(15,23,42,0.16)]"
                 style={{
                   top: `${panelPosition.top}px`,
-                  right: `${panelPosition.right}px`,
+                  left: `${panelPosition.left}px`,
                 }}
               >
                 <div className="border-b border-[#e8ecf3] px-2.5 py-2 text-center">

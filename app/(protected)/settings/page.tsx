@@ -40,7 +40,8 @@ export default async function SettingsPage() {
       : latestPage?.updatedAt ?? latestNotebook?.updatedAt ?? user.updatedAt;
 
   return (
-    <div className="mx-auto w-full max-w-[1120px] px-4 py-4 xl:px-6">
+    <div className="flex w-full justify-center px-4 py-4 xl:px-6">
+      <div className="w-full max-w-[1120px]">
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-4">
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
@@ -116,7 +117,7 @@ export default async function SettingsPage() {
           </section>
 
           <section className="rounded-[26px] border border-stone-200 bg-white/92 p-5 shadow-[0_12px_34px_rgba(28,25,23,0.06)]">
-            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">درون‌ریزی و برون‌بری</h2>
+            <h2 className="mb-4 font-serif text-[2rem] text-stone-950">ایمپورت و اکسپورت</h2>
             <WorkspacePortabilityCard />
           </section>
 
@@ -128,6 +129,7 @@ export default async function SettingsPage() {
             <LogoutForm />
           </section>
         </div>
+      </div>
       </div>
     </div>
   );

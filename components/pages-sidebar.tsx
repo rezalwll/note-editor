@@ -159,7 +159,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
   if (!activeNotebook) {
     return (
-      <aside className="hidden w-[300px] shrink-0 xl:block">
+      <aside className="hidden xl:block">
         <div
           className="fixed right-0 w-[300px] border-l"
           style={{ top: sidebarTopOffset, height: sidebarHeight }}
@@ -169,7 +169,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   }
 
   return (
-    <aside className="hidden w-[300px] shrink-0 xl:block">
+    <aside className="hidden xl:block">
       <div
         className="fixed right-0 w-[300px] border-l"
         style={{

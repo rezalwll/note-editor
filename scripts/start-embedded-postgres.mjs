@@ -1,11 +1,12 @@
 import EmbeddedPostgres from "embedded-postgres";
 
 const pg = new EmbeddedPostgres({
-  databaseDir: "./.local/postgres",
+  databaseDir: "./.local/postgres-win",
   user: "postgres",
   password: "postgres",
   port: 5432,
   persistent: true,
+  initdbFlags: ["--no-locale", "--encoding=UTF8"],
   onLog: (message) => console.log(String(message).trimEnd()),
   onError: (message) => console.error(String(message).trimEnd()),
 });

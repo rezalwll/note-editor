@@ -5,6 +5,7 @@ import { EditorToolbar } from "@/components/editor-toolbar";
 import { MobileShell } from "@/components/mobile-shell";
 import { PagesSidebar } from "@/components/pages-sidebar";
 import { SectionTabs } from "@/components/section-tabs";
+import { ShellContentLayout } from "@/components/shell-content-layout";
 import { getSidebarData } from "@/lib/queries";
 import { getUserAccent, getUserInitials } from "@/lib/users";
 
@@ -81,10 +82,9 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
           </div>
         </div>
 
-        <div className="flex min-h-screen items-start xl:min-h-[calc(100vh-83px)]">
-          <main className="min-w-0 flex-1 bg-white pb-20 xl:pb-0">{children}</main>
-          <PagesSidebar notebooks={shellNotebooks} />
-        </div>
+        <ShellContentLayout sidebar={<PagesSidebar notebooks={shellNotebooks} />}>
+          {children}
+        </ShellContentLayout>
       </div>
     </ContextMenuProvider>
   );

@@ -8,7 +8,7 @@ export function LogoutForm() {
     <form action={logoutAction}>
       <SubmitButton
         pendingText="در حال خروج..."
-        className="w-full justify-center bg-stone-100 py-2 text-stone-900 hover:bg-stone-200"
+        className="w-full justify-center bg-[#e25555] py-2 text-white hover:bg-[#cb4545]"
       >
         خروج از حساب
       </SubmitButton>

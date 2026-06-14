@@ -1,17 +1,41 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Naskh_Arabic, Noto_Sans_Arabic } from "next/font/google";
+import localFont from "next/font/local";
 
 import { PwaRuntime } from "@/components/pwa-runtime";
 import "./globals.css";
 
-const notoSansArabic = Noto_Sans_Arabic({
+const iranYekanSans = localFont({
   variable: "--font-sans",
-  subsets: ["arabic"],
+  src: [
+    {
+      path: "./fonts/iranyekan.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/iranyekan.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  display: "swap",
 });
 
-const notoNaskhArabic = Noto_Naskh_Arabic({
+const iranYekanSerif = localFont({
   variable: "--font-serif",
-  subsets: ["arabic"],
+  src: [
+    {
+      path: "./fonts/iranyekan.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/iranyekan.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -46,7 +70,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fa" dir="rtl">
-      <body className={`${notoSansArabic.variable} ${notoNaskhArabic.variable}`}>
+      <body className={`${iranYekanSans.variable} ${iranYekanSerif.variable}`}>
         <PwaRuntime />
         {children}
       </body>

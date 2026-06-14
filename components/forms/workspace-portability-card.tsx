@@ -22,15 +22,20 @@ export function WorkspacePortabilityCard() {
       });
       const payload = (await response.json()) as {
         error?: string;
-        imported?: { groups: number; notebooks: number; pages: number; attachments: number };
+        imported?: {
+          groups: number;
+          notebooks: number;
+          pages: number;
+          attachments: number;
+        };
       };
 
       if (!response.ok) {
-        throw new Error(payload.error || "درون‌ریزی انجام نشد.");
+        throw new Error(payload.error || "ایمپورت انجام نشد.");
       }
 
       setSuccess(
-        `${payload.imported?.notebooks ?? 0} دفتر و ${payload.imported?.pages ?? 0} صفحه با موفقیت به این حساب درون‌ریزی شد.`,
+        `${payload.imported?.notebooks ?? 0} دفتر و ${payload.imported?.pages ?? 0} صفحه با موفقیت ایمپورت شد.`,
       );
       formRef.current?.reset();
       router.refresh();
@@ -38,7 +43,7 @@ export function WorkspacePortabilityCard() {
       setError(
         submissionError instanceof Error
           ? submissionError.message
-          : "درون‌ریزی انجام نشد.",
+          : "ایمپورت انجام نشد.",
       );
     } finally {
       setPending(false);
@@ -48,7 +53,7 @@ export function WorkspacePortabilityCard() {
   return (
     <div className="space-y-4">
       <div className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4">
-        <p className="text-sm font-medium text-stone-800">برون‌بری فضای کاری</p>
+        <p className="text-sm font-medium text-stone-800">اکسپورت فضای کاری</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
           یک فایل ZIP شامل دفترها، صفحه‌ها، برچسب‌ها و فایل‌های پیوست خود دانلود کنید.
         </p>
@@ -56,7 +61,7 @@ export function WorkspacePortabilityCard() {
           href="/api/profile/export"
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)]"
         >
-          برون‌بری همه یادداشت‌ها
+          اکسپورت همه یادداشت‌ها
         </a>
       </div>
 
@@ -69,9 +74,11 @@ export function WorkspacePortabilityCard() {
           await handleSubmit(formData);
         }}
       >
-        <p className="text-sm font-medium text-stone-800">درون‌ریزی به این فضا</p>
+        <p className="text-sm font-medium text-stone-800">ایمپورت به این فضا</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          درون‌ریزی با حساب فعلی ادغام می‌شود. شناسه‌های یکسان به‌روزرسانی می‌شوند، شناسه‌های جدید اضافه می‌شوند و درون‌ریزی دوباره‌ی همان فایل باعث تکرار یادداشت‌ها نمی‌شود.
+          ایمپورت با حساب فعلی ادغام می‌شود. شناسه‌های یکسان به‌روزرسانی می‌شوند،
+          شناسه‌های جدید اضافه می‌شوند و ایمپورت دوباره‌ی همان فایل باعث تکرار
+          یادداشت‌ها نمی‌شود.
         </p>
         <label className="mt-3 block space-y-1.5">
           <span className="text-sm font-medium text-stone-700">فایل آرشیو</span>
@@ -99,7 +106,7 @@ export function WorkspacePortabilityCard() {
           disabled={pending}
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "در حال درون‌ریزی..." : "درون‌ریزی آرشیو"}
+          {pending ? "در حال ایمپورت..." : "ایمپورت آرشیو"}
         </button>
       </form>
     </div>

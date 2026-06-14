@@ -13,9 +13,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .local/postgres-win/
+.local/postgres-win.win1252-backup-*/
 dev-3000.log
 dev-3000.err.log
 dev-3001.log
 dev-3001.err.log
 embedded-postgres.log
+embedded-postgres-*.log
+embedded-postgres-*.err.log
 *.local-backup
