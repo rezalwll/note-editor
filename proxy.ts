@@ -5,7 +5,7 @@ import { getSessionCookieName, verifySession } from "@/lib/auth";
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname === "/signup") {
     const session = await verifySession(
       request.cookies.get(getSessionCookieName())?.value,
     );
@@ -32,6 +32,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

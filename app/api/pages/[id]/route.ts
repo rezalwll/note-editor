@@ -20,7 +20,7 @@ type RouteProps = {
 };
 
 export async function PUT(request: Request, { params }: RouteProps) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
   const parsed = updatePageSchema.safeParse(await request.json());
@@ -38,8 +38,17 @@ export async function PUT(request: Request, { params }: RouteProps) {
     ? parsed.data.bodyHtml
     : sanitizeNoteHtml(parsed.data.bodyHtml);
 
+  const page = await prisma.page.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+
+  if (!page) {
+    return NextResponse.json({ error: "Page not found." }, { status: 404 });
+  }
+
   await prisma.page.update({
-    where: { id },
+    where: { id: page.id },
     data: {
       title: parsed.data.title,
       bodyHtml: safeHtml,

@@ -9,11 +9,11 @@ type RouteProps = {
 };
 
 export async function GET(_request: Request, { params }: RouteProps) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
-  const attachment = await prisma.attachment.findUnique({
-    where: { id },
+  const attachment = await prisma.attachment.findFirst({
+    where: { id, userId: user.id },
   });
 
   if (!attachment) {

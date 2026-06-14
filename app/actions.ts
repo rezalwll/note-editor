@@ -9,9 +9,10 @@ import { z } from "zod";
 import {
   clearSession,
   createSession,
-  ensureBootstrapUser,
+  getUserByUsername,
   requireUser,
 } from "@/lib/auth";
+import { getFriendlyDatabaseError } from "@/lib/errors";
 import { parseTags } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
 import {
@@ -19,13 +20,18 @@ import {
   getRateLimitState,
   recordFailedAttempt,
 } from "@/lib/rate-limit";
-import { getFriendlyDatabaseError } from "@/lib/errors";
+import { normalizeUsername } from "@/lib/users";
 
 export type AuthActionState = {
   error?: string;
 };
 
 export type PasswordActionState = {
+  error?: string;
+  success?: string;
+};
+
+export type ProfileActionState = {
   error?: string;
   success?: string;
 };
@@ -44,21 +50,85 @@ const pageSchema = z.object({
   title: z.string().trim().min(1).max(160),
 });
 
+const usernameSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(32)
+  .regex(/^[a-z0-9_]+$/, "Username can only include lowercase letters, numbers, and underscores.")
+  .transform(normalizeUsername);
+
+const displayNameSchema = z.string().trim().min(2).max(80);
+
+const passwordSchema = z.string().min(8).max(128);
+
+function getSafeRedirectTarget(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") {
+    return "/";
+  }
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  return value;
+}
+
+async function getOwnedNotebook(userId: string, id: string) {
+  return prisma.notebook.findFirst({
+    where: { id, userId },
+    select: { id: true, userId: true, archived: true, groupId: true },
+  });
+}
+
+async function getOwnedPage(userId: string, id: string) {
+  return prisma.page.findFirst({
+    where: { id, userId },
+    select: { id: true, notebookId: true, archived: true },
+  });
+}
+
+async function getOwnedGroup(userId: string, id: string) {
+  return prisma.notebookGroup.findFirst({
+    where: { id, userId },
+    select: { id: true },
+  });
+}
+
+function isDuplicateUsernameError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
+}
+
 export async function loginAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
-  const password = z.string().min(1).safeParse(formData.get("password"));
+  const parsed = z
+    .object({
+      username: usernameSchema,
+      password: z.string().min(1),
+      next: z.string().optional(),
+    })
+    .safeParse({
+      username: formData.get("username"),
+      password: formData.get("password"),
+      next: formData.get("next") ?? undefined,
+    });
 
-  if (!password.success) {
-    return { error: "Password is required." };
+  if (!parsed.success) {
+    return { error: "Username and password are required." };
   }
 
   const headerList = await headers();
   const key =
     headerList.get("x-forwarded-for") ??
     headerList.get("x-real-ip") ??
-    "local-user";
+    `local-user:${parsed.data.username}`;
 
   const rateLimit = getRateLimitState(key);
 
@@ -72,7 +142,7 @@ export async function loginAction(
   let user;
 
   try {
-    user = await ensureBootstrapUser();
+    user = await getUserByUsername(parsed.data.username);
   } catch (error) {
     return {
       error:
@@ -81,21 +151,122 @@ export async function loginAction(
     };
   }
 
-  const isValid = await argon2.verify(user.passwordHash, password.data);
+  if (!user) {
+    recordFailedAttempt(key);
+    return { error: "Incorrect username or password." };
+  }
+
+  const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
 
   if (!isValid) {
     recordFailedAttempt(key);
-    return { error: "Incorrect password." };
+    return { error: "Incorrect username or password." };
   }
 
   clearAttempts(key);
   await createSession(user.id);
+  redirect(getSafeRedirectTarget(formData.get("next")));
+}
+
+export async function signupAction(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = z
+    .object({
+      username: usernameSchema,
+      displayName: displayNameSchema,
+      password: passwordSchema,
+      confirmPassword: z.string().min(1),
+    })
+    .safeParse({
+      username: formData.get("username"),
+      displayName: formData.get("displayName"),
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
+
+  if (!parsed.success) {
+    return { error: "Use a valid name, username, and password." };
+  }
+
+  if (parsed.data.password !== parsed.data.confirmPassword) {
+    return { error: "Password confirmation does not match." };
+  }
+
+  try {
+    const user = await prisma.user.create({
+      data: {
+        username: parsed.data.username,
+        displayName: parsed.data.displayName,
+        passwordHash: await argon2.hash(parsed.data.password),
+        mustChangePassword: false,
+      },
+    });
+
+    await createSession(user.id);
+  } catch (error) {
+    if (isDuplicateUsernameError(error)) {
+      return { error: "That username is already taken." };
+    }
+
+    return {
+      error:
+        getFriendlyDatabaseError(error) ??
+        "Could not create the account right now.",
+    };
+  }
+
   redirect("/");
 }
 
 export async function logoutAction() {
   await clearSession();
   redirect("/login");
+}
+
+export async function updateProfileAction(
+  _prevState: ProfileActionState,
+  formData: FormData,
+): Promise<ProfileActionState> {
+  const user = await requireUser();
+  const parsed = z
+    .object({
+      username: usernameSchema,
+      displayName: displayNameSchema,
+    })
+    .safeParse({
+      username: formData.get("username"),
+      displayName: formData.get("displayName"),
+    });
+
+  if (!parsed.success) {
+    return { error: "Use a valid display name and username." };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        username: parsed.data.username,
+        displayName: parsed.data.displayName,
+      },
+    });
+  } catch (error) {
+    if (isDuplicateUsernameError(error)) {
+      return { error: "That username is already taken." };
+    }
+
+    return {
+      error:
+        getFriendlyDatabaseError(error) ??
+        "Could not update the profile right now.",
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { success: "Profile updated successfully." };
 }
 
 export async function changePasswordAction(
@@ -107,7 +278,7 @@ export async function changePasswordAction(
   const parsed = z
     .object({
       currentPassword: z.string().min(1),
-      newPassword: z.string().min(8).max(128),
+      newPassword: passwordSchema,
     })
     .safeParse({
       currentPassword: formData.get("currentPassword"),
@@ -135,12 +306,13 @@ export async function changePasswordAction(
     },
   });
 
+  revalidatePath("/settings");
   revalidatePath("/settings/security");
   return { success: "Password updated successfully." };
 }
 
 export async function createNotebookAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = notebookSchema.safeParse({
     name: formData.get("name"),
@@ -152,7 +324,10 @@ export async function createNotebookAction(formData: FormData) {
   }
 
   await prisma.notebook.create({
-    data: parsed.data,
+    data: {
+      ...parsed.data,
+      userId: user.id,
+    },
   });
 
   revalidatePath("/");
@@ -162,10 +337,19 @@ export async function createNotebookInlineAction(
   name: string,
   groupId?: string | null,
 ) {
-  await requireUser();
+  const user = await requireUser();
+
+  if (groupId) {
+    const group = await getOwnedGroup(user.id, groupId);
+
+    if (!group) {
+      return { error: "Invalid category." };
+    }
+  }
 
   const notebook = await prisma.notebook.create({
     data: {
+      userId: user.id,
       name: name.trim(),
       description: undefined,
       groupId: groupId ?? null,
@@ -177,7 +361,7 @@ export async function createNotebookInlineAction(
 }
 
 export async function createNotebookGroupInlineAction(name: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = notebookGroupSchema.safeParse({ name });
 
@@ -187,6 +371,7 @@ export async function createNotebookGroupInlineAction(name: string) {
 
   const group = await prisma.notebookGroup.create({
     data: {
+      userId: user.id,
       name: parsed.data.name,
     },
   });
@@ -196,7 +381,7 @@ export async function createNotebookGroupInlineAction(name: string) {
 }
 
 export async function renameNotebookGroupInlineAction(id: string, name: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const groupId = z.string().cuid().safeParse(id);
   const groupName = z.string().trim().max(80).safeParse(name);
@@ -205,8 +390,14 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
     return { error: "Invalid category name." };
   }
 
+  const group = await getOwnedGroup(user.id, groupId.data);
+
+  if (!group) {
+    return { error: "Category not found." };
+  }
+
   await prisma.notebookGroup.update({
-    where: { id: groupId.data },
+    where: { id: group.id },
     data: { name: groupName.data || "Untitled Category" },
   });
 
@@ -215,7 +406,7 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
 }
 
 export async function deleteNotebookGroupInlineAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const groupId = z.string().cuid().safeParse(id);
 
@@ -223,13 +414,19 @@ export async function deleteNotebookGroupInlineAction(id: string) {
     return { error: "Invalid category." };
   }
 
+  const group = await getOwnedGroup(user.id, groupId.data);
+
+  if (!group) {
+    return { error: "Category not found." };
+  }
+
   await prisma.$transaction([
     prisma.notebook.updateMany({
-      where: { groupId: groupId.data },
+      where: { groupId: group.id, userId: user.id },
       data: { groupId: null },
     }),
     prisma.notebookGroup.delete({
-      where: { id: groupId.data },
+      where: { id: group.id },
     }),
   ]);
 
@@ -241,17 +438,29 @@ export async function assignNotebookGroupInlineAction(
   notebookIds: string[],
   groupId: string | null,
 ) {
-  await requireUser();
+  const user = await requireUser();
 
   const parsedNotebookIds = z.array(z.string().cuid()).safeParse(notebookIds);
-  const parsedGroupId = groupId === null ? { success: true, data: null } : z.string().cuid().safeParse(groupId);
+  const parsedGroupId =
+    groupId === null
+      ? { success: true, data: null }
+      : z.string().cuid().safeParse(groupId);
 
   if (!parsedNotebookIds.success || !parsedGroupId.success) {
     return { error: "Invalid category assignment." };
   }
 
+  if (parsedGroupId.data) {
+    const group = await getOwnedGroup(user.id, parsedGroupId.data);
+
+    if (!group) {
+      return { error: "Category not found." };
+    }
+  }
+
   await prisma.notebook.updateMany({
     where: {
+      userId: user.id,
       id: {
         in: parsedNotebookIds.data,
       },
@@ -266,7 +475,7 @@ export async function assignNotebookGroupInlineAction(
 }
 
 export async function renameNotebookInlineAction(id: string, name: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const notebookId = z.string().cuid().safeParse(id);
   const notebookName = z.string().trim().max(80).safeParse(name);
@@ -275,8 +484,14 @@ export async function renameNotebookInlineAction(id: string, name: string) {
     return { error: "Invalid section name." };
   }
 
+  const notebook = await getOwnedNotebook(user.id, notebookId.data);
+
+  if (!notebook) {
+    return { error: "Section not found." };
+  }
+
   await prisma.notebook.update({
-    where: { id: notebookId.data },
+    where: { id: notebook.id },
     data: { name: notebookName.data },
   });
 
@@ -286,7 +501,7 @@ export async function renameNotebookInlineAction(id: string, name: string) {
 }
 
 export async function updateNotebookAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
 
   const id = z.string().cuid().safeParse(formData.get("id"));
   const parsed = notebookSchema.safeParse({
@@ -298,8 +513,14 @@ export async function updateNotebookAction(formData: FormData) {
     return;
   }
 
+  const notebook = await getOwnedNotebook(user.id, id.data);
+
+  if (!notebook) {
+    return;
+  }
+
   await prisma.notebook.update({
-    where: { id: id.data },
+    where: { id: notebook.id },
     data: parsed.data,
   });
 
@@ -308,15 +529,21 @@ export async function updateNotebookAction(formData: FormData) {
 }
 
 export async function archiveNotebookAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = z.string().cuid().safeParse(formData.get("id"));
 
   if (!id.success) {
     return;
   }
 
+  const notebook = await getOwnedNotebook(user.id, id.data);
+
+  if (!notebook) {
+    return;
+  }
+
   await prisma.notebook.update({
-    where: { id: id.data },
+    where: { id: notebook.id },
     data: { archived: true },
   });
 
@@ -325,15 +552,21 @@ export async function archiveNotebookAction(formData: FormData) {
 }
 
 export async function archiveNotebookInlineAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
   const notebookId = z.string().cuid().safeParse(id);
 
   if (!notebookId.success) {
     return { error: "Invalid section." };
   }
 
+  const notebook = await getOwnedNotebook(user.id, notebookId.data);
+
+  if (!notebook) {
+    return { error: "Section not found." };
+  }
+
   await prisma.notebook.update({
-    where: { id: notebookId.data },
+    where: { id: notebook.id },
     data: { archived: true },
   });
 
@@ -342,7 +575,7 @@ export async function archiveNotebookInlineAction(id: string) {
 }
 
 export async function createPageAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = pageSchema.safeParse({
     notebookId: formData.get("notebookId"),
@@ -353,8 +586,15 @@ export async function createPageAction(formData: FormData) {
     return;
   }
 
+  const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
+
+  if (!notebook || notebook.archived) {
+    return;
+  }
+
   const page = await prisma.page.create({
     data: {
+      userId: user.id,
       notebookId: parsed.data.notebookId,
       title: parsed.data.title,
       bodyHtml: "<p></p>",
@@ -367,7 +607,7 @@ export async function createPageAction(formData: FormData) {
 }
 
 export async function createPageInlineAction(notebookId: string, title: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = pageSchema.safeParse({
     notebookId,
@@ -378,8 +618,15 @@ export async function createPageInlineAction(notebookId: string, title: string) 
     return { error: "Page title is required." };
   }
 
+  const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
+
+  if (!notebook || notebook.archived) {
+    return { error: "Section not found." };
+  }
+
   const page = await prisma.page.create({
     data: {
+      userId: user.id,
       notebookId: parsed.data.notebookId,
       title: parsed.data.title,
       bodyHtml: "<p></p>",
@@ -393,17 +640,25 @@ export async function createPageInlineAction(notebookId: string, title: string) 
 }
 
 export async function archivePageAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const pageId = z.string().cuid().safeParse(formData.get("pageId"));
 
   if (!pageId.success) {
     return;
   }
 
-  const page = await prisma.page.update({
-    where: { id: pageId.data },
+  const page = await prisma.page.findFirst({
+    where: { id: pageId.data, userId: user.id },
+    select: { id: true, notebookId: true },
+  });
+
+  if (!page) {
+    return;
+  }
+
+  await prisma.page.update({
+    where: { id: page.id },
     data: { archived: true },
-    select: { notebookId: true },
   });
 
   revalidatePath(`/notebooks/${page.notebookId}`);
@@ -411,17 +666,25 @@ export async function archivePageAction(formData: FormData) {
 }
 
 export async function archivePageInlineAction(pageId: string) {
-  await requireUser();
+  const user = await requireUser();
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
     return { error: "Invalid page." };
   }
 
-  const page = await prisma.page.update({
-    where: { id: parsedPageId.data },
+  const page = await prisma.page.findFirst({
+    where: { id: parsedPageId.data, userId: user.id },
+    select: { id: true, notebookId: true },
+  });
+
+  if (!page) {
+    return { error: "Page not found." };
+  }
+
+  await prisma.page.update({
+    where: { id: page.id },
     data: { archived: true },
-    select: { notebookId: true },
   });
 
   revalidatePath(`/notebooks/${page.notebookId}`);
@@ -431,7 +694,7 @@ export async function archivePageInlineAction(pageId: string) {
 }
 
 export async function updateTagsAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const pageId = z.string().cuid().safeParse(formData.get("pageId"));
   const tagsInput = z.string().safeParse(formData.get("tags"));
 
@@ -439,10 +702,16 @@ export async function updateTagsAction(formData: FormData) {
     return;
   }
 
+  const page = await getOwnedPage(user.id, pageId.data);
+
+  if (!page) {
+    return;
+  }
+
   const tags = parseTags(tagsInput.data);
 
   await prisma.page.update({
-    where: { id: pageId.data },
+    where: { id: page.id },
     data: {
       tags: {
         deleteMany: {},

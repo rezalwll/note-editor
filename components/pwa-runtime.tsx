@@ -2,18 +2,17 @@
 
 import { useEffect } from "react";
 
-import { bootstrapOfflineState, processSyncQueue } from "@/lib/sync/client";
-
 export function PwaRuntime() {
   useEffect(() => {
     const isDevelopment = process.env.NODE_ENV !== "production";
+    const enablePwa = process.env.NEXT_PUBLIC_ENABLE_PWA === "true";
 
     const setupServiceWorker = async () => {
       if (!("serviceWorker" in navigator)) {
         return;
       }
 
-      if (isDevelopment) {
+      if (isDevelopment || !enablePwa) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map((registration) => registration.unregister()));
 
@@ -28,24 +27,7 @@ export function PwaRuntime() {
       await navigator.serviceWorker.register("/sw.js");
     };
 
-    const bootstrap = async () => {
-      try {
-        await setupServiceWorker();
-        await bootstrapOfflineState();
-        await processSyncQueue();
-      } catch {
-        // Silent fallback keeps the app usable when the network is unavailable.
-      }
-    };
-
-    void bootstrap();
-
-    const handleOnline = () => {
-      void processSyncQueue();
-    };
-
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    void setupServiceWorker();
   }, []);
 
   return null;

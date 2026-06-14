@@ -18,11 +18,11 @@ type RouteProps = {
 };
 
 export async function POST(request: Request, { params }: RouteProps) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
-  const page = await prisma.page.findUnique({
-    where: { id },
+  const page = await prisma.page.findFirst({
+    where: { id, userId: user.id },
     select: { id: true, archived: true, notebook: { select: { archived: true } } },
   });
 
@@ -57,6 +57,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   const attachment = await prisma.attachment.create({
     data: {
+      userId: user.id,
       pageId: id,
       fileName: file.name,
       mimeType: file.type,

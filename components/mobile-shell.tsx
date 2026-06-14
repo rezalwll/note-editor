@@ -40,13 +40,17 @@ type MobileGroup = {
 type MobileShellProps = {
   notebooks: MobileNotebook[];
   groups: MobileGroup[];
+  currentUser: {
+    username: string;
+    displayName: string;
+  };
 };
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
 };
 
-export function MobileShell({ notebooks, groups }: MobileShellProps) {
+export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [sectionsOpen, setSectionsOpen] = useState(false);
@@ -370,8 +374,10 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
                 <UserRound className="h-5 w-5" />
               </div>
               <div className="text-right">
-                <div className="text-sm font-semibold text-[var(--text-strong)]">Mohammadreza Aziz</div>
-                <div className="text-[11px] text-[var(--text-muted)]">Personal notebook</div>
+                <div className="text-sm font-semibold text-[#1f2a37]">
+                  {currentUser.displayName}
+                </div>
+                <div className="text-[11px] text-[#708090]">@{currentUser.username}</div>
               </div>
             </div>
 
@@ -387,11 +393,11 @@ export function MobileShell({ notebooks, groups }: MobileShellProps) {
             ) : null}
 
             <Link
-              href="/settings/security"
+              href="/settings"
               onClick={closeAll}
               className="mb-2 block rounded-2xl border border-[var(--border-soft)] px-3 py-2 text-center text-sm text-[var(--text-main)]"
             >
-              Security settings
+              Profile settings
             </Link>
 
             <form action="/api/auth/logout" method="post">

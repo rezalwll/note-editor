@@ -207,6 +207,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       ),
     [activeGroupKey, items],
   );
+  const activeGroupNotebookSignature = useMemo(
+    () =>
+      activeGroupNotebooks
+        .map((notebook) => `${notebook.id}:${notebook.name}:${notebook.groupId ?? ""}`)
+        .join("|"),
+    [activeGroupNotebooks],
+  );
 
   const activeGroupNotebookSignature = useMemo(
     () =>
@@ -228,7 +235,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     );
 
     if (notebookElements.length === 0) {
-      setOverflowNotebookIds((current) => (current.length === 0 ? current : []));
+      setOverflowNotebookIds((current) =>
+        current.length === 0 ? current : [],
+      );
       return;
     }
 

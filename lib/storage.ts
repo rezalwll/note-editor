@@ -8,9 +8,14 @@ export function getUploadRoot() {
   return path.resolve(/* turbopackIgnore: true */ process.cwd(), env.UPLOAD_DIR);
 }
 
-export async function storeUpload(file: File) {
+async function ensureUploadRoot() {
   const uploadRoot = getUploadRoot();
   await mkdir(uploadRoot, { recursive: true });
+  return uploadRoot;
+}
+
+export async function storeUpload(file: File) {
+  const uploadRoot = await ensureUploadRoot();
 
   const extension = path.extname(file.name);
   const baseName = path.basename(file.name, extension);
@@ -26,6 +31,13 @@ export async function storeUpload(file: File) {
 export async function readUpload(storageKey: string) {
   const filePath = path.join(getUploadRoot(), storageKey);
   return readFile(filePath);
+}
+
+export async function writeUploadBuffer(storageKey: string, bytes: Uint8Array) {
+  const uploadRoot = await ensureUploadRoot();
+  const filePath = path.join(uploadRoot, storageKey);
+  await writeFile(filePath, bytes);
+  return filePath;
 }
 
 export async function deleteUpload(storageKey: string) {

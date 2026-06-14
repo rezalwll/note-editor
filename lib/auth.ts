@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { normalizeUsername } from "@/lib/users";
 
 const SESSION_COOKIE = "notebook_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 14;
@@ -15,33 +16,57 @@ type SessionPayload = {
   userId: string;
 };
 
-export async function ensureBootstrapUser() {
-  let user;
+function mapDatabaseError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    throw new Error(`DATABASE_REQUEST_FAILED:${error.code}`);
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    throw new Error("DATABASE_UNAVAILABLE");
+  }
+
+  throw error;
+}
+
+export async function getUserByUsername(username: string) {
+  try {
+    return await prisma.user.findUnique({
+      where: { username: normalizeUsername(username) },
+    });
+  } catch (error) {
+    mapDatabaseError(error);
+  }
+}
+
+export async function createBootstrapOwnerIfNeeded() {
+  const existingUser = await prisma.user.findFirst();
+
+  if (existingUser) {
+    if (!existingUser.username || !existingUser.displayName) {
+      return prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          username: normalizeUsername(existingUser.username || "owner"),
+          displayName: existingUser.displayName || "Owner",
+        },
+      });
+    }
+
+    return existingUser;
+  }
 
   try {
-    user = await prisma.user.findFirst();
+    return await prisma.user.create({
+      data: {
+        username: normalizeUsername("owner"),
+        displayName: "Owner",
+        passwordHash: await argon2.hash(env.BOOTSTRAP_PASSWORD),
+        mustChangePassword: true,
+      },
+    });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      throw new Error(`DATABASE_REQUEST_FAILED:${error.code}`);
-    }
-
-    if (error instanceof Prisma.PrismaClientInitializationError) {
-      throw new Error("DATABASE_UNAVAILABLE");
-    }
-
-    throw error;
+    mapDatabaseError(error);
   }
-
-  if (user) {
-    return user;
-  }
-
-  return prisma.user.create({
-    data: {
-      passwordHash: await argon2.hash(env.BOOTSTRAP_PASSWORD),
-      mustChangePassword: true,
-    },
-  });
 }
 
 export async function createSession(userId: string) {
@@ -56,7 +81,7 @@ export async function createSession(userId: string) {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env.SESSION_COOKIE_SECURE,
     path: "/",
     maxAge: SESSION_MAX_AGE,
   });
