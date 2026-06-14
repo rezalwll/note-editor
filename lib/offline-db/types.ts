@@ -2,6 +2,7 @@ export type SyncStatus = "synced" | "pending" | "failed" | "conflict";
 
 export type LocalNotebook = {
   id: string;
+  userId: string;
   groupId?: string | null;
   name: string;
   description?: string | null;
@@ -14,6 +15,7 @@ export type LocalNotebook = {
 
 export type LocalPage = {
   id: string;
+  userId: string;
   notebookId: string;
   title: string;
   bodyHtml: string;

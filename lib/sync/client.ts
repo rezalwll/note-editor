@@ -2,6 +2,7 @@
 
 import {
   applySyncPushResult,
+  clearOfflineStateForUser,
   fetchBootstrap,
   fetchPullChanges,
   listPendingQueue,
@@ -14,26 +15,26 @@ import {
 
 let syncInFlight: Promise<void> | null = null;
 
-export async function bootstrapOfflineState() {
+export async function bootstrapOfflineState(userId: string) {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return;
   }
 
   const payload = await fetchBootstrap();
-  await seedOfflineBootstrap(payload);
+  await seedOfflineBootstrap(userId, payload);
 }
 
-export async function pullRemoteChanges() {
+export async function pullRemoteChanges(userId: string) {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return;
   }
 
-  const payload = await fetchPullChanges();
-  await seedOfflineBootstrap(payload);
-  await setLastPullAt(payload.fetchedAt);
+  const payload = await fetchPullChanges(userId);
+  await seedOfflineBootstrap(userId, payload);
+  await setLastPullAt(userId, payload.fetchedAt);
 }
 
-export async function processSyncQueue() {
+export async function processSyncQueue(userId: string) {
   if (syncInFlight) {
     return syncInFlight;
   }
@@ -43,23 +44,32 @@ export async function processSyncQueue() {
       return;
     }
 
-    const queue = await listPendingQueue();
+    const queue = await listPendingQueue(userId);
 
     if (queue.length === 0) {
-      await pullRemoteChanges();
+      await pullRemoteChanges(userId);
       return;
     }
 
     const result = await pushQueue(queue);
-    await applySyncPushResult(result);
-    await upsertConflictRecords(result.conflicts);
+    await applySyncPushResult(userId, result);
+    await upsertConflictRecords(userId, result.conflicts);
 
     for (const page of result.pages) {
-      await updateLocalSyncStatus(page.id, page.syncStatus, page.lastSyncedAt ?? null);
+      await updateLocalSyncStatus(
+        userId,
+        page.id,
+        page.syncStatus,
+        page.lastSyncedAt ?? null,
+      );
     }
   })().finally(() => {
     syncInFlight = null;
   });
 
   return syncInFlight;
+}
+
+export async function resetOfflineState(userId: string) {
+  await clearOfflineStateForUser(userId);
 }

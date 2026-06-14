@@ -17,9 +17,9 @@ class NotavaOfflineDb extends Dexie {
   constructor() {
     super("notava-offline");
 
-    this.version(1).stores({
-      notebooks: "id, updatedAt, syncStatus, lastSyncedAt, deletedAt",
-      pages: "id, notebookId, updatedAt, syncStatus, lastSyncedAt, deletedAt",
+    this.version(2).stores({
+      notebooks: "id, userId, [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
+      pages: "id, userId, notebookId, [userId+notebookId], [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
       queue: "++id, entityType, entityId, createdAt, status",
       conflicts: "id, entityType, entityId, createdAt",
       meta: "key",

@@ -9,41 +9,54 @@ datasource db {
 
 model User {
   id                 String   @id @default(cuid())
+  username           String   @unique
+  displayName        String   @map("display_name")
   passwordHash       String   @map("password_hash")
   mustChangePassword Boolean  @default(true) @map("must_change_password")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
+  notebookGroups     NotebookGroup[]
+  notebooks          Notebook[]
+  pages              Page[]
+  attachments        Attachment[]
 
   @@map("users")
 }
 
 model Notebook {
   id          String   @id @default(cuid())
+  userId      String   @map("user_id")
   groupId     String?  @map("group_id")
   name        String
   description String?
   archived    Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   group       NotebookGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   pages       Page[]
 
-  @@index([groupId, archived])
+  @@index([userId, groupId, archived])
+  @@index([userId, updatedAt])
   @@map("notebooks")
 }
 
 model NotebookGroup {
   id        String     @id @default(cuid())
+  userId    String     @map("user_id")
   name      String
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   notebooks Notebook[]
 
+  @@index([userId, updatedAt])
   @@map("notebook_groups")
 }
 
 model Page {
   id         String       @id @default(cuid())
+  userId     String       @map("user_id")
   notebookId String       @map("notebook_id")
   title      String
   bodyHtml   String       @db.Text @map("body_html")
@@ -51,11 +64,13 @@ model Page {
   archived   Boolean      @default(false)
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   notebook   Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
   tags       PageTag[]
   attachments Attachment[]
 
-  @@index([notebookId, archived])
+  @@index([userId, notebookId, archived])
+  @@index([userId, updatedAt])
   @@map("pages")
 }
 
@@ -71,14 +86,16 @@ model PageTag {
 
 model Attachment {
   id          String   @id @default(cuid())
+  userId      String   @map("user_id")
   pageId      String   @map("page_id")
   fileName    String   @map("file_name")
   mimeType    String   @map("mime_type")
   sizeBytes   Int      @map("size_bytes")
   storageKey  String   @unique @map("storage_key")
   createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
-  @@index([pageId])
+  @@index([userId, pageId])
   @@map("attachments")
 }

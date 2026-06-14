@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { NoteEditor } from "@/components/editor/note-editor";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type PageViewProps = {
@@ -9,9 +10,10 @@ type PageViewProps = {
 
 export default async function PageView({ params }: PageViewProps) {
   const { id } = await params;
+  const user = await requireUser();
 
-  const page = await prisma.page.findUnique({
-    where: { id },
+  const page = await prisma.page.findFirst({
+    where: { id, userId: user.id },
     include: {
       notebook: true,
       attachments: {
@@ -31,6 +33,7 @@ export default async function PageView({ params }: PageViewProps) {
     <div className="min-h-[calc(100vh-99px)] bg-white">
       <div className="mx-auto max-w-[1400px]">
         <NoteEditor
+          userId={user.id}
           notebookId={page.notebook.id}
           pageId={page.id}
           initialTitle={page.title}

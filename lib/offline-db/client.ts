@@ -17,40 +17,91 @@ function dispatchSyncEvent(detail: Record<string, unknown>) {
   window.dispatchEvent(new CustomEvent("notava-sync", { detail }));
 }
 
-export async function setLastPullAt(value: string) {
-  await offlineDb.meta.put({ key: "lastPullAt", value });
+function metaKey(userId: string, key: string) {
+  return `${userId}:${key}`;
 }
 
-export async function getLastPullAt() {
-  return (await offlineDb.meta.get("lastPullAt"))?.value ?? null;
+export async function setLastPullAt(userId: string, value: string) {
+  await offlineDb.meta.put({ key: metaKey(userId, "lastPullAt"), value });
 }
 
-export async function seedOfflineBootstrap(payload: SyncBootstrapPayload) {
+export async function getLastPullAt(userId: string) {
+  return (await offlineDb.meta.get(metaKey(userId, "lastPullAt")))?.value ?? null;
+}
+
+export async function clearOfflineStateForUser(userId: string) {
+  await offlineDb.transaction(
+    "rw",
+    [
+      offlineDb.notebooks,
+      offlineDb.pages,
+      offlineDb.queue,
+      offlineDb.conflicts,
+      offlineDb.meta,
+    ],
+    async () => {
+      await offlineDb.notebooks.where("userId").equals(userId).delete();
+      await offlineDb.pages.where("userId").equals(userId).delete();
+      const queue = await offlineDb.queue.toArray();
+      const conflicts = await offlineDb.conflicts.toArray();
+      const meta = await offlineDb.meta.toArray();
+
+      await Promise.all(
+        queue
+          .filter((item) => (item.payload as { userId?: string }).userId === userId)
+          .map((item) => (item.id ? offlineDb.queue.delete(item.id) : Promise.resolve())),
+      );
+      await Promise.all(
+        conflicts
+          .filter((item) => item.id.startsWith(`${userId}:`))
+          .map((item) => offlineDb.conflicts.delete(item.id)),
+      );
+      await Promise.all(
+        meta
+          .filter((item) => item.key.startsWith(`${userId}:`))
+          .map((item) => offlineDb.meta.delete(item.key)),
+      );
+    },
+  );
+}
+
+export async function seedOfflineBootstrap(
+  userId: string,
+  payload: SyncBootstrapPayload,
+) {
   await offlineDb.transaction(
     "rw",
     offlineDb.notebooks,
     offlineDb.pages,
     offlineDb.meta,
     async () => {
+      await offlineDb.notebooks.where("userId").equals(userId).delete();
+      await offlineDb.pages.where("userId").equals(userId).delete();
       await offlineDb.notebooks.bulkPut(payload.notebooks);
       await offlineDb.pages.bulkPut(payload.pages);
-      await setLastPullAt(payload.fetchedAt);
+      await setLastPullAt(userId, payload.fetchedAt);
     },
   );
 }
 
 export async function upsertLocalPage(page: LocalPage) {
   await offlineDb.pages.put(page);
-  dispatchSyncEvent({ type: "page", pageId: page.id, syncStatus: page.syncStatus });
+  dispatchSyncEvent({
+    type: "page",
+    userId: page.userId,
+    pageId: page.id,
+    syncStatus: page.syncStatus,
+  });
 }
 
-export async function getLocalPage(pageId: string) {
-  return offlineDb.pages.get(pageId);
+export async function getLocalPage(userId: string, pageId: string) {
+  const page = await offlineDb.pages.get(pageId);
+  return page?.userId === userId ? page : undefined;
 }
 
-export async function getLocalNotebooks() {
-  const notebooks = await offlineDb.notebooks.toArray();
-  const pages = await offlineDb.pages.toArray();
+export async function getLocalNotebooks(userId: string) {
+  const notebooks = await offlineDb.notebooks.where("userId").equals(userId).toArray();
+  const pages = await offlineDb.pages.where("userId").equals(userId).toArray();
 
   return notebooks
     .filter((notebook) => !notebook.archived)
@@ -64,11 +115,12 @@ export async function getLocalNotebooks() {
 }
 
 export async function updateLocalSyncStatus(
+  userId: string,
   pageId: string,
   syncStatus: SyncStatus,
   lastSyncedAt?: string | null,
 ) {
-  const page = await offlineDb.pages.get(pageId);
+  const page = await getLocalPage(userId, pageId);
 
   if (!page) {
     return;
@@ -79,14 +131,19 @@ export async function updateLocalSyncStatus(
     syncStatus,
     lastSyncedAt: lastSyncedAt ?? page.lastSyncedAt ?? null,
   });
-  dispatchSyncEvent({ type: "page", pageId, syncStatus, lastSyncedAt });
+  dispatchSyncEvent({ type: "page", userId, pageId, syncStatus, lastSyncedAt });
 }
 
 export async function enqueuePageUpsert(page: LocalPage, baseUpdatedAt?: string | null) {
   const existing = await offlineDb.queue
     .where("entityId")
     .equals(page.id)
-    .and((item) => item.entityType === "page" && item.operation === "upsert")
+    .and(
+      (item) =>
+        item.entityType === "page" &&
+        item.operation === "upsert" &&
+        (item.payload as { userId?: string }).userId === page.userId,
+    )
     .first();
 
   const nextQueueItem = {
@@ -105,7 +162,7 @@ export async function enqueuePageUpsert(page: LocalPage, baseUpdatedAt?: string 
     await offlineDb.queue.add(nextQueueItem);
   }
 
-  await updateLocalSyncStatus(page.id, "pending", page.lastSyncedAt ?? null);
+  await updateLocalSyncStatus(page.userId, page.id, "pending", page.lastSyncedAt ?? null);
 }
 
 export async function enqueueNotebookUpsert(
@@ -116,7 +173,10 @@ export async function enqueueNotebookUpsert(
     .where("entityId")
     .equals(notebook.id)
     .and(
-      (item) => item.entityType === "notebook" && item.operation === "upsert",
+      (item) =>
+        item.entityType === "notebook" &&
+        item.operation === "upsert" &&
+        (item.payload as { userId?: string }).userId === notebook.userId,
     )
     .first();
 
@@ -138,11 +198,18 @@ export async function enqueueNotebookUpsert(
 }
 
 export async function enqueuePageArchive(page: LocalPage, baseUpdatedAt?: string | null) {
-  await offlineDb.queue
-    .where("entityId")
-    .equals(page.id)
-    .and((item) => item.entityType === "page")
-    .delete();
+  const queue = await offlineDb.queue.toArray();
+  await Promise.all(
+    queue
+      .filter(
+        (item) =>
+          item.entityId === page.id &&
+          item.entityType === "page" &&
+          (item.payload as { userId?: string }).userId === page.userId &&
+          item.id,
+      )
+      .map((item) => offlineDb.queue.delete(item.id!)),
+  );
 
   await offlineDb.queue.add({
     entityType: "page",
@@ -153,18 +220,25 @@ export async function enqueuePageArchive(page: LocalPage, baseUpdatedAt?: string
     createdAt: new Date().toISOString(),
     status: "pending",
   });
-  await updateLocalSyncStatus(page.id, "pending", page.lastSyncedAt ?? null);
+  await updateLocalSyncStatus(page.userId, page.id, "pending", page.lastSyncedAt ?? null);
 }
 
 export async function enqueueNotebookArchive(
   notebook: LocalNotebook,
   baseUpdatedAt?: string | null,
 ) {
-  await offlineDb.queue
-    .where("entityId")
-    .equals(notebook.id)
-    .and((item) => item.entityType === "notebook")
-    .delete();
+  const queue = await offlineDb.queue.toArray();
+  await Promise.all(
+    queue
+      .filter(
+        (item) =>
+          item.entityId === notebook.id &&
+          item.entityType === "notebook" &&
+          (item.payload as { userId?: string }).userId === notebook.userId &&
+          item.id,
+      )
+      .map((item) => offlineDb.queue.delete(item.id!)),
+  );
 
   await offlineDb.queue.add({
     entityType: "notebook",
@@ -177,11 +251,12 @@ export async function enqueueNotebookArchive(
   });
 }
 
-export async function listPendingQueue() {
-  return offlineDb.queue.orderBy("createdAt").toArray();
+export async function listPendingQueue(userId: string) {
+  const queue = await offlineDb.queue.orderBy("createdAt").toArray();
+  return queue.filter((item) => (item.payload as { userId?: string }).userId === userId);
 }
 
-export async function applySyncPushResult(result: SyncPushResult) {
+export async function applySyncPushResult(userId: string, result: SyncPushResult) {
   await offlineDb.transaction(
     "rw",
     [
@@ -207,16 +282,20 @@ export async function applySyncPushResult(result: SyncPushResult) {
       }
 
       for (const conflict of result.conflicts) {
-        await offlineDb.conflicts.put(conflict);
+        await offlineDb.conflicts.put({
+          ...conflict,
+          id: `${userId}:${conflict.id}`,
+        });
         dispatchSyncEvent({
           type: "page",
+          userId,
           pageId: conflict.entityId,
           syncStatus: "conflict",
           conflict,
         });
       }
 
-      await setLastPullAt(result.pulledAt);
+      await setLastPullAt(userId, result.pulledAt);
     },
   );
 }
@@ -233,8 +312,8 @@ export async function fetchBootstrap() {
   return (await response.json()) as SyncBootstrapPayload;
 }
 
-export async function fetchPullChanges() {
-  const since = await getLastPullAt();
+export async function fetchPullChanges(userId: string) {
+  const since = await getLastPullAt(userId);
   const response = await fetch(
     `/api/sync/pull${since ? `?since=${encodeURIComponent(since)}` : ""}`,
     {
@@ -264,10 +343,12 @@ export async function pushQueue(items: SyncQueueItem[]) {
   return (await response.json()) as SyncPushResult;
 }
 
-export async function upsertConflictRecords(conflicts: ConflictRecord[]) {
+export async function upsertConflictRecords(userId: string, conflicts: ConflictRecord[]) {
   if (conflicts.length === 0) {
     return;
   }
 
-  await offlineDb.conflicts.bulkPut(conflicts);
+  await offlineDb.conflicts.bulkPut(
+    conflicts.map((conflict) => ({ ...conflict, id: `${userId}:${conflict.id}` })),
+  );
 }

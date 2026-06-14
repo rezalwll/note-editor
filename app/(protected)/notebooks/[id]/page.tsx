@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type NotebookPageProps = {
@@ -8,12 +9,13 @@ type NotebookPageProps = {
 
 export default async function NotebookPage({ params }: NotebookPageProps) {
   const { id } = await params;
+  const user = await requireUser();
 
-  const notebook = await prisma.notebook.findUnique({
-    where: { id },
+  const notebook = await prisma.notebook.findFirst({
+    where: { id, userId: user.id },
     include: {
       pages: {
-        where: { archived: false },
+        where: { archived: false, userId: user.id },
         orderBy: { updatedAt: "desc" },
         take: 1,
       },

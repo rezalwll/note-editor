@@ -1,4 +1,5 @@
 import { UserRound } from "lucide-react";
+import Link from "next/link";
 
 import { logoutAction } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
@@ -8,9 +9,21 @@ import { MobileShell } from "@/components/mobile-shell";
 import { PagesSidebar } from "@/components/pages-sidebar";
 import { SectionTabs } from "@/components/section-tabs";
 import { getSidebarData } from "@/lib/queries";
+import { getUserAccent, getUserInitials } from "@/lib/users";
 
-export async function AppShell({ children }: { children: React.ReactNode }) {
-  const { groups, notebooks } = await getSidebarData();
+type AppShellProps = {
+  children: React.ReactNode;
+  currentUser: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
+};
+
+export async function AppShell({ children, currentUser }: AppShellProps) {
+  const { groups, notebooks } = await getSidebarData(currentUser.id);
+  const userAccent = getUserAccent(currentUser.username);
+  const userInitials = getUserInitials(currentUser.displayName);
   const shellNotebooks = notebooks.map((notebook) => ({
     id: notebook.id,
     name: notebook.name,
@@ -31,7 +44,11 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ContextMenuProvider>
       <div className="min-h-screen bg-[#f6f6f6] text-[#2b2b2b]">
-        <MobileShell notebooks={shellNotebooks} groups={shellGroups} />
+        <MobileShell
+          notebooks={shellNotebooks}
+          groups={shellGroups}
+          currentUser={currentUser}
+        />
 
         <div className="sticky top-0 z-40 hidden xl:block">
           <header className="border-b border-[#d6dee8] bg-[#e8edf5]/95 backdrop-blur">
@@ -46,19 +63,26 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center gap-2.5 rounded-2xl border border-[#d6dee8] bg-white px-3 py-1.5 shadow-[0_3px_10px_rgba(15,23,42,0.08)]">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1098c5] text-white">
-                    <UserRound className="h-4.5 w-4.5" />
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-2.5 rounded-2xl border border-[#d6dee8] bg-white px-3 py-1.5 shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition hover:bg-[#f7fbff]"
+                >
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: userAccent }}
+                  >
+                    {userInitials}
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-semibold leading-5 text-[#1f2a37]">
-                      Mohammadreza Aziz
+                      {currentUser.displayName}
                     </div>
                     <div className="text-[11px] leading-4 text-[#708090]">
-                      Personal notebook
+                      @{currentUser.username}
                     </div>
                   </div>
-                </div>
+                  <UserRound className="h-4.5 w-4.5 text-[#4b5a6b]" />
+                </Link>
 
                 <form action={logoutAction}>
                   <button

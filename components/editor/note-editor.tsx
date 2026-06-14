@@ -31,6 +31,7 @@ type Attachment = {
 };
 
 type NoteEditorProps = {
+  userId: string;
   notebookId: string;
   pageId: string;
   initialTitle: string;
@@ -143,6 +144,7 @@ function getCurrentLineRange(text: string, position: number) {
 }
 
 export function NoteEditor({
+  userId,
   notebookId,
   pageId,
   initialTitle,
@@ -271,7 +273,7 @@ export function NoteEditor({
     let isCancelled = false;
 
     async function hydrateFromOfflineStore() {
-      const localPage = await getLocalPage(pageId);
+      const localPage = await getLocalPage(userId, pageId);
       const serverUpdatedAt = new Date(initialUpdatedAt).getTime();
       const localUpdatedAt = localPage ? new Date(localPage.updatedAt).getTime() : 0;
       const shouldPreferLocal =
@@ -281,6 +283,7 @@ export function NoteEditor({
 
       const serverPage: LocalPage = {
         id: pageId,
+        userId,
         notebookId,
         title: initialTitle,
         bodyHtml: initialHtml,
@@ -323,7 +326,7 @@ export function NoteEditor({
     return () => {
       isCancelled = true;
     };
-  }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId]);
+  }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId, userId]);
 
   useEffect(() => {
     if (!isHydrated || !activeBlockId) {
@@ -376,6 +379,7 @@ export function NoteEditor({
       const updatedAt = new Date().toISOString();
       const localPage: LocalPage = {
         id: pageId,
+        userId,
         notebookId,
         title,
         bodyHtml: serializedDocument,
@@ -395,8 +399,8 @@ export function NoteEditor({
       setIsSavingLocally(false);
 
       if (navigator.onLine) {
-        await processSyncQueue();
-        const refreshed = await getLocalPage(pageId);
+        await processSyncQueue(userId);
+        const refreshed = await getLocalPage(userId, pageId);
 
         if (refreshed?.lastSyncedAt) {
           lastSyncedAtRef.current = refreshed.lastSyncedAt;
@@ -442,12 +446,17 @@ export function NoteEditor({
     const listener = (event: Event) => {
       const customEvent = event as CustomEvent<{
         type?: string;
+        userId?: string;
         pageId?: string;
         syncStatus?: SyncStatus;
         lastSyncedAt?: string | null;
       }>;
 
-      if (customEvent.detail?.pageId !== pageId || !customEvent.detail.syncStatus) {
+      if (
+        customEvent.detail?.userId !== userId ||
+        customEvent.detail?.pageId !== pageId ||
+        !customEvent.detail.syncStatus
+      ) {
         return;
       }
 
@@ -459,7 +468,7 @@ export function NoteEditor({
 
     window.addEventListener("notava-sync", listener);
     return () => window.removeEventListener("notava-sync", listener);
-  }, [pageId]);
+  }, [pageId, userId]);
 
   function addBlockAt(x: number, y: number) {
     const block: FreeformBlock = {

@@ -5,17 +5,18 @@ import type { LocalNotebook, LocalPage, SyncBootstrapPayload } from "@/lib/offli
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  await requireUser();
+  const user = await requireUser();
 
   const [notebooks, pages] = await Promise.all([
     prisma.notebook.findMany({
-      where: { archived: false },
+      where: { archived: false, userId: user.id },
       orderBy: { updatedAt: "desc" },
     }),
     prisma.page.findMany({
       where: {
+        userId: user.id,
         archived: false,
-        notebook: { archived: false },
+        notebook: { archived: false, userId: user.id },
       },
       orderBy: { updatedAt: "desc" },
     }),
@@ -25,6 +26,7 @@ export async function GET() {
     fetchedAt: new Date().toISOString(),
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
+      userId: user.id,
       groupId: notebook.groupId,
       name: notebook.name,
       description: notebook.description,
@@ -36,6 +38,7 @@ export async function GET() {
     })),
     pages: pages.map<LocalPage>((page) => ({
       id: page.id,
+      userId: user.id,
       notebookId: page.notebookId,
       title: page.title,
       bodyHtml: page.bodyHtml,

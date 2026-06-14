@@ -2,22 +2,23 @@ import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
 
-export const getSidebarData = cache(async () => {
+export const getSidebarData = cache(async (userId: string) => {
   const [groups, notebooks] = await Promise.all([
     prisma.notebookGroup.findMany({
+      where: { userId },
       orderBy: { createdAt: "asc" },
       include: {
         _count: {
           select: {
             notebooks: {
-              where: { archived: false },
+              where: { archived: false, userId },
             },
           },
         },
       },
     }),
     prisma.notebook.findMany({
-      where: { archived: false },
+      where: { archived: false, userId },
       orderBy: { createdAt: "asc" },
       include: {
         group: {
@@ -31,12 +32,13 @@ export const getSidebarData = cache(async () => {
             pages: {
               where: {
                 archived: false,
+                userId,
               },
             },
           },
         },
         pages: {
-          where: { archived: false },
+          where: { archived: false, userId },
           orderBy: { updatedAt: "desc" },
           select: {
             id: true,

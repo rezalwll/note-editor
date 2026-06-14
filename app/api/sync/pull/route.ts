@@ -5,19 +5,22 @@ import type { LocalNotebook, LocalPage, SyncBootstrapPayload } from "@/lib/offli
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
-  await requireUser();
+  const user = await requireUser();
 
   const { searchParams } = new URL(request.url);
   const since = searchParams.get("since");
   const sinceDate = since ? new Date(since) : null;
 
-  const notebookWhere = sinceDate ? { updatedAt: { gt: sinceDate } } : {};
+  const notebookWhere = sinceDate
+    ? { userId: user.id, updatedAt: { gt: sinceDate } }
+    : { userId: user.id };
   const pageWhere = sinceDate
     ? {
+        userId: user.id,
         updatedAt: { gt: sinceDate },
-        notebook: { archived: false },
+        notebook: { archived: false, userId: user.id },
       }
-    : { notebook: { archived: false } };
+    : { userId: user.id, notebook: { archived: false, userId: user.id } };
 
   const [notebooks, pages] = await Promise.all([
     prisma.notebook.findMany({
@@ -34,6 +37,7 @@ export async function GET(request: Request) {
     fetchedAt: new Date().toISOString(),
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
+      userId: user.id,
       groupId: notebook.groupId,
       name: notebook.name,
       description: notebook.description,
@@ -45,6 +49,7 @@ export async function GET(request: Request) {
     })),
     pages: pages.map<LocalPage>((page) => ({
       id: page.id,
+      userId: user.id,
       notebookId: page.notebookId,
       title: page.title,
       bodyHtml: page.bodyHtml,

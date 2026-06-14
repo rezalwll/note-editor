@@ -14,27 +14,41 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   const password = process.env.BOOTSTRAP_PASSWORD || "reza1071377";
   const existingUser = await prisma.user.findFirst();
+  let ownerId = existingUser?.id;
 
   if (!existingUser) {
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
+        username: "owner",
+        displayName: "Owner",
         passwordHash: await argon2.hash(password),
         mustChangePassword: true,
       },
     });
+
+    ownerId = user.id;
   }
 
   const notebook = await prisma.notebook.findFirst({
-    where: { name: "Quick Notes" },
+    where: ownerId
+      ? {
+          userId: ownerId,
+          name: "Quick Notes",
+        }
+      : {
+          name: "Quick Notes",
+        },
   });
 
-  if (!notebook) {
+  if (!notebook && ownerId) {
     await prisma.notebook.create({
       data: {
+        userId: ownerId,
         name: "Quick Notes",
         description: "Personal space for thoughts, plans, and study notes.",
         pages: {
           create: {
+            userId: ownerId,
             title: "Welcome",
             bodyHtml:
               "<h1>Welcome</h1><p>Your notebook is ready. Change the default password from Security settings first.</p>",

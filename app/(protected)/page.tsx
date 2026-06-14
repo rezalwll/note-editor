@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
+  const user = await requireUser();
   const notebooks = await prisma.notebook.findMany({
-    where: { archived: false },
+    where: { archived: false, userId: user.id },
     include: {
       pages: {
-        where: { archived: false },
+        where: { archived: false, userId: user.id },
         orderBy: { updatedAt: "desc" },
         take: 1,
       },

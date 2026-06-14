@@ -176,6 +176,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       ),
     [activeGroupKey, items],
   );
+  const activeGroupNotebookSignature = useMemo(
+    () =>
+      activeGroupNotebooks
+        .map((notebook) => `${notebook.id}:${notebook.name}:${notebook.groupId ?? ""}`)
+        .join("|"),
+    [activeGroupNotebooks],
+  );
 
   useLayoutEffect(() => {
     const container = measureRef.current;
@@ -189,7 +196,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     );
 
     if (notebookElements.length === 0) {
-      setOverflowNotebookIds([]);
+      setOverflowNotebookIds((current) =>
+        current.length === 0 ? current : [],
+      );
       return;
     }
 
@@ -223,7 +232,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     setOverflowNotebookIds((current) =>
       current.join(",") === overflowIds.join(",") ? current : overflowIds,
     );
-  }, [activeGroupNotebooks, editingNotebookId]);
+  }, [activeGroupNotebookSignature, editingNotebookId]);
 
   const visibleNotebooks = useMemo(() => {
     const hiddenIds = new Set(overflowNotebookIds);

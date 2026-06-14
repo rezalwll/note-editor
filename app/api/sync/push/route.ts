@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 
 const notebookPayloadSchema = z.object({
   id: z.string(),
+  userId: z.string().optional(),
   groupId: z.string().nullable().optional(),
   name: z.string(),
   description: z.string().nullable().optional(),
@@ -27,6 +28,7 @@ const notebookPayloadSchema = z.object({
 
 const pagePayloadSchema = z.object({
   id: z.string(),
+  userId: z.string().optional(),
   notebookId: z.string(),
   title: z.string(),
   bodyHtml: z.string(),
@@ -52,6 +54,7 @@ const pushSchema = z.object({
 
 function toNotebookResponse(notebook: {
   id: string;
+  userId: string;
   groupId: string | null;
   name: string;
   description: string | null;
@@ -60,6 +63,7 @@ function toNotebookResponse(notebook: {
 }): LocalNotebook {
   return {
     id: notebook.id,
+    userId: notebook.userId,
     groupId: notebook.groupId,
     name: notebook.name,
     description: notebook.description,
@@ -73,6 +77,7 @@ function toNotebookResponse(notebook: {
 
 function toPageResponse(page: {
   id: string;
+  userId: string;
   notebookId: string;
   title: string;
   bodyHtml: string;
@@ -82,6 +87,7 @@ function toPageResponse(page: {
 }): LocalPage {
   return {
     id: page.id,
+    userId: page.userId,
     notebookId: page.notebookId,
     title: page.title,
     bodyHtml: page.bodyHtml,
@@ -95,7 +101,7 @@ function toPageResponse(page: {
 }
 
 export async function POST(request: Request) {
-  await requireUser();
+  const user = await requireUser();
   const parsed = pushSchema.safeParse(await request.json());
 
   if (!parsed.success) {
@@ -110,10 +116,28 @@ export async function POST(request: Request) {
   for (const item of parsed.data.operations) {
     if (item.entityType === "notebook") {
       const payload = notebookPayloadSchema.parse(item.payload);
+      const existing = await prisma.notebook.findUnique({
+        where: { id: payload.id },
+      });
+
+      if (existing && existing.userId !== user.id) {
+        return NextResponse.json({ error: "Forbidden notebook scope." }, { status: 403 });
+      }
+
+      if (payload.groupId) {
+        const group = await prisma.notebookGroup.findFirst({
+          where: { id: payload.groupId, userId: user.id },
+          select: { id: true },
+        });
+
+        if (!group) {
+          return NextResponse.json({ error: "Invalid notebook group." }, { status: 400 });
+        }
+      }
 
       if (item.operation === "archive") {
         const archived = await prisma.notebook.update({
-          where: { id: payload.id },
+          where: { id: existing?.id ?? payload.id },
           data: { archived: true },
         });
 
@@ -127,14 +151,11 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const existing = await prisma.notebook.findUnique({
-        where: { id: payload.id },
-      });
-
       const notebook = existing
         ? await prisma.notebook.update({
             where: { id: payload.id },
             data: {
+              userId: user.id,
               groupId: payload.groupId ?? null,
               name: payload.name,
               description: payload.description ?? null,
@@ -144,6 +165,7 @@ export async function POST(request: Request) {
         : await prisma.notebook.create({
             data: {
               id: payload.id,
+              userId: user.id,
               groupId: payload.groupId ?? null,
               name: payload.name,
               description: payload.description ?? null,
@@ -162,6 +184,23 @@ export async function POST(request: Request) {
     }
 
     const payload = pagePayloadSchema.parse(item.payload);
+    const notebook = await prisma.notebook.findFirst({
+      where: { id: payload.notebookId, userId: user.id },
+      select: { id: true },
+    });
+
+    if (!notebook) {
+      return NextResponse.json({ error: "Invalid page notebook." }, { status: 400 });
+    }
+
+    const existing = await prisma.page.findUnique({
+      where: { id: payload.id },
+    });
+
+    if (existing && existing.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden page scope." }, { status: 403 });
+    }
+
     const freeformDocument = parseFreeformDocument(payload.bodyHtml);
     const safeHtml = freeformDocument
       ? payload.bodyHtml
@@ -172,7 +211,7 @@ export async function POST(request: Request) {
 
     if (item.operation === "archive") {
       const archived = await prisma.page.update({
-        where: { id: payload.id },
+        where: { id: existing?.id ?? payload.id },
         data: { archived: true },
       });
 
@@ -186,10 +225,6 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const existing = await prisma.page.findUnique({
-      where: { id: payload.id },
-    });
-
     if (existing && item.baseUpdatedAt) {
       const serverUpdatedAt = existing.updatedAt.getTime();
       const baseUpdatedAt = new Date(item.baseUpdatedAt).getTime();
@@ -197,6 +232,7 @@ export async function POST(request: Request) {
       if (Number.isFinite(serverUpdatedAt) && Number.isFinite(baseUpdatedAt) && serverUpdatedAt > baseUpdatedAt) {
         const recovered = await prisma.page.create({
           data: {
+            userId: user.id,
             notebookId: existing.notebookId,
             title: `${existing.title} (Recovered)`,
             bodyHtml: existing.bodyHtml,
@@ -219,6 +255,7 @@ export async function POST(request: Request) {
       ? await prisma.page.update({
           where: { id: payload.id },
           data: {
+            userId: user.id,
             notebookId: payload.notebookId,
             title: payload.title,
             bodyHtml: safeHtml,
@@ -226,9 +263,10 @@ export async function POST(request: Request) {
             archived: payload.archived,
           },
         })
-      : await prisma.page.create({
+        : await prisma.page.create({
           data: {
             id: payload.id,
+            userId: user.id,
             notebookId: payload.notebookId,
             title: payload.title,
             bodyHtml: safeHtml,

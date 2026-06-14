@@ -22,6 +22,7 @@ export function PasswordForm() {
             name="currentPassword"
             type="password"
             required
+            autoComplete="current-password"
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none transition focus:border-amber-500"
           />
         </label>
@@ -32,6 +33,7 @@ export function PasswordForm() {
             type="password"
             required
             minLength={8}
+            autoComplete="new-password"
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none transition focus:border-amber-500"
           />
         </label>
