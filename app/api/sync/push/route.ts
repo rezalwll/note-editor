@@ -60,6 +60,7 @@ function toNotebookResponse(notebook: {
   description: string | null;
   archived: boolean;
   updatedAt: Date;
+  deletedAt: Date | null;
 }): LocalNotebook {
   return {
     id: notebook.id,
@@ -70,7 +71,7 @@ function toNotebookResponse(notebook: {
     archived: notebook.archived,
     updatedAt: notebook.updatedAt.toISOString(),
     lastSyncedAt: notebook.updatedAt.toISOString(),
-    deletedAt: null,
+    deletedAt: notebook.deletedAt?.toISOString() ?? null,
     syncStatus: "synced",
   };
 }
@@ -84,6 +85,7 @@ function toPageResponse(page: {
   bodyText: string;
   archived: boolean;
   updatedAt: Date;
+  deletedAt: Date | null;
 }): LocalPage {
   return {
     id: page.id,
@@ -95,7 +97,7 @@ function toPageResponse(page: {
     archived: page.archived,
     updatedAt: page.updatedAt.toISOString(),
     lastSyncedAt: page.updatedAt.toISOString(),
-    deletedAt: null,
+    deletedAt: page.deletedAt?.toISOString() ?? null,
     syncStatus: "synced",
   };
 }

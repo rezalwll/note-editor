@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, FolderPlus, Plus } from "lucide-react";
+import { ChevronDown, FolderPlus, Plus, Trash2 } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -17,6 +17,7 @@ import {
   archiveNotebookInlineAction,
   assignNotebookGroupInlineAction,
   createNotebookGroupInlineAction,
+  emptyTrashInlineAction,
   createNotebookInlineAction,
   deleteNotebookGroupInlineAction,
   renameNotebookGroupInlineAction,
@@ -31,12 +32,14 @@ type NotebookTab = {
   name: string;
   groupId: string | null;
   groupName?: string | null;
+  deletedAt?: Date | null;
 };
 
 type NotebookGroupTab = {
   id: string;
   name: string;
   notebookCount: number;
+  systemKey?: string | null;
 };
 
 type SectionTabsProps = {
@@ -45,6 +48,7 @@ type SectionTabsProps = {
 };
 
 const UNGROUPED_KEY = "__ungrouped__";
+const TRASH_GROUP_KEY = "deleted-items";
 const GROUP_PILL_PALETTE = [
   {
     bg: "#9FA1FF",
@@ -279,6 +283,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       id: group.id,
       name: group.name,
       notebookCount: items.filter((item) => item.groupId === group.id).length,
+      systemKey: group.systemKey ?? null,
     }));
     const ungroupedCount = items.filter((item) => item.groupId === null).length;
 
@@ -288,6 +293,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         id: UNGROUPED_KEY,
         name: "بدون دسته",
         notebookCount: ungroupedCount,
+        systemKey: null,
       },
     ];
   }, [groupItems, items]);
@@ -296,8 +302,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     return GROUP_PILL_PALETTE[index % GROUP_PILL_PALETTE.length];
   }
 
+  function isTrashGroup(groupId: string | null | undefined) {
+    return groupItems.some(
+      (group) => group.id === groupId && group.systemKey === TRASH_GROUP_KEY,
+    );
+  }
+
   function beginCreateNotebook() {
-    if (isPending) {
+    if (isPending || isTrashGroup(activeGroupKey)) {
       return;
     }
 
@@ -484,21 +496,34 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function deleteGroup(groupId: string) {
-    const notebookIdsInGroup = items
-      .filter((notebook) => notebook.groupId === groupId)
+    startTransition(async () => {
+      const result = await deleteNotebookGroupInlineAction(groupId);
+
+      if ("trashGroupId" in result && result.trashGroupId) {
+        setManualGroupKey(result.trashGroupId);
+      }
+
+      router.refresh();
+    });
+  }
+
+  function clearTrash() {
+    const trashGroup = groupItems.find((group) => group.systemKey === TRASH_GROUP_KEY);
+
+    if (!trashGroup) {
+      return;
+    }
+
+    const trashNotebookIds = items
+      .filter((notebook) => notebook.groupId === trashGroup.id)
       .map((notebook) => notebook.id);
 
-    setManualGroupKey(UNGROUPED_KEY);
+    setSelectedNotebookIds([]);
 
     startTransition(async () => {
-      updateGroups({ type: "delete", groupId });
-      updateNotebooks({
-        type: "move-many",
-        notebookIds: notebookIdsInGroup,
-        groupId: null,
-        groupName: null,
-      });
-      await deleteNotebookGroupInlineAction(groupId);
+      updateNotebooks({ type: "remove-many", notebookIds: trashNotebookIds });
+      await emptyTrashInlineAction();
+      router.push("/");
       router.refresh();
     });
   }
@@ -536,6 +561,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           const isActive = activeGroupKey === group.id;
           const isEditing = editingGroupId === group.id;
           const pillTheme = getGroupPillTheme(index);
+          const isTrash = group.systemKey === TRASH_GROUP_KEY;
 
           return (
             <div
@@ -554,18 +580,30 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       label: "باز کردن دسته",
                       onSelect: () => setManualGroupKey(group.id),
                     },
-                    {
-                      id: "rename-group",
-                      label: "تغییر نام دسته",
-                      onSelect: () => beginRenameGroup(group.id, group.name),
-                    },
-                    { id: "separator-1", separator: true },
-                    {
-                      id: "delete-group",
-                      label: "حذف دسته",
-                      danger: true,
-                      onSelect: () => deleteGroup(group.id),
-                    },
+                    ...(isTrash
+                      ? [
+                          { id: "separator-trash", separator: true as const },
+                          {
+                            id: "empty-trash",
+                            label: "خالی کردن حذف‌شده‌ها",
+                            danger: true,
+                            onSelect: clearTrash,
+                          },
+                        ]
+                      : [
+                          {
+                            id: "rename-group",
+                            label: "تغییر نام دسته",
+                            onSelect: () => beginRenameGroup(group.id, group.name),
+                          },
+                          { id: "separator-1", separator: true as const },
+                          {
+                            id: "delete-group",
+                            label: "حذف دسته",
+                            danger: true,
+                            onSelect: () => deleteGroup(group.id),
+                          },
+                        ]),
                   ],
                 });
               }}
@@ -575,13 +613,18 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               )}
               style={{
                 borderColor: pillTheme.border,
-                backgroundColor: pillTheme.bg,
+                backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
                 color: pillTheme.text,
                 boxShadow: isActive
                   ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 4px ${pillTheme.border}18, 0 10px 24px ${pillTheme.border}52`
                   : `0 6px 18px ${pillTheme.border}33`,
                 opacity: isActive ? 1 : 0.92,
               }}
+              title={
+                isTrash
+                  ? "دفترها و صفحه‌های حذف‌شده تا ۳۰ روز اینجا نگه‌داری می‌شوند و بعد حذف خواهند شد."
+                  : undefined
+              }
             >
               {isEditing ? (
                 <input
@@ -615,6 +658,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     isActive ? "gap-2.5" : "gap-2",
                   )}
                 >
+                  {isTrash ? <Trash2 className="h-3.5 w-3.5" /> : null}
                   <span>{group.name}</span>
                   <span
                     className={cn(
@@ -877,9 +921,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         <button
           type="button"
           onClick={beginCreateNotebook}
-          disabled={isPending}
+          disabled={isPending || isTrashGroup(activeGroupKey)}
           className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-100 disabled:cursor-wait disabled:opacity-60"
-          title="دفتر جدید"
+          title={
+            isTrashGroup(activeGroupKey)
+              ? "در دسته حذف‌شده‌ها نمی‌توان دفتر جدید ساخت."
+              : "دفتر جدید"
+          }
         >
           <Plus className="h-4 w-4" />
         </button>

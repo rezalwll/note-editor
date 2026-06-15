@@ -31,12 +31,15 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
       id: page.id,
       title: page.title,
       updatedAt: page.updatedAt,
+      deletedAt: page.deletedAt,
     })),
+    deletedAt: notebook.deletedAt,
   }));
   const shellGroups = groups.map((group) => ({
     id: group.id,
     name: group.name,
     notebookCount: group._count.notebooks,
+    systemKey: group.systemKey,
   }));
 
   return (

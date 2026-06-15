@@ -1,12 +1,16 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
+import { ensureTrashGroup, purgeExpiredTrash, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
 
 export const getSidebarData = cache(async (userId: string) => {
+  await purgeExpiredTrash(userId);
+  await ensureTrashGroup(userId);
+
   const [groups, notebooks] = await Promise.all([
     prisma.notebookGroup.findMany({
       where: { userId },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }],
       include: {
         _count: {
           select: {
@@ -44,11 +48,24 @@ export const getSidebarData = cache(async (userId: string) => {
             id: true,
             title: true,
             updatedAt: true,
+            deletedAt: true,
           },
         },
       },
     }),
   ]);
 
-  return { groups, notebooks };
+  const sortedGroups = groups.sort((a, b) => {
+    if (a.systemKey === TRASH_GROUP_SYSTEM_KEY) {
+      return 1;
+    }
+
+    if (b.systemKey === TRASH_GROUP_SYSTEM_KEY) {
+      return -1;
+    }
+
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+
+  return { groups: sortedGroups, notebooks };
 });

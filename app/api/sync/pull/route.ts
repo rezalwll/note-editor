@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       archived: notebook.archived,
       updatedAt: notebook.updatedAt.toISOString(),
       lastSyncedAt: notebook.updatedAt.toISOString(),
-      deletedAt: null,
+      deletedAt: notebook.deletedAt?.toISOString() ?? null,
       syncStatus: "synced",
     })),
     pages: pages.map<LocalPage>((page) => ({
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       archived: page.archived,
       updatedAt: page.updatedAt.toISOString(),
       lastSyncedAt: page.updatedAt.toISOString(),
-      deletedAt: null,
+      deletedAt: page.deletedAt?.toISOString() ?? null,
       syncStatus: "synced",
     })),
   };

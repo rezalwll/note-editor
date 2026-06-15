@@ -13,10 +13,12 @@ import { formatDate } from "@/lib/utils";
 type NotebookSummary = {
   id: string;
   name: string;
+  deletedAt?: Date | null;
   pages: Array<{
     id: string;
     title: string;
     updatedAt: Date;
+    deletedAt?: Date | null;
   }>;
 };
 
@@ -66,6 +68,10 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   }, [isCreating]);
 
   function beginCreate() {
+    if (activeNotebook?.deletedAt) {
+      return;
+    }
+
     setDraftTitle("");
     setIsCreating(true);
   }
@@ -229,6 +235,12 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               borderColor: activeTheme?.sidebarBorder,
               backgroundColor: "rgba(255,255,255,0.82)",
             }}
+            disabled={Boolean(activeNotebook.deletedAt)}
+            title={
+              activeNotebook.deletedAt
+                ? "در دفترهای حذف‌شده نمی‌توان صفحه جدید ساخت."
+                : "صفحه جدید"
+            }
           >
             <CirclePlus className="h-4 w-4" />
             صفحه جدید

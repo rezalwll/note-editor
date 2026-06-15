@@ -20,6 +20,7 @@ import {
   getRateLimitState,
   recordFailedAttempt,
 } from "@/lib/rate-limit";
+import { emptyTrash, ensureTrashGroup, purgeExpiredTrash, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
 import { normalizeUsername } from "@/lib/users";
 
 export type AuthActionState = {
@@ -77,7 +78,7 @@ function getSafeRedirectTarget(value: FormDataEntryValue | null) {
 async function getOwnedNotebook(userId: string, id: string) {
   return prisma.notebook.findFirst({
     where: { id, userId },
-    select: { id: true, userId: true, archived: true, groupId: true },
+    select: { id: true, userId: true, archived: true, groupId: true, deletedAt: true },
   });
 }
 
@@ -91,7 +92,7 @@ async function getOwnedPage(userId: string, id: string) {
 async function getOwnedGroup(userId: string, id: string) {
   return prisma.notebookGroup.findFirst({
     where: { id, userId },
-    select: { id: true },
+    select: { id: true, systemKey: true },
   });
 }
 
@@ -338,11 +339,12 @@ export async function createNotebookInlineAction(
   groupId?: string | null,
 ) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   if (groupId) {
     const group = await getOwnedGroup(user.id, groupId);
 
-    if (!group) {
+    if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
       return { error: "دسته معتبر نیست." };
     }
   }
@@ -362,6 +364,7 @@ export async function createNotebookInlineAction(
 
 export async function createNotebookGroupInlineAction(name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsed = notebookGroupSchema.safeParse({ name });
 
@@ -382,6 +385,7 @@ export async function createNotebookGroupInlineAction(name: string) {
 
 export async function renameNotebookGroupInlineAction(id: string, name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const groupId = z.string().cuid().safeParse(id);
   const groupName = z.string().trim().max(80).safeParse(name);
@@ -392,7 +396,7 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
-  if (!group) {
+  if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
     return { error: "دسته پیدا نشد." };
   }
 
@@ -407,6 +411,7 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
 
 export async function deleteNotebookGroupInlineAction(id: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const groupId = z.string().cuid().safeParse(id);
 
@@ -416,14 +421,35 @@ export async function deleteNotebookGroupInlineAction(id: string) {
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
-  if (!group) {
+  if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
     return { error: "دسته پیدا نشد." };
   }
 
+  const trashGroup = await ensureTrashGroup(user.id);
+  const deletedAt = new Date();
+  const notebooksInGroup = await prisma.notebook.findMany({
+    where: { groupId: group.id, userId: user.id },
+    select: { id: true },
+  });
+
+  const notebookIds = notebooksInGroup.map((notebook) => notebook.id);
+
   await prisma.$transaction([
     prisma.notebook.updateMany({
-      where: { groupId: group.id, userId: user.id },
-      data: { groupId: null },
+      where: { id: { in: notebookIds }, userId: user.id },
+      data: {
+        groupId: trashGroup.id,
+        deletedAt,
+      },
+    }),
+    prisma.page.updateMany({
+      where: {
+        notebookId: { in: notebookIds },
+        userId: user.id,
+      },
+      data: {
+        deletedAt,
+      },
     }),
     prisma.notebookGroup.delete({
       where: { id: group.id },
@@ -431,7 +457,7 @@ export async function deleteNotebookGroupInlineAction(id: string) {
   ]);
 
   revalidatePath("/");
-  return { success: true };
+  return { success: true, trashGroupId: trashGroup.id };
 }
 
 export async function assignNotebookGroupInlineAction(
@@ -439,6 +465,7 @@ export async function assignNotebookGroupInlineAction(
   groupId: string | null,
 ) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsedNotebookIds = z.array(z.string().cuid()).safeParse(notebookIds);
   const parsedGroupId =
@@ -453,7 +480,7 @@ export async function assignNotebookGroupInlineAction(
   if (parsedGroupId.data) {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
-    if (!group) {
+    if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
       return { error: "دسته پیدا نشد." };
     }
   }
@@ -476,6 +503,7 @@ export async function assignNotebookGroupInlineAction(
 
 export async function renameNotebookInlineAction(id: string, name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const notebookId = z.string().cuid().safeParse(id);
   const notebookName = z.string().trim().max(80).safeParse(name);
@@ -502,6 +530,7 @@ export async function renameNotebookInlineAction(id: string, name: string) {
 
 export async function updateNotebookAction(formData: FormData) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const id = z.string().cuid().safeParse(formData.get("id"));
   const parsed = notebookSchema.safeParse({
@@ -530,6 +559,7 @@ export async function updateNotebookAction(formData: FormData) {
 
 export async function archiveNotebookAction(formData: FormData) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
   const id = z.string().cuid().safeParse(formData.get("id"));
 
   if (!id.success) {
@@ -553,6 +583,7 @@ export async function archiveNotebookAction(formData: FormData) {
 
 export async function archiveNotebookInlineAction(id: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
   const notebookId = z.string().cuid().safeParse(id);
 
   if (!notebookId.success) {
@@ -576,6 +607,7 @@ export async function archiveNotebookInlineAction(id: string) {
 
 export async function createPageAction(formData: FormData) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsed = pageSchema.safeParse({
     notebookId: formData.get("notebookId"),
@@ -588,7 +620,7 @@ export async function createPageAction(formData: FormData) {
 
   const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
 
-  if (!notebook || notebook.archived) {
+  if (!notebook || notebook.archived || notebook.deletedAt) {
     return;
   }
 
@@ -608,6 +640,7 @@ export async function createPageAction(formData: FormData) {
 
 export async function createPageInlineAction(notebookId: string, title: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsed = pageSchema.safeParse({
     notebookId,
@@ -620,7 +653,7 @@ export async function createPageInlineAction(notebookId: string, title: string) 
 
   const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
 
-  if (!notebook || notebook.archived) {
+  if (!notebook || notebook.archived || notebook.deletedAt) {
     return { error: "دفتر پیدا نشد." };
   }
 
@@ -641,6 +674,7 @@ export async function createPageInlineAction(notebookId: string, title: string) 
 
 export async function archivePageAction(formData: FormData) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
   const pageId = z.string().cuid().safeParse(formData.get("pageId"));
 
   if (!pageId.success) {
@@ -667,6 +701,7 @@ export async function archivePageAction(formData: FormData) {
 
 export async function archivePageInlineAction(pageId: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
@@ -695,6 +730,7 @@ export async function archivePageInlineAction(pageId: string) {
 
 export async function updateTagsAction(formData: FormData) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
   const pageId = z.string().cuid().safeParse(formData.get("pageId"));
   const tagsInput = z.string().safeParse(formData.get("tags"));
 
@@ -723,4 +759,12 @@ export async function updateTagsAction(formData: FormData) {
   });
 
   revalidatePath(`/pages/${pageId.data}`);
+}
+
+export async function emptyTrashInlineAction() {
+  const user = await requireUser();
+  await purgeExpiredTrash(user.id);
+  const deletedCount = await emptyTrash(user.id);
+  revalidatePath("/");
+  return { success: true, deletedCount };
 }

@@ -8,6 +8,7 @@ import {
   FileText,
   Menu,
   NotebookTabs,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -28,13 +29,16 @@ type MobileNotebook = {
     id: string;
     title: string;
     updatedAt: Date;
+    deletedAt: Date | null;
   }>;
+  deletedAt: Date | null;
 };
 
 type MobileGroup = {
   id: string;
   name: string;
   notebookCount: number;
+  systemKey: string | null;
 };
 
 type MobileShellProps = {
@@ -152,7 +156,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   function submitCreate() {
     const nextTitle = draftTitle.trim() || "صفحه بدون عنوان";
 
-    if (!activeNotebook) {
+    if (!activeNotebook || activeNotebook.deletedAt) {
       setDraftTitle("");
       setIsCreating(false);
       return;
@@ -190,11 +194,13 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     ...groups.map((group) => ({
       id: group.id,
       name: group.name,
+      systemKey: group.systemKey,
       notebooks: notebooks.filter((notebook) => notebook.groupId === group.id),
     })),
     {
       id: "ungrouped",
       name: "بدون دسته",
+      systemKey: null,
       notebooks: notebooks.filter((notebook) => notebook.groupId === null),
     },
   ].filter((group) => group.notebooks.length > 0);
@@ -300,7 +306,12 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               {groupedNotebooks.map((group) => (
                 <div key={group.id}>
                   <div className="mb-2 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {group.name}
+                    <span className="inline-flex items-center gap-1">
+                      {group.systemKey === "deleted-items" ? (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      ) : null}
+                      {group.name}
+                    </span>
                   </div>
                   <div className="grid gap-2">
                     {group.notebooks.map((notebook) => {
@@ -351,6 +362,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                 }}
                 className="inline-flex items-center gap-2 text-sm"
                 style={{ color: activeTheme.sidebarText }}
+                disabled={Boolean(activeNotebook?.deletedAt)}
               >
                 <CirclePlus className="h-4 w-4" />
                 صفحه جدید
