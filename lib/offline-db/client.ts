@@ -84,6 +84,38 @@ export async function seedOfflineBootstrap(
   );
 }
 
+export async function hasOfflineBootstrap(userId: string) {
+  const [notebookCount, pageCount] = await Promise.all([
+    offlineDb.notebooks.where("userId").equals(userId).count(),
+    offlineDb.pages.where("userId").equals(userId).count(),
+  ]);
+
+  return notebookCount > 0 || pageCount > 0;
+}
+
+export async function applyPullChanges(
+  userId: string,
+  payload: SyncBootstrapPayload,
+) {
+  await offlineDb.transaction(
+    "rw",
+    offlineDb.notebooks,
+    offlineDb.pages,
+    offlineDb.meta,
+    async () => {
+      if (payload.notebooks.length > 0) {
+        await offlineDb.notebooks.bulkPut(payload.notebooks);
+      }
+
+      if (payload.pages.length > 0) {
+        await offlineDb.pages.bulkPut(payload.pages);
+      }
+
+      await setLastPullAt(userId, payload.fetchedAt);
+    },
+  );
+}
+
 export async function upsertLocalPage(page: LocalPage) {
   await offlineDb.pages.put(page);
   dispatchSyncEvent({
@@ -303,6 +335,7 @@ export async function applySyncPushResult(userId: string, result: SyncPushResult
 export async function fetchBootstrap() {
   const response = await fetch("/api/sync/bootstrap", {
     credentials: "same-origin",
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -318,6 +351,7 @@ export async function fetchPullChanges(userId: string) {
     `/api/sync/pull${since ? `?since=${encodeURIComponent(since)}` : ""}`,
     {
       credentials: "same-origin",
+      cache: "no-store",
     },
   );
 

@@ -25,8 +25,24 @@ export function AuthenticatedRuntime({ userId }: AuthenticatedRuntimeProps) {
       void processSyncQueue(userId);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void processSyncQueue(userId);
+      }
+    };
+
+    const handleFocus = () => {
+      void processSyncQueue(userId);
+    };
+
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [userId]);
 
   return null;

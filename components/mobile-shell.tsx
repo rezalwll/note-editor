@@ -205,6 +205,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     },
   ].filter((group) => group.notebooks.length > 0);
 
+  const activeNotebookGroupId = activeNotebook?.groupId ?? "ungrouped";
+  const mobileNotebookOptions = groupedNotebooks.find(
+    (group) => group.id === activeNotebookGroupId,
+  )?.notebooks ?? [];
+
   return (
     <div className="xl:hidden">
       <div className="sticky top-0 z-40 border-b border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.95)_0%,rgba(181,186,255,0.95)_36%,rgba(174,226,255,0.92)_74%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
@@ -296,13 +301,14 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="absolute inset-x-0 top-0 max-h-[72vh] overflow-hidden rounded-b-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[var(--border-soft)] px-4 py-3">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-soft)] bg-white px-4 py-3">
               <div className="text-sm font-semibold text-[var(--text-strong)]">دسته‌ها</div>
               <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid gap-4 p-4">
+            <div className="max-h-[calc(72vh-58px)] overflow-y-auto p-4">
+              <div className="grid gap-4">
               {groupedNotebooks.map((group) => (
                 <div key={group.id}>
                   <div className="mb-2 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -335,6 +341,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           </div>
         </div>
@@ -348,7 +355,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             onClick={(event) => event.stopPropagation()}
           >
             <div
-              className="flex items-center justify-between border-b px-4 py-3"
+              className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3"
               style={{
                 borderColor: activeTheme.sidebarBorder,
                 backgroundColor: activeTheme.sidebarHeaderBg,
@@ -372,8 +379,52 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               </button>
             </div>
 
+            <div
+              className="sticky top-[57px] z-[9] border-b px-4 py-3 backdrop-blur"
+              style={{
+                borderColor: activeTheme.sidebarBorder,
+                backgroundColor: `${activeTheme.sidebarBg}f0`,
+              }}
+            >
+              <div className="mb-2 text-right text-[11px] font-semibold text-[var(--text-muted)]">
+                دفتر فعال
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {mobileNotebookOptions.map((notebook) => {
+                  const isActiveNotebook = notebook.id === activeNotebook?.id;
+                  const notebookTheme = getNotebookTheme(notebook.id);
+
+                  return (
+                    <Link
+                      key={notebook.id}
+                      href={`/notebooks/${notebook.id}`}
+                      onClick={() => {
+                        setDraftTitle("");
+                        setIsCreating(false);
+                      }}
+                      className="shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition"
+                      style={{
+                        backgroundColor: isActiveNotebook
+                          ? notebookTheme.sidebarActive
+                          : notebookTheme.accentSoft,
+                        borderColor: isActiveNotebook
+                          ? notebookTheme.accent
+                          : notebookTheme.editorBorder,
+                        color: notebookTheme.sidebarText,
+                      }}
+                    >
+                      {notebook.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
             {isCreating ? (
-              <div className="border-b bg-white px-4 py-3" style={{ borderColor: activeTheme.sidebarBorder }}>
+              <div
+                className="border-b bg-white px-4 py-3"
+                style={{ borderColor: activeTheme.sidebarBorder }}
+              >
                 <input
                   ref={inputRef}
                   value={draftTitle}
@@ -393,7 +444,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               </div>
             ) : null}
 
-            <div className="max-h-[58vh] overflow-y-auto">
+            <div className="max-h-[calc(78vh-138px)] overflow-y-auto">
               {activeNotebook?.pages.map((page) => {
                 const isActive = pathname === `/pages/${page.id}`;
 

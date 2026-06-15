@@ -42,63 +42,27 @@ type NoteEditorProps = {
 
 type BlockSnapshot = Pick<FreeformBlock, "text" | "align" | "bold" | "italic">;
 
-const PAGE_SIDE_PADDING = 48;
-const BLOCK_MIN_WIDTH = 180;
-const BLOCK_DEFAULT_WIDTH = 240;
-const BLOCK_MAX_WIDTH = 900;
-const BLOCK_RIGHT_GUTTER = 0;
-const BLOCK_RTL_CLICK_ANCHOR = 12;
+const PAGE_SIDE_PADDING_DESKTOP = 48;
+const PAGE_SIDE_PADDING_MOBILE = 16;
+const BLOCK_MIN_WIDTH = 220;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
-let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 function createId() {
   return `block-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getBlockWidth(text: string) {
-  const longestLineLength = text
-    .split("\n")
-    .reduce((max, line) => Math.max(max, line.trim().length), 0);
-
-  if (longestLineLength === 0) {
-    return BLOCK_DEFAULT_WIDTH;
-  }
-
-  return Math.min(
-    BLOCK_MAX_WIDTH,
-    Math.max(BLOCK_MIN_WIDTH, longestLineLength * 11 + 56),
-  );
+function getCanvasInset(canvasWidth: number) {
+  return canvasWidth >= 768 ? PAGE_SIDE_PADDING_DESKTOP : PAGE_SIDE_PADDING_MOBILE;
 }
 
-function measureBlockWidth(text: string) {
-  if (typeof document === "undefined") {
-    return getBlockWidth(text);
-  }
-
-  if (!textMeasureContext) {
-    const canvas = document.createElement("canvas");
-    textMeasureContext = canvas.getContext("2d");
-  }
-
-  if (!textMeasureContext) {
-    return getBlockWidth(text);
-  }
-
-  textMeasureContext.font = "400 15px Segoe UI, Tahoma, Geneva, Verdana, sans-serif";
-  const longestLineWidth = text
-    .split("\n")
-    .reduce((max, line) => Math.max(max, textMeasureContext!.measureText(line || " ").width), 0);
-
-  if (longestLineWidth === 0) {
-    return BLOCK_DEFAULT_WIDTH;
-  }
-
-  return Math.min(
-    BLOCK_MAX_WIDTH,
-    Math.max(BLOCK_MIN_WIDTH, Math.ceil(longestLineWidth) + 40),
-  );
+function getBlockLayout(canvasWidth: number) {
+  const inset = getCanvasInset(canvasWidth);
+  return {
+    x: inset,
+    width: Math.max(BLOCK_MIN_WIDTH, canvasWidth - inset * 2),
+  };
 }
 
 function getInitialBlocks(initialHtml: string): FreeformBlock[] {
@@ -107,7 +71,7 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   if (parsed) {
     return parsed.blocks.length > 0
       ? parsed.blocks
-      : [{ id: createId(), x: 96, y: 72, text: "", align: "right" }];
+      : [{ id: createId(), x: PAGE_SIDE_PADDING_DESKTOP, y: 72, text: "", align: "right" }];
   }
 
   const plainText = initialHtml
@@ -118,7 +82,7 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   return [
     {
       id: createId(),
-      x: 96,
+      x: PAGE_SIDE_PADDING_DESKTOP,
       y: 72,
       text: plainText,
       align: "right",
@@ -241,18 +205,8 @@ export function NoteEditor({
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
   const selectedBlocks = blocks.filter((block) => selectedBlockIds.includes(block.id));
 
-  function getCanvasBoundedX(
-    canvasWidth: number,
-    desiredX: number,
-    blockWidth: number,
-  ) {
-    return Math.min(
-      Math.max(PAGE_SIDE_PADDING, desiredX),
-      Math.max(
-        PAGE_SIDE_PADDING,
-        canvasWidth - blockWidth - BLOCK_RIGHT_GUTTER,
-      ),
-    );
+  function getCanvasBoundedX(canvasWidth: number) {
+    return getBlockLayout(canvasWidth).x;
   }
 
   function pushHistoryEntry(block: FreeformBlock) {
@@ -384,6 +338,27 @@ export function NoteEditor({
     element.setSelectionRange(restore.start, restore.end);
   }, [blocks]);
 
+  useEffect(() => {
+    const normalizeBlockLayout = () => {
+      const canvasWidth = canvasRef.current?.getBoundingClientRect().width;
+
+      if (!canvasWidth) {
+        return;
+      }
+
+      const boundedX = getCanvasBoundedX(canvasWidth);
+      setBlocks((current) =>
+        current.map((block) =>
+          block.x === boundedX ? block : { ...block, x: boundedX },
+        ),
+      );
+    };
+
+    normalizeBlockLayout();
+    window.addEventListener("resize", normalizeBlockLayout);
+    return () => window.removeEventListener("resize", normalizeBlockLayout);
+  }, []);
+
   const saveNoteLocally = useEffectEvent(async () => {
     try {
       const updatedAt = new Date().toISOString();
@@ -497,7 +472,6 @@ export function NoteEditor({
   function getCanvasCoordinates(
     clientX: number,
     clientY: number,
-    blockWidth = BLOCK_DEFAULT_WIDTH,
   ) {
     if (!canvasRef.current || !pageRef.current) {
       return null;
@@ -505,11 +479,7 @@ export function NoteEditor({
 
     const pageRect = pageRef.current.getBoundingClientRect();
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const x = getCanvasBoundedX(
-      canvasRect.width,
-      clientX - canvasRect.left - blockWidth + BLOCK_RTL_CLICK_ANCHOR,
-      blockWidth,
-    );
+    const x = getCanvasBoundedX(canvasRect.width);
     const canvasOffsetTop = canvasRect.top - pageRect.top;
     const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
@@ -579,20 +549,12 @@ export function NoteEditor({
 
   function updateBlockText(id: string, text: string) {
     updateBlock(id, (block) => {
-      const previousWidth = measureBlockWidth(block.text);
-      const nextWidth = measureBlockWidth(text);
-      const widthDelta = nextWidth - previousWidth;
-      const canvasWidth = canvasRef.current?.getBoundingClientRect().width ?? BLOCK_MAX_WIDTH;
-      const nextX = getCanvasBoundedX(
-        canvasWidth,
-        widthDelta === 0 ? block.x : block.x - widthDelta,
-        nextWidth,
-      );
-
       return {
         ...block,
         text,
-        x: nextX,
+        x: getCanvasBoundedX(
+          canvasRef.current?.getBoundingClientRect().width ?? 1200,
+        ),
       };
     });
   }
@@ -782,15 +744,6 @@ export function NoteEditor({
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const currentBlock = blocks.find(
-      (block) => block.id === dragStateRef.current?.id,
-    );
-    const blockWidth = getBlockWidth(currentBlock?.text ?? "");
-    const nextX = getCanvasBoundedX(
-      rect.width,
-      event.clientX - rect.left - dragStateRef.current.pointerOffsetX,
-      blockWidth,
-    );
     const nextY = Math.max(
       24,
       event.clientY - rect.top - dragStateRef.current.pointerOffsetY,
@@ -799,7 +752,7 @@ export function NoteEditor({
     setBlocks((current) =>
       current.map((block) =>
         block.id === dragStateRef.current?.id
-          ? { ...block, x: nextX, y: nextY }
+          ? { ...block, x: getCanvasBoundedX(rect.width), y: nextY }
           : block,
       ),
     );
@@ -981,7 +934,7 @@ export function NoteEditor({
         >
           <div className="px-4 pt-5 text-right md:px-[48px] md:pt-6" dir="rtl">
             <div
-              className="inline-block min-w-[260px] max-w-[560px] border-b pb-3 align-top"
+              className="w-full border-b pb-3 align-top md:max-w-[720px]"
               style={{ borderColor: notebookTheme.accent }}
             >
               <h1 className="mb-2 text-[22px] font-normal text-[#111]">{title}</h1>
@@ -1058,9 +1011,6 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
-              const blockWidth = isHydrated
-                ? measureBlockWidth(block.text)
-                : getBlockWidth(block.text);
               const isSelected = selectedBlockIds.includes(block.id);
 
               return (
@@ -1069,14 +1019,13 @@ export function NoteEditor({
                   style={{
                     left: `${block.x}px`,
                     top: `${block.y}px`,
-                    width: `${blockWidth}px`,
                   }}
-                  className="group absolute rounded-md"
+                  className="group absolute w-[calc(100%-32px)] rounded-md md:w-[calc(100%-96px)]"
                 >
                   <button
                     type="button"
                     onPointerDown={(event) => startDraggingBlock(event, block)}
-                    className="absolute -right-8 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100"
+                    className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
                     aria-label="جابجایی بلوک"
                   >
                     <GripVertical className="h-3.5 w-3.5" />

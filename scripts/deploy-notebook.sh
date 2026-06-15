@@ -12,6 +12,8 @@ DB_PASS=${DB_PASS:-}
 PORT=${PORT:-3000}
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-change-me-now}
 NODE_MAJOR=${NODE_MAJOR:-22}
+DOMAIN=${DOMAIN:-}
+SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -47,7 +49,7 @@ ensure_swap() {
 
 install_packages() {
   apt-get update
-  apt-get install -y curl ca-certificates gnupg build-essential postgresql nginx openssl
+  apt-get install -y curl ca-certificates gnupg build-essential postgresql nginx openssl certbot python3-certbot-nginx
 
   if ! command -v node >/dev/null 2>&1; then
     curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
@@ -134,7 +136,7 @@ write_env() {
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
 SESSION_SECRET="${SESSION_SECRET_VALUE}"
 BOOTSTRAP_PASSWORD="${BOOTSTRAP_PASSWORD}"
-SESSION_COOKIE_SECURE="false"
+SESSION_COOKIE_SECURE="$([[ -n "${DOMAIN}" ]] && echo "true" || echo "false")"
 NEXT_PUBLIC_ENABLE_PWA="false"
 UPLOAD_DIR="./uploads"
 MAX_UPLOAD_SIZE_MB="10"
@@ -178,13 +180,23 @@ activate_release() {
 }
 
 configure_nginx() {
+  local server_name="_"
+
+  if [[ -n "${DOMAIN}" ]]; then
+    server_name="${DOMAIN}"
+  fi
+
   cat >/etc/nginx/sites-available/notebook <<NGINXEOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name _;
+    server_name ${server_name};
 
     client_max_body_size 20M;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:${PORT};
@@ -204,6 +216,26 @@ NGINXEOF
   nginx -t
   systemctl enable nginx
   systemctl restart nginx
+}
+
+configure_ssl() {
+  if [[ -z "${DOMAIN}" ]]; then
+    return
+  fi
+
+  mkdir -p /var/www/html
+
+  certbot --nginx \
+    --non-interactive \
+    --agree-tos \
+    --redirect \
+    --email "${SSL_EMAIL}" \
+    -d "${DOMAIN}"
+
+  if grep -q '^SESSION_COOKIE_SECURE="false"' "${APP_DIR}/.env"; then
+    sed -i 's/^SESSION_COOKIE_SECURE="false"/SESSION_COOKIE_SECURE="true"/' "${APP_DIR}/.env"
+    pm2 restart notebook --update-env
+  fi
 }
 
 start_app() {
@@ -250,4 +282,5 @@ build_app
 activate_release
 configure_nginx
 start_app
+configure_ssl
 print_summary

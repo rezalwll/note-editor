@@ -30,12 +30,13 @@ html {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   color: var(--text-strong);
   font-family: var(--font-sans), "Segoe UI", Tahoma, sans-serif;
   background: var(--bg-app);
   text-align: right;
+  overflow-x: hidden;
 }
 
 a {

@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  applyPullChanges,
   applySyncPushResult,
   clearOfflineStateForUser,
   fetchBootstrap,
   fetchPullChanges,
+  hasOfflineBootstrap,
   listPendingQueue,
   seedOfflineBootstrap,
   setLastPullAt,
@@ -20,6 +22,11 @@ export async function bootstrapOfflineState(userId: string) {
     return;
   }
 
+  if (await hasOfflineBootstrap(userId)) {
+    await pullRemoteChanges(userId);
+    return;
+  }
+
   const payload = await fetchBootstrap();
   await seedOfflineBootstrap(userId, payload);
 }
@@ -30,7 +37,7 @@ export async function pullRemoteChanges(userId: string) {
   }
 
   const payload = await fetchPullChanges(userId);
-  await seedOfflineBootstrap(userId, payload);
+  await applyPullChanges(userId, payload);
   await setLastPullAt(userId, payload.fetchedAt);
 }
 

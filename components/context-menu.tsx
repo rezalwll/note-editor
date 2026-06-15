@@ -24,12 +24,14 @@ type ContextMenuState = {
   y: number;
   title?: string;
   items: ContextMenuEntry[];
+  dismissOnScroll: boolean;
+  lockBodyScroll: boolean;
 };
 
 type ContextMenuContextValue = {
   openMenu: (
     event: Pick<MouseEvent, "clientX" | "clientY"> | Pick<React.MouseEvent, "clientX" | "clientY">,
-    options: Omit<ContextMenuState, "x" | "y">,
+    options: Pick<ContextMenuState, "title" | "items">,
   ) => void;
   closeMenu: () => void;
 };
@@ -53,11 +55,18 @@ export function ContextMenuProvider({
   const value = useMemo<ContextMenuContextValue>(
     () => ({
       openMenu(event, options) {
+        const isTouchLike =
+          typeof window !== "undefined" &&
+          (window.matchMedia("(pointer: coarse)").matches ||
+            navigator.maxTouchPoints > 0);
+
         setMenu({
           x: event.clientX,
           y: event.clientY,
           title: options.title,
           items: options.items,
+          dismissOnScroll: !isTouchLike,
+          lockBodyScroll: isTouchLike,
         });
       },
       closeMenu,
@@ -94,20 +103,44 @@ export function ContextMenuProvider({
       }
     };
 
-    const handleViewportChange = () => {
-      setMenu(null);
-    };
-
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("scroll", handleViewportChange, true);
-    window.addEventListener("resize", handleViewportChange);
+    if (menu.dismissOnScroll) {
+      const handleViewportChange = () => {
+        setMenu(null);
+      };
+
+      window.addEventListener("scroll", handleViewportChange, true);
+      window.addEventListener("resize", handleViewportChange);
+
+      return () => {
+        window.removeEventListener("pointerdown", handlePointerDown);
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("scroll", handleViewportChange, true);
+        window.removeEventListener("resize", handleViewportChange);
+      };
+    }
 
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("scroll", handleViewportChange, true);
-      window.removeEventListener("resize", handleViewportChange);
+    };
+  }, [menu]);
+
+  useEffect(() => {
+    if (!menu?.lockBodyScroll) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
     };
   }, [menu]);
 
@@ -146,10 +179,16 @@ function ContextMenuOverlay({
   );
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[200]">
+    <div className="fixed inset-0 z-[200]">
+      <button
+        type="button"
+        aria-label="بستن منو"
+        className="absolute inset-0 bg-transparent"
+        onClick={closeMenu}
+      />
       <div
         ref={menuRef}
-        className="pointer-events-auto fixed min-w-[220px] rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
+        className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
         style={{ left, top }}
       >
         {menu.title ? (
