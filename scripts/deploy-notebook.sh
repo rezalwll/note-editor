@@ -94,6 +94,9 @@ deploy_files() {
     exit 1
   fi
 
+  # Stop the running app before replacing node_modules and build output.
+  pm2 delete notebook >/dev/null 2>&1 || true
+
   mkdir -p "${APP_DIR}"
   find "${APP_DIR}" -mindepth 1 -maxdepth 1 ! -name uploads -exec rm -rf {} +
   tar -xzf "${ARCHIVE_PATH}" -C "${APP_DIR}"
