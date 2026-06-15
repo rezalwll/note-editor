@@ -155,7 +155,7 @@ ENVEOF
 build_app() {
   cd "${STAGING_DIR}"
   rm -rf node_modules .next
-  npm install --no-audit --no-fund
+  npm install --include=dev --no-audit --no-fund
   npm run prisma:generate
   npx prisma migrate resolve --rolled-back 20260614120000_multi_user_accounts >/dev/null 2>&1 || true
   npm run prisma:deploy
