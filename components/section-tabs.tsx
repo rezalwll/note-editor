@@ -569,13 +569,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   ],
                 });
               }}
-              className="inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition hover:-translate-y-px"
+              className={cn(
+                "inline-flex items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
+                isActive ? "h-10 scale-[1.04] px-4 text-sm font-semibold" : "h-8",
+              )}
               style={{
                 borderColor: pillTheme.border,
                 backgroundColor: pillTheme.bg,
                 color: pillTheme.text,
                 boxShadow: isActive
-                  ? `0 0 0 2px rgba(255,255,255,0.65), 0 10px 26px ${pillTheme.border}55`
+                  ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 6px ${pillTheme.border}22, 0 14px 34px ${pillTheme.border}66`
                   : `0 6px 18px ${pillTheme.border}33`,
                 opacity: isActive ? 1 : 0.92,
               }}
@@ -607,18 +610,24 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 <button
                   type="button"
                   onClick={() => setManualGroupKey(group.id)}
-                  className="inline-flex items-center gap-2"
+                  className={cn(
+                    "inline-flex items-center gap-2",
+                    isActive ? "gap-2.5" : "gap-2",
+                  )}
                 >
                   <span>{group.name}</span>
-                    <span
-                      className="rounded-full px-1.5 py-0.5 text-[10px]"
-                      style={{
-                        backgroundColor: pillTheme.badgeBg,
-                        color: pillTheme.badgeText,
-                      }}
-                    >
-                      {group.notebookCount}
-                    </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10px]",
+                      isActive ? "min-w-6 text-[11px]" : "",
+                    )}
+                    style={{
+                      backgroundColor: pillTheme.badgeBg,
+                      color: pillTheme.badgeText,
+                    }}
+                  >
+                    {group.notebookCount}
+                  </span>
                 </button>
               )}
             </div>
