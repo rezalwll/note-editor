@@ -2,6 +2,9 @@
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/notebook}
+STAGING_DIR=${STAGING_DIR:-${APP_DIR}.staging}
+PREVIOUS_DIR=${PREVIOUS_DIR:-${APP_DIR}.previous}
+UPLOADS_DIR=${UPLOADS_DIR:-/var/www/notebook-uploads}
 ARCHIVE_PATH=${ARCHIVE_PATH:-/root/notebook-deploy.tgz}
 DB_NAME=${DB_NAME:-notebook}
 DB_USER=${DB_USER:-notebook_app}
@@ -58,7 +61,11 @@ install_packages() {
 
 prepare_postgres() {
   systemctl enable postgresql
-  systemctl restart postgresql
+  if systemctl is-active --quiet postgresql; then
+    systemctl reload postgresql || true
+  else
+    systemctl start postgresql
+  fi
 
   if [[ -z "${DB_PASS}" && -f /root/notebook-db.env ]]; then
     DB_PASS=$(read_env_value /root/notebook-db.env DB_PASS || true)
@@ -94,13 +101,16 @@ deploy_files() {
     exit 1
   fi
 
-  # Stop the running app before replacing node_modules and build output.
-  pm2 delete notebook >/dev/null 2>&1 || true
+  rm -rf "${STAGING_DIR}"
+  mkdir -p "${STAGING_DIR}" "${UPLOADS_DIR}"
+  tar -xzf "${ARCHIVE_PATH}" -C "${STAGING_DIR}"
 
-  mkdir -p "${APP_DIR}"
-  find "${APP_DIR}" -mindepth 1 -maxdepth 1 ! -name uploads -exec rm -rf {} +
-  tar -xzf "${ARCHIVE_PATH}" -C "${APP_DIR}"
-  mkdir -p "${APP_DIR}/uploads"
+  if [[ -d "${APP_DIR}/uploads" ]] && [[ ! -L "${APP_DIR}/uploads" ]] && [[ -z "$(find "${UPLOADS_DIR}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
+    cp -a "${APP_DIR}/uploads/." "${UPLOADS_DIR}/"
+  fi
+
+  rm -rf "${STAGING_DIR}/uploads"
+  ln -s "${UPLOADS_DIR}" "${STAGING_DIR}/uploads"
 }
 
 write_env() {
@@ -120,7 +130,7 @@ write_env() {
     BOOTSTRAP_PASSWORD=${existing_bootstrap_password}
   fi
 
-  cat >"${APP_DIR}/.env" <<ENVEOF
+  cat >"${STAGING_DIR}/.env" <<ENVEOF
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
 SESSION_SECRET="${SESSION_SECRET_VALUE}"
 BOOTSTRAP_PASSWORD="${BOOTSTRAP_PASSWORD}"
@@ -140,7 +150,7 @@ ENVEOF
 }
 
 build_app() {
-  cd "${APP_DIR}"
+  cd "${STAGING_DIR}"
   if ! npm ci; then
     echo "npm ci failed, falling back to npm install because lockfile is out of sync." >&2
     npm install
@@ -154,6 +164,17 @@ build_app() {
   fi
 
   npm run build
+}
+
+activate_release() {
+  pm2 delete notebook >/dev/null 2>&1 || true
+
+  rm -rf "${PREVIOUS_DIR}"
+  if [[ -d "${APP_DIR}" ]]; then
+    mv "${APP_DIR}" "${PREVIOUS_DIR}"
+  fi
+
+  mv "${STAGING_DIR}" "${APP_DIR}"
 }
 
 configure_nginx() {
@@ -226,6 +247,7 @@ prepare_postgres
 deploy_files
 write_env
 build_app
+activate_release
 configure_nginx
 start_app
 print_summary
