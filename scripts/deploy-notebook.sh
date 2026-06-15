@@ -113,6 +113,7 @@ deploy_files() {
 
   rm -rf "${STAGING_DIR}/uploads"
   ln -s "${UPLOADS_DIR}" "${STAGING_DIR}/uploads"
+  rm -rf "${STAGING_DIR}/.local" "${STAGING_DIR}/notebook-deploy.tgz"
 }
 
 write_env() {
@@ -153,10 +154,8 @@ ENVEOF
 
 build_app() {
   cd "${STAGING_DIR}"
-  if ! npm ci; then
-    echo "npm ci failed, falling back to npm install because lockfile is out of sync." >&2
-    npm install
-  fi
+  rm -rf node_modules .next
+  npm install --no-audit --no-fund
   npm run prisma:generate
   npx prisma migrate resolve --rolled-back 20260614120000_multi_user_accounts >/dev/null 2>&1 || true
   npm run prisma:deploy
