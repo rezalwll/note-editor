@@ -79,6 +79,22 @@ Notes:
 - The bootstrap password should be overridden at runtime for production.
 - The deploy script now creates a dedicated Postgres login named `notebook_app` by default instead of reusing `postgres`.
 
+## Git-based auto deploy
+
+If you want the server to redeploy itself after every `git push`, install the poller once on the server. For a private GitHub repository, point it at an SSH deploy key:
+
+```bash
+chmod +x scripts/install-auto-deploy.sh scripts/auto-deploy-server.sh
+sudo APP_DIR=/var/www/notebook PORT=3000 scripts/install-auto-deploy.sh
+```
+
+What it does:
+
+- Installs a `systemd` timer named `notebook-auto-deploy.timer`
+- Checks the GitHub `master` branch every minute
+- Runs a fresh deploy only when a new commit is detected
+- Keeps the last deployed commit in `/var/lib/notebook-auto-deploy/last-deployed-commit`
+
 ## Database portability
 
 If you plan to move the app between servers often, treat the database and `uploads/` as one migration unit.
