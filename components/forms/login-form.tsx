@@ -29,7 +29,7 @@ export function LoginForm() {
           autoComplete="username"
           autoCapitalize="none"
           dir="ltr"
-          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-right text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-right placeholder:text-stone-400 focus:border-amber-500"
           placeholder="نام کاربری خود را وارد کنید"
         />
       </div>
