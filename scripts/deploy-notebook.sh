@@ -192,6 +192,7 @@ start_app() {
 
 print_summary() {
   local server_ip
+  local attempt
 
   server_ip=$(hostname -I | awk '{print $1}')
 
@@ -202,7 +203,17 @@ print_summary() {
   echo
   pm2 status
   echo
-  curl -I "http://127.0.0.1:${PORT}"
+
+  for attempt in $(seq 1 15); do
+    if curl -fsSI "http://127.0.0.1:${PORT}" >/tmp/notebook-healthcheck.txt 2>/dev/null; then
+      cat /tmp/notebook-healthcheck.txt
+      return
+    fi
+
+    sleep 2
+  done
+
+  echo "Warning: app did not answer on http://127.0.0.1:${PORT} before the health-check timeout." >&2
 }
 
 require_root
