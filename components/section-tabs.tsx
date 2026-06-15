@@ -571,7 +571,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               }}
               className={cn(
                 "inline-flex items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
-                isActive ? "h-9 scale-[1.01] px-3.5 text-[13px] font-semibold" : "h-8",
+                isActive ? "h-9 text-[13px] font-semibold" : "h-8",
               )}
               style={{
                 borderColor: pillTheme.border,
