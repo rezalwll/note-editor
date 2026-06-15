@@ -12,6 +12,17 @@ NODE_MAJOR=${NODE_MAJOR:-22}
 
 export DEBIAN_FRONTEND=noninteractive
 
+read_env_value() {
+  local file_path=$1
+  local key=$2
+
+  if [[ ! -f "${file_path}" ]]; then
+    return 1
+  fi
+
+  sed -n "s/^${key}=\"\\(.*\\)\"$/\\1/p" "${file_path}" | tail -n 1
+}
+
 require_root() {
   if [[ ${EUID} -ne 0 ]]; then
     echo "Run this script as root." >&2
@@ -49,8 +60,12 @@ prepare_postgres() {
   systemctl enable postgresql
   systemctl restart postgresql
 
+  if [[ -z "${DB_PASS}" && -f /root/notebook-db.env ]]; then
+    DB_PASS=$(read_env_value /root/notebook-db.env DB_PASS || true)
+  fi
+
   if [[ -z "${DB_PASS}" ]]; then
-    DB_PASS=$(openssl rand -base64 24 | tr -d '\n')
+    DB_PASS=$(openssl rand -hex 24)
   fi
 
   if ! su - postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\"" | grep -q 1; then
@@ -64,6 +79,13 @@ prepare_postgres() {
   else
     su - postgres -c "psql -c \"ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};\""
   fi
+
+  su - postgres -c "psql -d '${DB_NAME}' -c \"ALTER SCHEMA public OWNER TO ${DB_USER};\""
+  su - postgres -c "psql -d '${DB_NAME}' -c \"GRANT ALL ON SCHEMA public TO ${DB_USER};\""
+  su - postgres -c "psql -d '${DB_NAME}' -c \"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${DB_USER};\""
+  su - postgres -c "psql -d '${DB_NAME}' -c \"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${DB_USER};\""
+  su - postgres -c "psql -d '${DB_NAME}' -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${DB_USER};\""
+  su - postgres -c "psql -d '${DB_NAME}' -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${DB_USER};\""
 }
 
 deploy_files() {
@@ -79,9 +101,25 @@ deploy_files() {
 }
 
 write_env() {
+  local existing_session_secret
+  local existing_bootstrap_password
+
+  existing_session_secret=$(read_env_value "${APP_DIR}/.env" SESSION_SECRET || true)
+  existing_bootstrap_password=$(read_env_value "${APP_DIR}/.env" BOOTSTRAP_PASSWORD || true)
+
+  if [[ -n "${existing_session_secret}" ]]; then
+    SESSION_SECRET_VALUE=${existing_session_secret}
+  else
+    SESSION_SECRET_VALUE=$(openssl rand -hex 32)
+  fi
+
+  if [[ "${BOOTSTRAP_PASSWORD}" == "change-me-now" && -n "${existing_bootstrap_password}" ]]; then
+    BOOTSTRAP_PASSWORD=${existing_bootstrap_password}
+  fi
+
   cat >"${APP_DIR}/.env" <<ENVEOF
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
-SESSION_SECRET="$(openssl rand -hex 32)"
+SESSION_SECRET="${SESSION_SECRET_VALUE}"
 BOOTSTRAP_PASSWORD="${BOOTSTRAP_PASSWORD}"
 SESSION_COOKIE_SECURE="false"
 NEXT_PUBLIC_ENABLE_PWA="false"
@@ -105,6 +143,7 @@ build_app() {
     npm install
   fi
   npm run prisma:generate
+  npx prisma migrate resolve --rolled-back 20260614120000_multi_user_accounts >/dev/null 2>&1 || true
   npm run prisma:deploy
 
   if ! su - postgres -c "psql -d '${DB_NAME}' -tAc 'SELECT 1 FROM users LIMIT 1'" 2>/dev/null | grep -q 1; then

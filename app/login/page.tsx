@@ -15,7 +15,7 @@ export default function LoginPage() {
           </div>
           <div className="mb-8 space-y-3">
             <h2 className="font-serif text-4xl tracking-tight text-[var(--text-strong)]">
-              ورود به notava
+              ورود به نوتاوا
             </h2>
             <p className="text-sm leading-7 text-stone-600">
               با نام کاربری و رمز عبور وارد شوید تا فضای کاری خصوصی‌تان باز شود.

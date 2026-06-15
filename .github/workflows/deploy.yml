@@ -1,0 +1,61 @@
+name: Deploy Notebook
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      APP_DIR: /var/www/notebook
+      ARCHIVE_PATH: /root/notebook-deploy.tgz
+      PORT: "3000"
+      SSH_HOST: ${{ secrets.VPS_HOST }}
+      SSH_PORT: ${{ secrets.VPS_PORT }}
+      SSH_USER: ${{ secrets.VPS_USER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "${SSH_PORT}" ]; then
+            ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Build Deploy Archive
+        run: |
+          tar \
+            --exclude .git \
+            --exclude node_modules \
+            --exclude .next \
+            --exclude uploads \
+            -czf notebook-deploy.tgz .
+
+      - name: Upload Files
+        run: |
+          SSH_ARGS="-i ~/.ssh/id_ed25519"
+          if [ -n "${SSH_PORT}" ]; then
+            SSH_ARGS="${SSH_ARGS} -P ${SSH_PORT}"
+          fi
+
+          scp ${SSH_ARGS} notebook-deploy.tgz "${SSH_USER}@${SSH_HOST}:${ARCHIVE_PATH}"
+          scp ${SSH_ARGS} scripts/deploy-notebook.sh "${SSH_USER}@${SSH_HOST}:/root/deploy-notebook.sh"
+
+      - name: Run Deploy Script
+        run: |
+          SSH_ARGS="-i ~/.ssh/id_ed25519"
+          if [ -n "${SSH_PORT}" ]; then
+            SSH_ARGS="${SSH_ARGS} -p ${SSH_PORT}"
+          fi
+
+          ssh ${SSH_ARGS} "${SSH_USER}@${SSH_HOST}" \
+            "chmod +x /root/deploy-notebook.sh && APP_DIR='${APP_DIR}' ARCHIVE_PATH='${ARCHIVE_PATH}' PORT='${PORT}' /root/deploy-notebook.sh"
