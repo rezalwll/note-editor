@@ -11,6 +11,7 @@ DEPLOY_SCRIPT_PATH=${DEPLOY_SCRIPT_PATH:-/root/deploy-notebook.sh}
 APP_DIR=${APP_DIR:-/var/www/notebook}
 PORT=${PORT:-3000}
 FORCE_DEPLOY=${FORCE_DEPLOY:-0}
+LOCK_FILE=${LOCK_FILE:-/var/lock/notebook-auto-deploy.lock}
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -101,6 +102,13 @@ run_deploy() {
 }
 
 require_root
+exec 9>"${LOCK_FILE}"
+
+if ! flock -n 9; then
+  log "Another deployment is already running. Exiting."
+  exit 0
+fi
+
 ensure_dependencies
 ensure_repo
 sync_repo
