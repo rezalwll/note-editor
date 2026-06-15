@@ -571,14 +571,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               }}
               className={cn(
                 "inline-flex items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
-                isActive ? "h-10 scale-[1.04] px-4 text-sm font-semibold" : "h-8",
+                isActive ? "h-9 scale-[1.01] px-3.5 text-[13px] font-semibold" : "h-8",
               )}
               style={{
                 borderColor: pillTheme.border,
                 backgroundColor: pillTheme.bg,
                 color: pillTheme.text,
                 boxShadow: isActive
-                  ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 6px ${pillTheme.border}22, 0 14px 34px ${pillTheme.border}66`
+                  ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 4px ${pillTheme.border}18, 0 10px 24px ${pillTheme.border}52`
                   : `0 6px 18px ${pillTheme.border}33`,
                 opacity: isActive ? 1 : 0.92,
               }}
@@ -619,7 +619,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   <span
                     className={cn(
                       "rounded-full px-1.5 py-0.5 text-[10px]",
-                      isActive ? "min-w-6 text-[11px]" : "",
+                      isActive ? "min-w-5.5 text-[10px]" : "",
                     )}
                     style={{
                       backgroundColor: pillTheme.badgeBg,
