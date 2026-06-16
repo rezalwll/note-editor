@@ -106,7 +106,14 @@ export function ContextMenuProvider({
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
     if (menu.dismissOnScroll) {
-      const handleViewportChange = () => {
+      const handleViewportChange = (event: Event) => {
+        if (
+          event.target instanceof Node &&
+          menuRef.current?.contains(event.target)
+        ) {
+          return;
+        }
+
         setMenu(null);
       };
 
@@ -176,13 +183,14 @@ function ContextMenuOverlay({
   );
 
   return (
-    <div className="fixed inset-0 z-[200]">
-      <button
-        type="button"
-        aria-label="بستن منو"
-        className="absolute inset-0 bg-transparent"
-        onClick={closeMenu}
-      />
+    <div
+      className="fixed inset-0 z-[200]"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) {
+          closeMenu();
+        }
+      }}
+    >
       <div
         ref={menuRef}
         className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
@@ -192,6 +200,8 @@ function ContextMenuOverlay({
           WebkitOverflowScrolling: "touch",
           touchAction: "pan-y",
         }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         {menu.title ? (
           <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
