@@ -166,6 +166,9 @@ export function NoteEditor({
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 900,
+  );
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -207,8 +210,8 @@ export function NoteEditor({
     () => blocks.reduce((max, block) => Math.max(max, block.y), 0),
     [blocks],
   );
-  const mobileCanvasMinHeight = `max(calc(100dvh - 16rem), ${furthestBlockY + 320}px)`;
-  const desktopCanvasMinHeight = `max(calc(100vh - 240px), ${furthestBlockY + 520}px)`;
+  const mobileCanvasMinHeight = Math.max(viewportHeight - 256, furthestBlockY + 320);
+  const desktopCanvasMinHeight = Math.max(viewportHeight - 240, furthestBlockY + 520);
 
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
@@ -355,6 +358,7 @@ export function NoteEditor({
         return;
       }
 
+      setViewportHeight(window.innerHeight);
       setIsDesktopViewport(canvasWidth >= 768);
       const boundedX = getCanvasBoundedX(canvasWidth);
       setBlocks((current) =>
@@ -936,7 +940,7 @@ export function NoteEditor({
         <div
           ref={pageRef}
           onClick={handlePageClick}
-          className="pt-0 flex min-h-full flex-col overflow-hidden border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
+          className="pt-0 flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
           style={{
             borderColor: notebookTheme.editorBorder,
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,
@@ -960,9 +964,9 @@ export function NoteEditor({
             ref={canvasRef}
             className="freeform-canvas relative flex-1 bg-white"
             style={{
-              minHeight: isDesktopViewport
-                ? desktopCanvasMinHeight
-                : mobileCanvasMinHeight,
+              minHeight: `${
+                isDesktopViewport ? desktopCanvasMinHeight : mobileCanvasMinHeight
+              }px`,
             }}
             onContextMenu={(event) => {
               const target = event.target as HTMLElement;
