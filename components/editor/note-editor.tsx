@@ -53,7 +53,6 @@ const PAGE_SIDE_PADDING_MOBILE = 16;
 const BLOCK_MIN_WIDTH = 180;
 const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
-const BLOCK_RIGHT_GUTTER = 0;
 const BLOCK_RTL_CLICK_ANCHOR = 12;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
@@ -68,9 +67,14 @@ function getCanvasInset(canvasWidth: number) {
   return canvasWidth >= 768 ? PAGE_SIDE_PADDING_DESKTOP : PAGE_SIDE_PADDING_MOBILE;
 }
 
+function getBlockRightGutter(canvasWidth: number) {
+  return getCanvasInset(canvasWidth);
+}
+
 function getBlockMaxWidth(canvasWidth: number) {
   const inset = getCanvasInset(canvasWidth);
-  return Math.max(BLOCK_MIN_WIDTH, canvasWidth - inset - BLOCK_RIGHT_GUTTER);
+  const rightGutter = getBlockRightGutter(canvasWidth);
+  return Math.max(BLOCK_MIN_WIDTH, canvasWidth - inset - rightGutter);
 }
 
 function getBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
@@ -125,14 +129,15 @@ function measureBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
 
 function getLegacyBlockWidth(x: number, canvasWidth: number) {
   const inset = getCanvasInset(canvasWidth);
+  const rightGutter = getBlockRightGutter(canvasWidth);
   const boundedX = Math.min(
     Math.max(inset, x),
-    Math.max(inset, canvasWidth - BLOCK_MIN_WIDTH - BLOCK_RIGHT_GUTTER),
+    Math.max(inset, canvasWidth - BLOCK_MIN_WIDTH - rightGutter),
   );
 
   return Math.min(
     getBlockMaxWidth(canvasWidth),
-    Math.max(BLOCK_MIN_WIDTH, canvasWidth - boundedX - BLOCK_RIGHT_GUTTER),
+    Math.max(BLOCK_MIN_WIDTH, canvasWidth - boundedX - rightGutter),
   );
 }
 
@@ -304,12 +309,13 @@ export function NoteEditor({
     blockWidth: number,
   ) {
     const inset = getCanvasInset(targetCanvasWidth);
+    const rightGutter = getBlockRightGutter(targetCanvasWidth);
 
     return Math.min(
       Math.max(inset, desiredX),
       Math.max(
         inset,
-        targetCanvasWidth - blockWidth - BLOCK_RIGHT_GUTTER,
+        targetCanvasWidth - blockWidth - rightGutter,
       ),
     );
   }
@@ -468,13 +474,43 @@ export function NoteEditor({
       }
 
       setCanvasWidth(canvasWidth);
-      setViewportHeight(window.innerHeight);
+      setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
       setIsDesktopViewport(canvasWidth >= 768);
+    };
+    let animationFrameId: number | null = null;
+    const scheduleNormalizeBlockLayout = () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+
+      animationFrameId = requestAnimationFrame(() => {
+        animationFrameId = null;
+        normalizeBlockLayout();
+      });
     };
 
     normalizeBlockLayout();
-    window.addEventListener("resize", normalizeBlockLayout);
-    return () => window.removeEventListener("resize", normalizeBlockLayout);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleNormalizeBlockLayout);
+    const visualViewport = window.visualViewport;
+
+    if (canvasRef.current) {
+      resizeObserver?.observe(canvasRef.current);
+    }
+
+    window.addEventListener("resize", scheduleNormalizeBlockLayout);
+    visualViewport?.addEventListener("resize", scheduleNormalizeBlockLayout);
+    return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleNormalizeBlockLayout);
+      visualViewport?.removeEventListener("resize", scheduleNormalizeBlockLayout);
+    };
   }, []);
 
   const saveNoteLocally = useEffectEvent(async () => {
