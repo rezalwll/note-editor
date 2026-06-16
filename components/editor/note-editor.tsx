@@ -169,6 +169,7 @@ export function NoteEditor({
   const [viewportHeight, setViewportHeight] = useState(
     typeof window !== "undefined" ? window.innerHeight : 900,
   );
+  const [lowestBlockBottom, setLowestBlockBottom] = useState(0);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -206,12 +207,8 @@ export function NoteEditor({
       ? extractFreeformPlainText(freeformDocument)
       : "";
   }, [serializedDocument]);
-  const furthestBlockY = useMemo(
-    () => blocks.reduce((max, block) => Math.max(max, block.y), 0),
-    [blocks],
-  );
-  const mobileCanvasMinHeight = Math.max(viewportHeight - 256, furthestBlockY + 320);
-  const desktopCanvasMinHeight = Math.max(viewportHeight - 240, furthestBlockY + 520);
+  const mobileCanvasMinHeight = Math.max(viewportHeight - 256, lowestBlockBottom + 280);
+  const desktopCanvasMinHeight = Math.max(viewportHeight - 240, lowestBlockBottom + 360);
 
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
@@ -335,6 +332,13 @@ export function NoteEditor({
     });
 
     if (!selectionRestoreRef.current) {
+      const nextLowestBlockBottom = blocks.reduce((max, block) => {
+        const element = blockRefs.current[block.id];
+        const blockHeight = Math.max(element?.scrollHeight ?? 28, 28);
+        return Math.max(max, block.y + blockHeight);
+      }, 0);
+
+      setLowestBlockBottom(nextLowestBlockBottom);
       return;
     }
 
@@ -348,6 +352,14 @@ export function NoteEditor({
 
     element.focus();
     element.setSelectionRange(restore.start, restore.end);
+
+    const nextLowestBlockBottom = blocks.reduce((max, block) => {
+      const blockElement = blockRefs.current[block.id];
+      const blockHeight = Math.max(blockElement?.scrollHeight ?? 28, 28);
+      return Math.max(max, block.y + blockHeight);
+    }, 0);
+
+    setLowestBlockBottom(nextLowestBlockBottom);
   }, [blocks]);
 
   useEffect(() => {
