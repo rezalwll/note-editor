@@ -926,7 +926,7 @@ export function NoteEditor({
         <div
           ref={pageRef}
           onClick={handlePageClick}
-          className="mt-0 flex min-h-full flex-col overflow-hidden border-x-0 border-y bg-white pb-24 md:mt-4 md:rounded-[10px] md:border md:pb-28"
+          className="mt-0 flex min-h-full flex-col overflow-hidden border-x-0 border-y bg-white pb-24 md:mt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
           style={{
             borderColor: notebookTheme.editorBorder,
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,
@@ -948,7 +948,7 @@ export function NoteEditor({
 
           <div
             ref={canvasRef}
-            className="freeform-canvas relative flex-1 bg-white min-h-[24rem] md:min-h-[30rem]"
+            className="freeform-canvas relative flex-1 bg-white min-h-[24rem] md:min-h-[calc(100vh-240px)]"
             onContextMenu={(event) => {
               const target = event.target as HTMLElement;
 
