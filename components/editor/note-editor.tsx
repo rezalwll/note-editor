@@ -184,7 +184,6 @@ export function NoteEditor({
   >({});
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef("");
-  const lastFocusedBlockIdRef = useRef<string | null>(null);
   const lastSyncedAtRef = useRef(initialUpdatedAt);
   const selectionRestoreRef = useRef<{
     id: string;
@@ -306,19 +305,12 @@ export function NoteEditor({
       return;
     }
 
-    if (lastFocusedBlockIdRef.current === activeBlockId) {
-      return;
-    }
-
     const element = blockRefs.current[activeBlockId];
-    if (!element) {
+    if (!element || document.activeElement === element) {
       return;
     }
 
-    lastFocusedBlockIdRef.current = activeBlockId;
     element.focus();
-    const end = element.value.length;
-    element.setSelectionRange(end, end);
   }, [activeBlockId, isHydrated]);
 
   useEffect(() => {
