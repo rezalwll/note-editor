@@ -423,7 +423,11 @@ export function NoteEditor({
     if (!selectionRestoreRef.current) {
       const nextLowestBlockBottom = blocks.reduce((max, block) => {
         const element = blockRefs.current[block.id];
-        const blockHeight = Math.max(element?.scrollHeight ?? 28, 28);
+        const blockHeight = Math.max(
+          element?.scrollHeight ?? 28,
+          element?.offsetHeight ?? 28,
+          28,
+        );
         return Math.max(max, block.y + blockHeight);
       }, 0);
 
@@ -444,12 +448,16 @@ export function NoteEditor({
 
     const nextLowestBlockBottom = blocks.reduce((max, block) => {
       const blockElement = blockRefs.current[block.id];
-      const blockHeight = Math.max(blockElement?.scrollHeight ?? 28, 28);
+      const blockHeight = Math.max(
+        blockElement?.scrollHeight ?? 28,
+        blockElement?.offsetHeight ?? 28,
+        28,
+      );
       return Math.max(max, block.y + blockHeight);
     }, 0);
 
     setLowestBlockBottom(nextLowestBlockBottom);
-  }, [blocks]);
+  }, [blocks, canvasWidth]);
 
   useEffect(() => {
     const normalizeBlockLayout = () => {
