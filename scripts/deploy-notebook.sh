@@ -13,6 +13,7 @@ PORT=${PORT:-3000}
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-change-me-now}
 NODE_MAJOR=${NODE_MAJOR:-22}
 DOMAIN=${DOMAIN:-}
+DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
 SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
 
 export DEBIAN_FRONTEND=noninteractive
@@ -180,9 +181,20 @@ activate_release() {
 
 configure_nginx() {
   local server_name="_"
+  local -a domains=()
 
   if [[ -n "${DOMAIN}" ]]; then
-    server_name="${DOMAIN}"
+    domains+=("${DOMAIN}")
+  fi
+
+  if [[ -n "${DOMAIN_ALIASES}" ]]; then
+    # shellcheck disable=SC2206
+    local aliases=( ${DOMAIN_ALIASES} )
+    domains+=("${aliases[@]}")
+  fi
+
+  if [[ ${#domains[@]} -gt 0 ]]; then
+    server_name="${domains[*]}"
   fi
 
   cat >/etc/nginx/sites-available/notebook <<NGINXEOF
@@ -218,18 +230,31 @@ NGINXEOF
 }
 
 configure_ssl() {
+  local -a certbot_domains=()
+
   if [[ -z "${DOMAIN}" ]]; then
     return
   fi
 
   mkdir -p /var/www/html
 
+  certbot_domains+=(-d "${DOMAIN}")
+
+  if [[ -n "${DOMAIN_ALIASES}" ]]; then
+    # shellcheck disable=SC2206
+    local aliases=( ${DOMAIN_ALIASES} )
+    local alias
+    for alias in "${aliases[@]}"; do
+      certbot_domains+=(-d "${alias}")
+    done
+  fi
+
   certbot --nginx \
     --non-interactive \
     --agree-tos \
     --redirect \
     --email "${SSL_EMAIL}" \
-    -d "${DOMAIN}"
+    "${certbot_domains[@]}"
 
   if grep -q '^SESSION_COOKIE_SECURE="false"' "${APP_DIR}/.env"; then
     sed -i 's/^SESSION_COOKIE_SECURE="false"/SESSION_COOKIE_SECURE="true"/' "${APP_DIR}/.env"
