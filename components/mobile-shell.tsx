@@ -257,26 +257,21 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     });
   }
 
-  function toggleGroup(groupId: string) {
-    setExpandedGroupIds((current) =>
-      current.includes(groupId)
-        ? current.filter((id) => id !== groupId)
-        : [...current, groupId],
-    );
-  }
-
-  function selectGroup(groupId: string) {
+  function toggleGroupSelection(groupId: string) {
     const targetGroup = groupedNotebooks.find((group) => group.id === groupId);
     const nextNotebook =
       activeNotebook &&
       (activeNotebook.groupId ?? UNGROUPED_ID) === groupId
         ? activeNotebook
         : targetGroup?.notebooks[0] ?? null;
+    const shouldExpand = !expandedGroupIds.includes(groupId);
 
     setSelectedGroupId(groupId);
-    setSelectedNotebookId(nextNotebook?.id ?? null);
+    setSelectedNotebookId(shouldExpand ? nextNotebook?.id ?? null : selectedNotebookId);
     setExpandedGroupIds((current) =>
-      current.includes(groupId) ? current : [...current, groupId],
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId],
     );
   }
 
@@ -472,10 +467,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   <div key={group.id}>
                     <button
                       type="button"
-                      onClick={() => {
-                        selectGroup(group.id);
-                        toggleGroup(group.id);
-                      }}
+                      onClick={() => toggleGroupSelection(group.id)}
                       className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
                     >
                       <div className="flex items-center gap-3">
