@@ -42,13 +42,23 @@ type NoteEditorProps = {
 };
 
 type BlockSnapshot = Pick<FreeformBlock, "text" | "align" | "bold" | "italic">;
+type CanvasCoordinates = {
+  x: number;
+  y: number;
+  width: number;
+};
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
-const BLOCK_MIN_WIDTH = 220;
+const BLOCK_MIN_WIDTH = 180;
+const BLOCK_DEFAULT_WIDTH = 240;
+const BLOCK_MAX_WIDTH = 900;
+const BLOCK_RIGHT_GUTTER = 0;
+const BLOCK_RTL_CLICK_ANCHOR = 12;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
+let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 function createId() {
   return `block-${Math.random().toString(36).slice(2, 10)}`;
@@ -58,12 +68,78 @@ function getCanvasInset(canvasWidth: number) {
   return canvasWidth >= 768 ? PAGE_SIDE_PADDING_DESKTOP : PAGE_SIDE_PADDING_MOBILE;
 }
 
-function getBlockLayout(canvasWidth: number) {
+function getBlockMaxWidth(canvasWidth: number) {
   const inset = getCanvasInset(canvasWidth);
-  return {
-    x: inset,
-    width: Math.max(BLOCK_MIN_WIDTH, canvasWidth - inset * 2),
-  };
+  return Math.max(BLOCK_MIN_WIDTH, canvasWidth - inset - BLOCK_RIGHT_GUTTER);
+}
+
+function getBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
+  const longestLineLength = text
+    .split("\n")
+    .reduce((max, line) => Math.max(max, line.trim().length), 0);
+  const maxWidth = Math.min(BLOCK_MAX_WIDTH, getBlockMaxWidth(canvasWidth));
+
+  if (longestLineLength === 0) {
+    return Math.min(BLOCK_DEFAULT_WIDTH, maxWidth);
+  }
+
+  return Math.min(
+    maxWidth,
+    Math.max(BLOCK_MIN_WIDTH, longestLineLength * 11 + 56),
+  );
+}
+
+function measureBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
+  if (typeof document === "undefined") {
+    return getBlockWidth(text, canvasWidth);
+  }
+
+  if (!textMeasureContext) {
+    const canvas = document.createElement("canvas");
+    textMeasureContext = canvas.getContext("2d");
+  }
+
+  if (!textMeasureContext) {
+    return getBlockWidth(text, canvasWidth);
+  }
+
+  textMeasureContext.font = "400 15px Segoe UI, Tahoma, Geneva, Verdana, sans-serif";
+  const longestLineWidth = text
+    .split("\n")
+    .reduce(
+      (max, line) =>
+        Math.max(max, textMeasureContext!.measureText(line || " ").width),
+      0,
+    );
+  const maxWidth = Math.min(BLOCK_MAX_WIDTH, getBlockMaxWidth(canvasWidth));
+
+  if (longestLineWidth === 0) {
+    return Math.min(BLOCK_DEFAULT_WIDTH, maxWidth);
+  }
+
+  return Math.min(
+    maxWidth,
+    Math.max(BLOCK_MIN_WIDTH, Math.ceil(longestLineWidth) + 40),
+  );
+}
+
+function getLegacyBlockWidth(x: number, canvasWidth: number) {
+  const inset = getCanvasInset(canvasWidth);
+  const boundedX = Math.min(
+    Math.max(inset, x),
+    Math.max(inset, canvasWidth - BLOCK_MIN_WIDTH - BLOCK_RIGHT_GUTTER),
+  );
+
+  return Math.min(
+    getBlockMaxWidth(canvasWidth),
+    Math.max(BLOCK_MIN_WIDTH, canvasWidth - boundedX - BLOCK_RIGHT_GUTTER),
+  );
+}
+
+function getRenderedBlockWidth(block: FreeformBlock, canvasWidth: number) {
+  return typeof block.width === "number"
+    ? Math.min(block.width, getBlockMaxWidth(canvasWidth))
+    : getLegacyBlockWidth(block.x, canvasWidth);
 }
 
 function getInitialBlocks(initialHtml: string): FreeformBlock[] {
@@ -167,6 +243,9 @@ export function NoteEditor({
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
+  const [canvasWidth, setCanvasWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
   const [viewportHeight, setViewportHeight] = useState(
     typeof window !== "undefined" ? window.innerHeight : 900,
   );
@@ -219,8 +298,20 @@ export function NoteEditor({
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
   const selectedBlocks = blocks.filter((block) => selectedBlockIds.includes(block.id));
 
-  function getCanvasBoundedX(canvasWidth: number) {
-    return getBlockLayout(canvasWidth).x;
+  function getCanvasBoundedX(
+    targetCanvasWidth: number,
+    desiredX: number,
+    blockWidth: number,
+  ) {
+    const inset = getCanvasInset(targetCanvasWidth);
+
+    return Math.min(
+      Math.max(inset, desiredX),
+      Math.max(
+        inset,
+        targetCanvasWidth - blockWidth - BLOCK_RIGHT_GUTTER,
+      ),
+    );
   }
 
   function pushHistoryEntry(block: FreeformBlock) {
@@ -368,14 +459,9 @@ export function NoteEditor({
         return;
       }
 
+      setCanvasWidth(canvasWidth);
       setViewportHeight(window.innerHeight);
       setIsDesktopViewport(canvasWidth >= 768);
-      const boundedX = getCanvasBoundedX(canvasWidth);
-      setBlocks((current) =>
-        current.map((block) =>
-          block.x === boundedX ? block : { ...block, x: boundedX },
-        ),
-      );
     };
 
     normalizeBlockLayout();
@@ -502,11 +588,17 @@ export function NoteEditor({
     });
   }
 
-  function addBlockAt(x: number, y: number, shouldFocus = true) {
+  function addBlockAt(
+    x: number,
+    y: number,
+    shouldFocus = true,
+    width = BLOCK_DEFAULT_WIDTH,
+  ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
+      width,
       text: "",
       align: "right",
     };
@@ -529,18 +621,24 @@ export function NoteEditor({
   function getCanvasCoordinates(
     clientX: number,
     clientY: number,
-  ) {
+    blockWidth = BLOCK_DEFAULT_WIDTH,
+  ): CanvasCoordinates | null {
     if (!canvasRef.current || !pageRef.current) {
       return null;
     }
 
     const pageRect = pageRef.current.getBoundingClientRect();
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const x = getCanvasBoundedX(canvasRect.width);
+    const boundedBlockWidth = Math.min(blockWidth, getBlockMaxWidth(canvasRect.width));
+    const x = getCanvasBoundedX(
+      canvasRect.width,
+      clientX - canvasRect.left - boundedBlockWidth + BLOCK_RTL_CLICK_ANCHOR,
+      boundedBlockWidth,
+    );
     const canvasOffsetTop = canvasRect.top - pageRect.top;
     const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
-    return { x, y };
+    return { x, y, width: boundedBlockWidth };
   }
 
   function isEditorControlTarget(target: HTMLElement) {
@@ -585,7 +683,7 @@ export function NoteEditor({
     const coordinates = getCanvasCoordinates(event.clientX, event.clientY);
 
     if (coordinates) {
-      addBlockAt(coordinates.x, coordinates.y);
+      addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
     }
   }
 
@@ -643,12 +741,25 @@ export function NoteEditor({
 
   function updateBlockText(id: string, text: string) {
     updateBlock(id, (block) => {
+      const activeCanvasWidth =
+        canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
+      const isLegacyColumnBlock = typeof block.width !== "number";
+      const previousWidth = getRenderedBlockWidth(block, activeCanvasWidth);
+      const nextWidth = isLegacyColumnBlock
+        ? previousWidth
+        : measureBlockWidth(text, activeCanvasWidth);
+      const widthDelta = nextWidth - previousWidth;
+      const nextX = getCanvasBoundedX(
+        activeCanvasWidth,
+        widthDelta === 0 ? block.x : block.x - widthDelta,
+        nextWidth,
+      );
+
       return {
         ...block,
         text,
-        x: getCanvasBoundedX(
-          canvasRef.current?.getBoundingClientRect().width ?? 1200,
-        ),
+        x: nextX,
+        width: isLegacyColumnBlock ? block.width : nextWidth,
       };
     });
   }
@@ -838,6 +949,17 @@ export function NoteEditor({
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
+    const currentBlock = blocks.find(
+      (block) => block.id === dragStateRef.current?.id,
+    );
+    const blockWidth = currentBlock
+      ? getRenderedBlockWidth(currentBlock, rect.width)
+      : BLOCK_DEFAULT_WIDTH;
+    const nextX = getCanvasBoundedX(
+      rect.width,
+      event.clientX - rect.left - dragStateRef.current.pointerOffsetX,
+      blockWidth,
+    );
     const nextY = Math.max(
       24,
       event.clientY - rect.top - dragStateRef.current.pointerOffsetY,
@@ -846,7 +968,7 @@ export function NoteEditor({
     setBlocks((current) =>
       current.map((block) =>
         block.id === dragStateRef.current?.id
-          ? { ...block, x: getCanvasBoundedX(rect.width), y: nextY }
+          ? { ...block, x: nextX, y: nextY, width: blockWidth }
           : block,
       ),
     );
@@ -1007,9 +1129,11 @@ export function NoteEditor({
     selectSingleBlock(block.id);
 
     const rect = canvasRef.current.getBoundingClientRect();
+    const blockWidth = getRenderedBlockWidth(block, rect.width);
+    const renderedX = getCanvasBoundedX(rect.width, block.x, blockWidth);
     dragStateRef.current = {
       id: block.id,
-      pointerOffsetX: event.clientX - rect.left - block.x,
+      pointerOffsetX: event.clientX - rect.left - renderedX,
       pointerOffsetY: event.clientY - rect.top - block.y,
     };
   }
@@ -1078,7 +1202,13 @@ export function NoteEditor({
                         {
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
-                          onSelect: () => addBlockAt(coordinates.x, coordinates.y),
+                          onSelect: () =>
+                            addBlockAt(
+                              coordinates.x,
+                              coordinates.y,
+                              true,
+                              coordinates.width,
+                            ),
                         },
                         { id: "separator-1", separator: true },
                         {
@@ -1097,7 +1227,13 @@ export function NoteEditor({
                         {
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
-                          onSelect: () => addBlockAt(coordinates.x, coordinates.y),
+                          onSelect: () =>
+                            addBlockAt(
+                              coordinates.x,
+                              coordinates.y,
+                              true,
+                              coordinates.width,
+                            ),
                         },
                       ],
               });
@@ -1112,16 +1248,19 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
+              const blockWidth = getRenderedBlockWidth(block, canvasWidth);
+              const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
               const isSelected = selectedBlockIds.includes(block.id);
 
               return (
                 <div
                   key={block.id}
                   style={{
-                    left: `${block.x}px`,
+                    left: `${blockX}px`,
                     top: `${block.y}px`,
+                    width: `${blockWidth}px`,
                   }}
-                  className="group absolute w-[calc(100%-32px)] rounded-md md:w-[calc(100%-96px)]"
+                  className="group absolute rounded-md"
                 >
                   <button
                     type="button"
