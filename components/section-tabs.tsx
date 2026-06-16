@@ -614,7 +614,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               style={{
                 borderColor: pillTheme.border,
                 backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
-                color: pillTheme.text,
+                color: isTrash ? "#1f2937" : pillTheme.text,
                 boxShadow: isActive
                   ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 4px ${pillTheme.border}18, 0 10px 24px ${pillTheme.border}52`
                   : `0 6px 18px ${pillTheme.border}33`,
@@ -645,8 +645,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   }}
                   className="w-24 border-none bg-transparent text-xs outline-none"
                   style={{
-                    color: pillTheme.text,
-                    caretColor: pillTheme.text,
+                    color: isTrash ? "#1f2937" : pillTheme.text,
+                    caretColor: isTrash ? "#1f2937" : pillTheme.text,
                   }}
                 />
               ) : (
@@ -666,8 +666,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       isActive ? "min-w-5.5 text-[10px]" : "",
                     )}
                     style={{
-                      backgroundColor: pillTheme.badgeBg,
-                      color: pillTheme.badgeText,
+                      backgroundColor: isTrash
+                        ? "rgba(255,255,255,0.72)"
+                        : pillTheme.badgeBg,
+                      color: isTrash ? "#1f2937" : pillTheme.badgeText,
                     }}
                   >
                     {group.notebookCount}
