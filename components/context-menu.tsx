@@ -133,14 +133,11 @@ export function ContextMenuProvider({
     }
 
     const originalOverflow = document.body.style.overflow;
-    const originalTouchAction = document.body.style.touchAction;
 
     document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      document.body.style.touchAction = originalTouchAction;
     };
   }, [menu]);
 
@@ -188,8 +185,13 @@ function ContextMenuOverlay({
       />
       <div
         ref={menuRef}
-        className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
-        style={{ left, top }}
+        className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
+        style={{
+          left,
+          top,
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+        }}
       >
         {menu.title ? (
           <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
