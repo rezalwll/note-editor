@@ -40,7 +40,7 @@ export function SignupForm() {
           autoCapitalize="none"
           dir="ltr"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-          placeholder="lowercase_username"
+          placeholder="هر نام کاربری که می‌خواهید"
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -54,9 +54,8 @@ export function SignupForm() {
             type="password"
             required
             autoComplete="new-password"
-            minLength={8}
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
-            placeholder="حداقل ۸ کاراکتر"
+            placeholder="رمز عبور دلخواه"
           />
         </div>
         <div className="space-y-2">
@@ -69,7 +68,6 @@ export function SignupForm() {
             type="password"
             required
             autoComplete="new-password"
-            minLength={8}
             className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-stone-400 focus:border-amber-500"
             placeholder="رمز عبور را دوباره وارد کنید"
           />

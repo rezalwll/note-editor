@@ -54,14 +54,13 @@ const pageSchema = z.object({
 const usernameSchema = z
   .string()
   .trim()
-  .min(3)
-  .max(32)
-  .regex(/^[a-z0-9_]+$/, "نام کاربری فقط می‌تواند شامل حروف کوچک انگلیسی، عدد و زیرخط باشد.")
+  .min(1)
+  .max(120)
   .transform(normalizeUsername);
 
-const displayNameSchema = z.string().trim().min(2).max(80);
+const displayNameSchema = z.string().trim().min(1).max(80);
 
-const passwordSchema = z.string().min(8).max(128);
+const passwordSchema = z.string().min(1).max(1024);
 
 function getSafeRedirectTarget(value: FormDataEntryValue | null) {
   if (typeof value !== "string") {
@@ -287,7 +286,7 @@ export async function changePasswordAction(
     });
 
   if (!parsed.success) {
-    return { error: "یک رمز عبور جدید با حداقل ۸ کاراکتر وارد کنید." };
+    return { error: "یک رمز عبور جدید وارد کنید." };
   }
 
   const matches = await argon2.verify(

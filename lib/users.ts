@@ -1,5 +1,5 @@
 export function normalizeUsername(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim();
 }
 
 export function getUserInitials(displayName: string) {

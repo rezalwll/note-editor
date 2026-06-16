@@ -32,7 +32,6 @@ export function PasswordForm() {
             name="newPassword"
             type="password"
             required
-            minLength={8}
             autoComplete="new-password"
             className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition focus:border-amber-500"
           />
