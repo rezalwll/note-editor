@@ -30,5 +30,5 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
     redirect(`/pages/${notebook.pages[0].id}`);
   }
 
-  return <div className="min-h-[calc(100vh-99px)] bg-white" />;
+  return <div className="h-full bg-white" />;
 }

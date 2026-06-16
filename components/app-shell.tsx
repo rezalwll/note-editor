@@ -44,7 +44,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
 
   return (
     <ContextMenuProvider>
-      <div className="min-h-screen bg-[#f6f6f6] text-[#2b2b2b]">
+      <div className="min-h-screen h-[100dvh] overflow-hidden bg-[#f6f6f6] text-[#2b2b2b] xl:h-auto xl:overflow-visible">
         <MobileShell
           notebooks={shellNotebooks}
           groups={shellGroups}

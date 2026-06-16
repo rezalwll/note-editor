@@ -28,5 +28,5 @@ export default async function DashboardPage() {
     redirect(`/notebooks/${activeNotebook.id}`);
   }
 
-  return <div className="min-h-[calc(100vh-99px)] bg-white" />;
+  return <div className="h-full bg-white" />;
 }
