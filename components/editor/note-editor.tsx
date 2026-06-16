@@ -2,6 +2,7 @@
 
 import { GripVertical } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
 import {
@@ -189,6 +190,11 @@ export function NoteEditor({
     id: string;
     start: number;
     end: number;
+  } | null>(null);
+  const pagePointerStartRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
   } | null>(null);
 
   const serializedDocument = useMemo(
@@ -473,7 +479,30 @@ export function NoteEditor({
     return () => window.removeEventListener("notava-sync", listener);
   }, [pageId, userId]);
 
-  function addBlockAt(x: number, y: number) {
+  function focusBlockElement(blockId: string, caretPosition = 0) {
+    const element = blockRefs.current[blockId];
+
+    if (!element) {
+      return false;
+    }
+
+    const boundedCaretPosition = Math.min(caretPosition, element.value.length);
+    element.focus({ preventScroll: true });
+    element.setSelectionRange(boundedCaretPosition, boundedCaretPosition);
+    return document.activeElement === element;
+  }
+
+  function focusBlockWhenReady(blockId: string, caretPosition = 0) {
+    if (focusBlockElement(blockId, caretPosition)) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      focusBlockElement(blockId, caretPosition);
+    });
+  }
+
+  function addBlockAt(x: number, y: number, shouldFocus = true) {
     const block: FreeformBlock = {
       id: createId(),
       x,
@@ -482,9 +511,19 @@ export function NoteEditor({
       align: "right",
     };
 
-    setBlocks((current) => [...current, block]);
-    setActiveBlockId(block.id);
-    setSelectedBlockIds([block.id]);
+    const addBlock = () => {
+      setBlocks((current) => [...current, block]);
+      setActiveBlockId(block.id);
+      setSelectedBlockIds([block.id]);
+    };
+
+    if (shouldFocus) {
+      flushSync(addBlock);
+      focusBlockWhenReady(block.id);
+      return;
+    }
+
+    addBlock();
   }
 
   function getCanvasCoordinates(
@@ -504,17 +543,54 @@ export function NoteEditor({
     return { x, y };
   }
 
-  function handlePageClick(event: React.MouseEvent<HTMLDivElement>) {
+  function isEditorControlTarget(target: HTMLElement) {
+    return Boolean(target.closest("textarea") || target.closest("button"));
+  }
+
+  function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
-    if (target.closest("textarea") || target.closest("button")) {
+
+    if (event.button !== 0 || isEditorControlTarget(target)) {
+      pagePointerStartRef.current = null;
       return;
     }
+
+    pagePointerStartRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+  }
+
+  function handlePagePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    const pointerStart = pagePointerStartRef.current;
+    pagePointerStartRef.current = null;
+
+    if (!pointerStart || pointerStart.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const movedDistance = Math.hypot(
+      event.clientX - pointerStart.clientX,
+      event.clientY - pointerStart.clientY,
+    );
+
+    if (movedDistance > 8 || isEditorControlTarget(target)) {
+      return;
+    }
+
+    event.preventDefault();
 
     const coordinates = getCanvasCoordinates(event.clientX, event.clientY);
 
     if (coordinates) {
       addBlockAt(coordinates.x, coordinates.y);
     }
+  }
+
+  function handlePagePointerCancel() {
+    pagePointerStartRef.current = null;
   }
 
   function updateBlock(
@@ -943,7 +1019,9 @@ export function NoteEditor({
       <div className="min-h-full w-full">
         <div
           ref={pageRef}
-          onClick={handlePageClick}
+          onPointerDown={handlePagePointerDown}
+          onPointerUp={handlePagePointerUp}
+          onPointerCancel={handlePagePointerCancel}
           className="pt-0 flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
           style={{
             borderColor: notebookTheme.editorBorder,
@@ -975,7 +1053,7 @@ export function NoteEditor({
             onContextMenu={(event) => {
               const target = event.target as HTMLElement;
 
-              if (target.closest("textarea") || target.closest("button")) {
+              if (isEditorControlTarget(target)) {
                 return;
               }
 
