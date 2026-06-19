@@ -27,7 +27,7 @@ type PagesSidebarProps = {
 };
 
 export function PagesSidebar({ notebooks }: PagesSidebarProps) {
-  const sidebarTopOffset = "185px";
+  const sidebarTopOffset = "166px";
   const sidebarHeight = "calc(100vh - 150px)";
   const sidebarListHeight = "calc(100vh - 198px)";
   const pathname = usePathname();
