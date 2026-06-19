@@ -53,9 +53,9 @@ const GROUP_PILL_PALETTE = [
   {
     bg: "#9FA1FF",
     border: "#858BFF",
-    text: "#ffffff",
-    badgeBg: "rgba(255,255,255,0.22)",
-    badgeText: "#ffffff",
+    text: "#2f3864",
+    badgeBg: "rgba(255,255,255,0.52)",
+    badgeText: "#2f3864",
   },
   {
     bg: "#B5BAFF",
