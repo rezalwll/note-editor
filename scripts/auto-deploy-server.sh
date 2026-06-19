@@ -10,6 +10,9 @@ ARCHIVE_PATH=${ARCHIVE_PATH:-/root/notebook-deploy.tgz}
 DEPLOY_SCRIPT_PATH=${DEPLOY_SCRIPT_PATH:-/root/deploy-notebook.sh}
 APP_DIR=${APP_DIR:-/var/www/notebook}
 PORT=${PORT:-3000}
+DOMAIN=${DOMAIN:-}
+DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
+SSL_EMAIL=${SSL_EMAIL:-}
 FORCE_DEPLOY=${FORCE_DEPLOY:-0}
 LOCK_FILE=${LOCK_FILE:-/var/lock/notebook-auto-deploy.lock}
 
@@ -95,6 +98,9 @@ run_deploy() {
   APP_DIR="${APP_DIR}" \
   ARCHIVE_PATH="${ARCHIVE_PATH}" \
   PORT="${PORT}" \
+  DOMAIN="${DOMAIN}" \
+  DOMAIN_ALIASES="${DOMAIN_ALIASES}" \
+  SSL_EMAIL="${SSL_EMAIL}" \
   "${DEPLOY_SCRIPT_PATH}"
 
   printf '%s\n' "${deployed_head}" >"${STATE_DIR}/last-deployed-commit"

@@ -9,11 +9,25 @@ REPO_URL=${REPO_URL:-git@github.com:rezalwll/note-editor.git}
 BRANCH=${BRANCH:-master}
 APP_DIR=${APP_DIR:-/var/www/notebook}
 PORT=${PORT:-3000}
+DOMAIN=${DOMAIN:-}
+DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
+SSL_EMAIL=${SSL_EMAIL:-}
 
 require_root() {
   if [[ ${EUID} -ne 0 ]]; then
     echo "Run this script as root." >&2
     exit 1
+  fi
+}
+
+write_env_key() {
+  local key=$1
+  local value=$2
+
+  if grep -q "^${key}=" "${ENV_FILE}" 2>/dev/null; then
+    sed -i "s#^${key}=.*#${key}=\"${value}\"#" "${ENV_FILE}"
+  else
+    printf '%s="%s"\n' "${key}" "${value}" >>"${ENV_FILE}"
   fi
 }
 
@@ -25,14 +39,14 @@ apt-get install -y git
 install -d "${INSTALL_DIR}"
 install -m 755 "$(dirname "$0")/auto-deploy-server.sh" "${INSTALL_DIR}/${SERVICE_NAME}"
 
-if [[ ! -f "${ENV_FILE}" ]]; then
-  cat >"${ENV_FILE}" <<ENVEOF
-REPO_URL="${REPO_URL}"
-BRANCH="${BRANCH}"
-APP_DIR="${APP_DIR}"
-PORT="${PORT}"
-ENVEOF
-fi
+touch "${ENV_FILE}"
+write_env_key REPO_URL "${REPO_URL}"
+write_env_key BRANCH "${BRANCH}"
+write_env_key APP_DIR "${APP_DIR}"
+write_env_key PORT "${PORT}"
+write_env_key DOMAIN "${DOMAIN}"
+write_env_key DOMAIN_ALIASES "${DOMAIN_ALIASES}"
+write_env_key SSL_EMAIL "${SSL_EMAIL}"
 
 cat >"${SYSTEMD_DIR}/${SERVICE_NAME}.service" <<SERVICEEOF
 [Unit]

@@ -37,15 +37,35 @@ require_root() {
 }
 
 ensure_swap() {
-  if swapon --show | grep -q '/swapfile'; then
-    return
+  local total_swap_mb
+  total_swap_mb=$(swapon --bytes --noheadings --raw --output SIZE 2>/dev/null | awk '{sum += $1} END {print int(sum / 1024 / 1024)}')
+
+  if [[ -z "${total_swap_mb}" ]]; then
+    total_swap_mb=0
   fi
 
-  fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
-  chmod 600 /swapfile
-  mkswap /swapfile
-  swapon /swapfile
-  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  if (( total_swap_mb < 1024 )); then
+    if [[ ! -f /swapfile ]]; then
+      fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+      chmod 600 /swapfile
+      mkswap /swapfile
+    fi
+
+    swapon /swapfile 2>/dev/null || true
+    grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    total_swap_mb=$((total_swap_mb + 1024))
+  fi
+
+  if (( total_swap_mb < 2048 )); then
+    if [[ ! -f /swapfile2 ]]; then
+      fallocate -l 1G /swapfile2 || dd if=/dev/zero of=/swapfile2 bs=1M count=1024
+      chmod 600 /swapfile2
+      mkswap /swapfile2
+    fi
+
+    swapon /swapfile2 2>/dev/null || true
+    grep -q '^/swapfile2 ' /etc/fstab || echo '/swapfile2 none swap sw 0 0' >> /etc/fstab
+  fi
 }
 
 install_packages() {
@@ -165,7 +185,7 @@ build_app() {
     npm run prisma:seed
   fi
 
-  npm run build
+  NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512} npx next build --webpack
 }
 
 activate_release() {
