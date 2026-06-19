@@ -103,6 +103,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       current,
       action:
         | { type: "append"; notebook: NotebookTab }
+        | { type: "replace"; notebookId: string; notebook: NotebookTab }
         | { type: "rename"; notebookId: string; name: string }
         | { type: "remove-many"; notebookIds: string[] }
         | {
@@ -115,6 +116,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       switch (action.type) {
         case "append":
           return [...current, action.notebook];
+        case "replace":
+          return current.map((notebook) =>
+            notebook.id === action.notebookId ? action.notebook : notebook,
+          );
         case "rename":
           return current.map((notebook) =>
             notebook.id === action.notebookId
@@ -313,29 +318,24 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       return;
     }
 
-    startTransition(async () => {
-      const result = await createNotebookInlineAction(
-        "",
-        activeGroupKey === UNGROUPED_KEY ? null : activeGroupKey,
-      );
+    const tempNotebookId = `draft-notebook-${Date.now()}`;
+    const nextGroupId = activeGroupKey === UNGROUPED_KEY ? null : activeGroupKey;
+    const nextGroupName =
+      groupItems.find((group) => group.id === activeGroupKey)?.name ?? null;
 
-      if ("id" in result && result.id) {
-        updateNotebooks({
-          type: "append",
-          notebook: {
-            id: result.id,
-            name: "",
-            groupId: activeGroupKey === UNGROUPED_KEY ? null : activeGroupKey,
-            groupName:
-              groupItems.find((group) => group.id === activeGroupKey)?.name ?? null,
-          },
-        });
-        setCreatedNotebookId(result.id);
-        setEditingNotebookId(result.id);
-        setDraftName("");
-        setSelectedNotebookIds([result.id]);
-      }
+    updateNotebooks({
+      type: "append",
+      notebook: {
+        id: tempNotebookId,
+        name: "",
+        groupId: nextGroupId,
+        groupName: nextGroupName,
+      },
     });
+    setCreatedNotebookId(tempNotebookId);
+    setEditingNotebookId(tempNotebookId);
+    setDraftName("");
+    setSelectedNotebookIds([tempNotebookId]);
   }
 
 
@@ -356,6 +356,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function cancelNotebookEdit() {
+    if (editingNotebookId && createdNotebookId === editingNotebookId) {
+      updateNotebooks({ type: "remove-many", notebookIds: [editingNotebookId] });
+      setCreatedNotebookId(null);
+      setSelectedNotebookIds([]);
+    }
+
     setDraftName("");
     setEditingNotebookId(null);
   }
@@ -390,7 +396,34 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
     if (createdNotebookId === targetNotebookId) {
       setCreatedNotebookId(null);
-      router.push(`/notebooks/${targetNotebookId}`);
+      const notebookGroupId =
+        items.find((notebook) => notebook.id === targetNotebookId)?.groupId ?? null;
+      const notebookGroupName =
+        items.find((notebook) => notebook.id === targetNotebookId)?.groupName ?? null;
+
+      startTransition(async () => {
+        const result = await createNotebookInlineAction(nextName, notebookGroupId);
+
+        if (!("id" in result) || !result.id) {
+          updateNotebooks({ type: "remove-many", notebookIds: [targetNotebookId] });
+          setSelectedNotebookIds([]);
+          return;
+        }
+
+        updateNotebooks({
+          type: "replace",
+          notebookId: targetNotebookId,
+          notebook: {
+            id: result.id,
+            name: nextName,
+            groupId: notebookGroupId,
+            groupName: notebookGroupName,
+          },
+        });
+        setSelectedNotebookIds([result.id]);
+        router.push(`/notebooks/${result.id}`);
+      });
+      return;
     }
 
     startTransition(async () => {
@@ -400,7 +433,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         name: nextName,
       });
       await renameNotebookInlineAction(targetNotebookId, nextName);
-      router.refresh();
     });
   }
 
@@ -424,7 +456,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             },
           });
           setManualGroupKey(result.id);
-          router.refresh();
         }
       });
       return;
@@ -451,7 +482,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         groupName: nextName,
       });
       await renameNotebookGroupInlineAction(targetGroupId, nextName);
-      router.refresh();
     });
   }
 
@@ -491,7 +521,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         groupName: nextGroupName,
       });
       await assignNotebookGroupInlineAction(notebookIds, groupId);
-      router.refresh();
     });
   }
 
