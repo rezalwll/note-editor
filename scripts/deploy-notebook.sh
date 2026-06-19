@@ -38,7 +38,7 @@ require_root() {
 
 ensure_swap() {
   local total_swap_mb
-  total_swap_mb=$(swapon --bytes --noheadings --raw --output SIZE 2>/dev/null | awk '{sum += $1} END {print int(sum / 1024 / 1024)}')
+  total_swap_mb=$(awk 'NR > 1 {sum += $3} END {print int(sum / 1024)}' /proc/swaps 2>/dev/null)
 
   if [[ -z "${total_swap_mb}" ]]; then
     total_swap_mb=0
