@@ -24,6 +24,7 @@ import {
   renameNotebookInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
+import { getOverflowNotebookIds } from "@/lib/notebook-tabs";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { cn } from "@/lib/utils";
 
@@ -241,37 +242,29 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       return;
     }
 
-    const rows: number[] = [];
-    const visibleIds: string[] = [];
-    const overflowIds: string[] = [];
+    const pinnedNotebookId = editingNotebookId ?? createdNotebookId ?? activeNotebookId;
+    const overflowIds = getOverflowNotebookIds(
+      notebookElements
+        .map((element) => {
+          const notebookId = element.dataset.measureNotebookId;
 
-    for (const element of notebookElements) {
-      const top = element.offsetTop;
+          if (!notebookId) {
+            return null;
+          }
 
-      if (!rows.includes(top)) {
-        rows.push(top);
-      }
-
-      const notebookId = element.dataset.measureNotebookId;
-      if (!notebookId) {
-        continue;
-      }
-
-      if (rows.length <= 2) {
-        visibleIds.push(notebookId);
-      } else {
-        overflowIds.push(notebookId);
-      }
-    }
-
-    if (overflowIds.length > 0 && visibleIds.length > 0) {
-      overflowIds.unshift(visibleIds.pop()!);
-    }
+          return {
+            id: notebookId,
+            rowTop: element.offsetTop,
+          };
+        })
+        .filter((row): row is { id: string; rowTop: number } => row !== null),
+      pinnedNotebookId,
+    );
 
     setOverflowNotebookIds((current) =>
       current.join(",") === overflowIds.join(",") ? current : overflowIds,
     );
-  }, [activeGroupNotebookSignature, editingNotebookId]);
+  }, [activeGroupNotebookSignature, activeNotebookId, createdNotebookId, editingNotebookId]);
 
   const visibleNotebooks = useMemo(() => {
     const hiddenIds = new Set(overflowNotebookIds);
@@ -335,6 +328,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     setCreatedNotebookId(tempNotebookId);
     setEditingNotebookId(tempNotebookId);
     setDraftName("");
+    setManualGroupKey(nextGroupId ?? UNGROUPED_KEY);
+    setIsOverflowOpen(false);
     setSelectedNotebookIds([tempNotebookId]);
   }
 
@@ -495,12 +490,19 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       updateNotebooks({ type: "remove-many", notebookIds });
       setSelectedNotebookIds([]);
 
-      await Promise.all(
+      const results = await Promise.all(
         notebookIds.map((notebookId) => archiveNotebookInlineAction(notebookId)),
       );
+      const trashGroupId = results.find(
+        (result) => "trashGroupId" in result && Boolean(result.trashGroupId),
+      )?.trashGroupId;
 
       if (shouldRedirect) {
         router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/");
+      }
+
+      if (trashGroupId) {
+        setManualGroupKey(trashGroupId);
       }
 
       router.refresh();

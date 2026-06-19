@@ -364,6 +364,7 @@ export async function createNotebookInlineAction(
   groupId?: string | null,
 ) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   if (groupId) {
     const group = await getOwnedGroup(user.id, groupId);
@@ -388,6 +389,7 @@ export async function createNotebookInlineAction(
 
 export async function createNotebookGroupInlineAction(name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsed = notebookGroupSchema.safeParse({ name });
 
@@ -408,6 +410,7 @@ export async function createNotebookGroupInlineAction(name: string) {
 
 export async function renameNotebookGroupInlineAction(id: string, name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const groupId = z.string().cuid().safeParse(id);
   const groupName = z.string().trim().max(80).safeParse(name);
@@ -487,6 +490,7 @@ export async function assignNotebookGroupInlineAction(
   groupId: string | null,
 ) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsedNotebookIds = z.array(z.string().cuid()).safeParse(notebookIds);
   const parsedGroupId =
@@ -524,6 +528,7 @@ export async function assignNotebookGroupInlineAction(
 
 export async function renameNotebookInlineAction(id: string, name: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const notebookId = z.string().cuid().safeParse(id);
   const notebookName = z.string().trim().max(80).safeParse(name);
@@ -654,6 +659,7 @@ export async function createPageAction(formData: FormData) {
 
 export async function createPageInlineAction(notebookId: string, title: string) {
   const user = await requireUser();
+  await purgeExpiredTrash(user.id);
 
   const parsed = pageSchema.safeParse({
     notebookId,
