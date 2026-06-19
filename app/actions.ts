@@ -95,6 +95,32 @@ async function getOwnedGroup(userId: string, id: string) {
   });
 }
 
+async function moveNotebookToTrash(userId: string, notebookId: string) {
+  const trashGroup = await ensureTrashGroup(userId);
+  const deletedAt = new Date();
+
+  await prisma.$transaction([
+    prisma.notebook.update({
+      where: { id: notebookId },
+      data: {
+        groupId: trashGroup.id,
+        deletedAt,
+      },
+    }),
+    prisma.page.updateMany({
+      where: {
+        userId,
+        notebookId,
+      },
+      data: {
+        deletedAt,
+      },
+    }),
+  ]);
+
+  return trashGroup.id;
+}
+
 function isDuplicateUsernameError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -571,10 +597,7 @@ export async function archiveNotebookAction(formData: FormData) {
     return;
   }
 
-  await prisma.notebook.update({
-    where: { id: notebook.id },
-    data: { archived: true },
-  });
+  await moveNotebookToTrash(user.id, notebook.id);
 
   revalidatePath("/");
   redirect("/");
@@ -595,13 +618,10 @@ export async function archiveNotebookInlineAction(id: string) {
     return { error: "دفتر پیدا نشد." };
   }
 
-  await prisma.notebook.update({
-    where: { id: notebook.id },
-    data: { archived: true },
-  });
+  const trashGroupId = await moveNotebookToTrash(user.id, notebook.id);
 
   revalidatePath("/");
-  return { success: true };
+  return { success: true, trashGroupId };
 }
 
 export async function createPageAction(formData: FormData) {
