@@ -422,6 +422,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         });
         setSelectedNotebookIds([result.id]);
         router.push(`/notebooks/${result.id}`);
+        router.refresh();
       });
       return;
     }
