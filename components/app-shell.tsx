@@ -83,6 +83,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                 groupName: notebook.groupName,
                 systemKey: notebook.systemKey,
                 deletedAt: notebook.deletedAt,
+                pageIds: notebook.pages.map((page) => page.id),
               }))}
             />
             <div className="h-[4px] bg-[linear-gradient(90deg,var(--color-lavender),var(--color-periwinkle),var(--color-sky),var(--color-mint))]" />

@@ -10,10 +10,11 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   openMenu: vi.fn(),
+  pathname: "/notebooks/notebook-1",
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/notebooks/notebook-1",
+  usePathname: () => mocks.pathname,
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 
@@ -44,6 +45,7 @@ vi.mock("@/app/actions", () => ({
 describe("SectionTabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.pathname = "/notebooks/notebook-1";
     mocks.createNotebook.mockResolvedValue({ id: "notebook-2" });
   });
 
@@ -53,10 +55,15 @@ describe("SectionTabs", () => {
     render(
       <SectionTabs
         groups={[
-          { id: "group-1", name: "کار", notebookCount: 1, systemKey: null },
+          { id: "group-1", name: "Ú©Ø§Ø±", notebookCount: 1, systemKey: null },
         ]}
         notebooks={[
-          { id: "notebook-1", name: "دفتر اول", groupId: "group-1" },
+          {
+            id: "notebook-1",
+            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            groupId: "group-1",
+            pageIds: [],
+          },
         ]}
       />,
     );
@@ -66,10 +73,10 @@ describe("SectionTabs", () => {
     const input = screen.getByRole("textbox");
     expect(input).toBeVisible();
 
-    await user.type(input, "دفتر تست{Enter}");
+    await user.type(input, "Ø¯ÙØªØ± ØªØ³Øª{Enter}");
 
     await waitFor(() => {
-      expect(mocks.createNotebook).toHaveBeenCalledWith("دفتر تست", "group-1");
+      expect(mocks.createNotebook).toHaveBeenCalledWith("Ø¯ÙØªØ± ØªØ³Øª", "group-1");
     });
     expect(mocks.createNotebook).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith("/notebooks/notebook-2");
@@ -83,7 +90,12 @@ describe("SectionTabs", () => {
       <SectionTabs
         groups={[]}
         notebooks={[
-          { id: "notebook-1", name: "دفتر اول", groupId: null },
+          {
+            id: "notebook-1",
+            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            groupId: null,
+            pageIds: [],
+          },
         ]}
       />,
     );
@@ -94,5 +106,75 @@ describe("SectionTabs", () => {
 
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(mocks.createNotebook).not.toHaveBeenCalled();
+  });
+
+  it("hides the new notebook button when the active page belongs to trash", () => {
+    mocks.pathname = "/pages/page-trash";
+
+    render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Ú©Ø§Ø±", notebookCount: 1, systemKey: null },
+          {
+            id: "trash-group",
+            name: "Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡â€ŒÙ‡Ø§",
+            notebookCount: 1,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            groupId: "group-1",
+            pageIds: ["page-1"],
+          },
+          {
+            id: "trash-pages",
+            name: "ØµÙØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            systemKey: "deleted-pages",
+            pageIds: ["page-trash"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTitle("دفتر جدید")).not.toBeInTheDocument();
+  });
+
+  it("removes the new notebook action from the empty-area menu inside trash", () => {
+    mocks.pathname = "/pages/page-trash";
+
+    const { container } = render(
+      <SectionTabs
+        groups={[
+          {
+            id: "trash-group",
+            name: "Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡â€ŒÙ‡Ø§",
+            notebookCount: 1,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "trash-pages",
+            name: "ØµÙØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            systemKey: "deleted-pages",
+            pageIds: ["page-trash"],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.contextMenu(container.querySelector(".mt-2")!);
+    const menu = mocks.openMenu.mock.calls[0][1];
+    const itemIds = menu.items.map((item: { id: string }) => item.id);
+
+    expect(itemIds).not.toContain("new-section");
+    expect(itemIds).toContain("new-category");
   });
 });

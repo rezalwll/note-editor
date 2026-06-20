@@ -36,6 +36,7 @@ type NotebookTab = {
   groupName?: string | null;
   systemKey?: string | null;
   deletedAt?: Date | null;
+  pageIds?: string[];
 };
 
 type NotebookGroupTab = {
@@ -171,10 +172,24 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     },
   );
 
-  const activeNotebookId =
-    pathname.match(/^\/notebooks\/([^/]+)/)?.[1] ??
-    displayItems.find((notebook) => pathname.includes(notebook.id))?.id ??
-    null;
+  const activeNotebookId = useMemo(() => {
+    const notebookMatch = pathname.match(/^\/notebooks\/([^/]+)/)?.[1];
+
+    if (notebookMatch) {
+      return notebookMatch;
+    }
+
+    const pageMatch = pathname.match(/^\/pages\/([^/]+)/)?.[1];
+
+    if (!pageMatch) {
+      return null;
+    }
+
+    return (
+      displayItems.find((notebook) => notebook.pageIds?.includes(pageMatch))?.id ??
+      null
+    );
+  }, [displayItems, pathname]);
   const currentActiveNotebookGroupKey =
     displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
     UNGROUPED_KEY;
@@ -326,6 +341,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       name: "",
       groupId: nextGroupId,
       groupName: nextGroupName,
+      pageIds: [],
     });
     setEditingNotebookId(tempNotebookId);
     setDraftName("");
@@ -601,9 +617,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             </div>
           );
         })}
-        <div className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700">
-          <Plus className="h-4 w-4" />
-        </div>
+        {!isTrashGroup(activeGroupKey) ? (
+          <div className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700">
+            <Plus className="h-4 w-4" />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -778,11 +796,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           openMenu(event, {
             title: "دفترها",
             items: [
+              ...(!isTrashGroup(activeGroupKey) ? [
               {
                 id: "new-section",
                 label: "دفتر جدید",
                 onSelect: beginCreateNotebook,
               },
+              ] : []),
               {
                 id: "new-category",
                 label: "دسته جدید",
@@ -987,6 +1007,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           </div>
         ) : null}
 
+        {!isTrashGroup(activeGroupKey) ? (
         <button
           type="button"
           onClick={beginCreateNotebook}
@@ -1000,6 +1021,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         >
           <Plus className="h-4 w-4" />
         </button>
+        ) : null}
       </div>
     </div>
   );
