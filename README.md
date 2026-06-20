@@ -46,6 +46,18 @@ npm run dev
 - `UPLOAD_DIR`: attachment storage folder
 - `MAX_UPLOAD_SIZE_MB`: upload limit for images and PDFs
 
+## Verification
+
+Run the complete regression check before every push or deployment:
+
+```bash
+npm run verify
+```
+
+This validates the Prisma schema, runs ESLint and TypeScript, executes the
+functional tests, and creates a production build. Use `npm run test:watch`
+while developing a focused change.
+
 ## Deployment notes
 
 - Put the app behind HTTPS and a reverse proxy.

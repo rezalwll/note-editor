@@ -2,10 +2,23 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { env } from "@/lib/env";
+import { isValidStorageKey } from "@/lib/storage-key";
 import { slugifyFileName } from "@/lib/utils";
 
 export function getUploadRoot() {
-  return path.resolve(/* turbopackIgnore: true */ process.cwd(), env.UPLOAD_DIR);
+  if (path.isAbsolute(env.UPLOAD_DIR)) {
+    return env.UPLOAD_DIR;
+  }
+
+  return path.join(/* turbopackIgnore: true */ process.cwd(), env.UPLOAD_DIR);
+}
+
+function getStoragePath(storageKey: string) {
+  if (!isValidStorageKey(storageKey)) {
+    throw new Error("INVALID_STORAGE_KEY");
+  }
+
+  return path.join(getUploadRoot(), storageKey);
 }
 
 async function ensureUploadRoot() {
@@ -29,18 +42,18 @@ export async function storeUpload(file: File) {
 }
 
 export async function readUpload(storageKey: string) {
-  const filePath = path.join(getUploadRoot(), storageKey);
+  const filePath = getStoragePath(storageKey);
   return readFile(filePath);
 }
 
 export async function writeUploadBuffer(storageKey: string, bytes: Uint8Array) {
-  const uploadRoot = await ensureUploadRoot();
-  const filePath = path.join(uploadRoot, storageKey);
+  await ensureUploadRoot();
+  const filePath = getStoragePath(storageKey);
   await writeFile(filePath, bytes);
   return filePath;
 }
 
 export async function deleteUpload(storageKey: string) {
-  const filePath = path.join(getUploadRoot(), storageKey);
+  const filePath = getStoragePath(storageKey);
   await unlink(filePath).catch(() => undefined);
 }

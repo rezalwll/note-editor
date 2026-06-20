@@ -46,11 +46,14 @@ export function extractPlainText(html: string) {
 }
 
 export function parseTags(raw: string) {
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  return [
+    ...new Set(
+      raw
+        .split(/[,،]/)
+        .map((item) => item.trim().replace(/\s+/g, " "))
+        .filter(Boolean),
+    ),
+  ].slice(0, 12);
 }
 
 const freeformBlockSchema = z.object({

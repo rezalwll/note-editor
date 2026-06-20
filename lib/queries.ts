@@ -1,10 +1,10 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
-import { ensureTrashGroup, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
+import { purgeExpiredTrash, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
 
 export const getSidebarData = cache(async (userId: string) => {
-  await ensureTrashGroup(userId);
+  await purgeExpiredTrash(userId);
 
   const [groups, notebooks] = await Promise.all([
     prisma.notebookGroup.findMany({

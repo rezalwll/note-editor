@@ -15,6 +15,7 @@ NODE_MAJOR=${NODE_MAJOR:-22}
 DOMAIN=${DOMAIN:-}
 DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
 SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
+DEPLOY_LOCK_FILE=${DEPLOY_LOCK_FILE:-/var/lock/notebook-deploy.lock}
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -69,6 +70,23 @@ ensure_swap() {
 }
 
 install_packages() {
+  local command_name
+  local missing_dependency=0
+
+  for command_name in curl gpg make cc psql nginx openssl certbot node; do
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+      missing_dependency=1
+      break
+    fi
+  done
+
+  if (( missing_dependency == 0 )); then
+    if ! command -v pm2 >/dev/null 2>&1; then
+      npm install -g pm2
+    fi
+    return
+  fi
+
   apt-get update
   apt-get install -y curl ca-certificates gnupg build-essential postgresql nginx openssl certbot python3-certbot-nginx
 
@@ -176,8 +194,7 @@ ENVEOF
 build_app() {
   cd "${STAGING_DIR}"
   rm -rf node_modules .next
-  npm install --include=dev --no-audit --no-fund
-  npm run prisma:generate
+  npm ci --include=dev --no-audit --no-fund --prefer-offline
   npx prisma migrate resolve --rolled-back 20260614120000_multi_user_accounts >/dev/null 2>&1 || true
   npm run prisma:deploy
 
@@ -185,6 +202,9 @@ build_app() {
     npm run prisma:seed
   fi
 
+  npm run lint
+  npm run typecheck
+  npm run test
   NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512} npx next build --webpack
 }
 
@@ -317,6 +337,13 @@ print_summary() {
 }
 
 require_root
+exec 9>"${DEPLOY_LOCK_FILE}"
+
+if ! flock -n 9; then
+  echo "Another notebook deployment is already running." >&2
+  exit 1
+fi
+
 ensure_swap
 install_packages
 prepare_postgres

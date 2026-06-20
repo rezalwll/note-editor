@@ -1,5 +1,6 @@
 type AttemptState = {
   count: number;
+  firstAttemptAt: number;
   blockedUntil: number;
 };
 
@@ -11,7 +12,10 @@ const BLOCK_MS = 15 * 60 * 1000;
 function cleanup() {
   const now = Date.now();
   for (const [key, value] of attempts.entries()) {
-    if (value.blockedUntil < now - WINDOW_MS) {
+    const blockExpired = value.blockedUntil > 0 && value.blockedUntil <= now;
+    const windowExpired = value.firstAttemptAt + WINDOW_MS <= now;
+
+    if (blockExpired || (value.blockedUntil === 0 && windowExpired)) {
       attempts.delete(key);
     }
   }
@@ -35,9 +39,10 @@ export function getRateLimitState(key: string) {
 export function recordFailedAttempt(key: string) {
   cleanup();
   const current = attempts.get(key);
+  const now = Date.now();
 
   if (!current) {
-    attempts.set(key, { count: 1, blockedUntil: 0 });
+    attempts.set(key, { count: 1, firstAttemptAt: now, blockedUntil: 0 });
     return;
   }
 
@@ -45,7 +50,8 @@ export function recordFailedAttempt(key: string) {
 
   attempts.set(key, {
     count: nextCount,
-    blockedUntil: nextCount >= MAX_ATTEMPTS ? Date.now() + BLOCK_MS : 0,
+    firstAttemptAt: current.firstAttemptAt,
+    blockedUntil: nextCount >= MAX_ATTEMPTS ? now + BLOCK_MS : 0,
   });
 }
 

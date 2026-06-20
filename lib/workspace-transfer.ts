@@ -1,6 +1,8 @@
 import JSZip from "jszip";
 import { z } from "zod";
 
+import { isValidStorageKey } from "@/lib/storage-key";
+
 export const WORKSPACE_ARCHIVE_APP = "notebook";
 export const WORKSPACE_ARCHIVE_FORMAT_VERSION = 1;
 
@@ -49,7 +51,11 @@ const attachmentSchema = z.object({
   fileName: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(),
-  storageKey: z.string(),
+  storageKey: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine(isValidStorageKey),
   createdAt: z.string().datetime(),
 });
 
