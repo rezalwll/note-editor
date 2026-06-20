@@ -415,7 +415,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         try {
           const result = await createNotebookInlineAction(nextName, notebookGroupId);
 
-          if (!("id" in result) || !result.id) {
+          if (!("id" in result) || !result.id || !("pageId" in result) || !result.pageId) {
             return;
           }
 
@@ -426,13 +426,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               name: nextName,
               groupId: notebookGroupId,
               groupName: notebookGroupName,
+              pageIds: [result.pageId],
             },
           });
           setDraftNotebook(null);
           setEditingNotebookId(null);
           setDraftName("");
           setSelectedNotebookIds([result.id]);
-          router.push(`/notebooks/${result.id}`);
+          router.push(`/pages/${result.pageId}`);
           router.refresh();
         } finally {
           createNotebookInFlightRef.current = false;
@@ -796,13 +797,15 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           openMenu(event, {
             title: "دفترها",
             items: [
-              ...(!isTrashGroup(activeGroupKey) ? [
-              {
+              ...(!isTrashGroup(activeGroupKey)
+                ? [
+                    {
                 id: "new-section",
                 label: "دفتر جدید",
                 onSelect: beginCreateNotebook,
-              },
-              ] : []),
+                    },
+                  ]
+                : []),
               {
                 id: "new-category",
                 label: "دسته جدید",
@@ -1011,7 +1014,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         <button
           type="button"
           onClick={beginCreateNotebook}
-          disabled={isPending || isTrashGroup(activeGroupKey)}
+          disabled={isPending}
           className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-100 disabled:cursor-wait disabled:opacity-60"
           title={
             isTrashGroup(activeGroupKey)

@@ -57,6 +57,7 @@ const notebookGroupSchema = z.object({
 });
 
 const notebookNameSchema = z.string().trim().min(1).max(80);
+const defaultInlinePageTitle = "صفحه بدون عنوان";
 
 const pageSchema = z.object({
   notebookId: z.string().cuid(),
@@ -371,17 +372,33 @@ export async function createNotebookInlineAction(
     }
   }
 
-  const notebook = await prisma.notebook.create({
-    data: {
-      userId: user.id,
-      name: parsedName.data,
-      description: undefined,
-      groupId: groupId ?? null,
-    },
+  const { notebook, page } = await prisma.$transaction(async (tx) => {
+    const notebook = await tx.notebook.create({
+      data: {
+        userId: user.id,
+        name: parsedName.data,
+        description: undefined,
+        groupId: groupId ?? null,
+      },
+    });
+
+    const page = await tx.page.create({
+      data: {
+        userId: user.id,
+        notebookId: notebook.id,
+        title: defaultInlinePageTitle,
+        bodyHtml: "<p></p>",
+        bodyText: "",
+      },
+    });
+
+    return { notebook, page };
   });
 
   revalidatePath("/");
-  return { id: notebook.id };
+  revalidatePath(`/notebooks/${notebook.id}`);
+  revalidatePath(`/pages/${page.id}`);
+  return { id: notebook.id, pageId: page.id };
 }
 
 export async function createNotebookGroupInlineAction(name: string) {

@@ -99,6 +99,27 @@ describe("trash lifecycle", () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
+  it("moves an empty notebook into trash even when it has no pages", async () => {
+    mocks.pageUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      moveNotebookToTrash("user-1", "empty-notebook"),
+    ).resolves.toBe("trash-group");
+
+    expect(mocks.notebookUpdate).toHaveBeenCalledWith({
+      where: { id: "empty-notebook" },
+      data: {
+        groupId: "trash-group",
+        archived: false,
+        deletedAt: expect.any(Date),
+      },
+    });
+    expect(mocks.pageUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", notebookId: "empty-notebook" },
+      data: { archived: false, deletedAt: expect.any(Date) },
+    });
+  });
+
   it("restores notebook and page deletion markers when moved out of trash", async () => {
     await restoreNotebooksToGroup(
       "user-1",

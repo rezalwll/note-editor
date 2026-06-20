@@ -46,21 +46,24 @@ describe("SectionTabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.pathname = "/notebooks/notebook-1";
-    mocks.createNotebook.mockResolvedValue({ id: "notebook-2" });
+    mocks.createNotebook.mockResolvedValue({
+      id: "notebook-2",
+      pageId: "page-2",
+    });
   });
 
-  it("keeps the new notebook draft visible and creates it on Enter", async () => {
+  it("creates a new notebook and opens its untitled page on Enter", async () => {
     const user = userEvent.setup();
 
     render(
       <SectionTabs
         groups={[
-          { id: "group-1", name: "Ú©Ø§Ø±", notebookCount: 1, systemKey: null },
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
         ]}
         notebooks={[
           {
             id: "notebook-1",
-            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            name: "Inbox",
             groupId: "group-1",
             pageIds: [],
           },
@@ -73,13 +76,13 @@ describe("SectionTabs", () => {
     const input = screen.getByRole("textbox");
     expect(input).toBeVisible();
 
-    await user.type(input, "Ø¯ÙØªØ± ØªØ³Øª{Enter}");
+    await user.type(input, "Sprint Notes{Enter}");
 
     await waitFor(() => {
-      expect(mocks.createNotebook).toHaveBeenCalledWith("Ø¯ÙØªØ± ØªØ³Øª", "group-1");
+      expect(mocks.createNotebook).toHaveBeenCalledWith("Sprint Notes", "group-1");
     });
     expect(mocks.createNotebook).toHaveBeenCalledTimes(1);
-    expect(mocks.push).toHaveBeenCalledWith("/notebooks/notebook-2");
+    expect(mocks.push).toHaveBeenCalledWith("/pages/page-2");
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
@@ -92,7 +95,7 @@ describe("SectionTabs", () => {
         notebooks={[
           {
             id: "notebook-1",
-            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            name: "Inbox",
             groupId: null,
             pageIds: [],
           },
@@ -114,10 +117,10 @@ describe("SectionTabs", () => {
     render(
       <SectionTabs
         groups={[
-          { id: "group-1", name: "Ú©Ø§Ø±", notebookCount: 1, systemKey: null },
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
           {
             id: "trash-group",
-            name: "Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡â€ŒÙ‡Ø§",
+            name: "Trash",
             notebookCount: 1,
             systemKey: "deleted-items",
           },
@@ -125,13 +128,13 @@ describe("SectionTabs", () => {
         notebooks={[
           {
             id: "notebook-1",
-            name: "Ø¯ÙØªØ± Ø§ÙˆÙ„",
+            name: "Inbox",
             groupId: "group-1",
             pageIds: ["page-1"],
           },
           {
             id: "trash-pages",
-            name: "ØµÙØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡",
+            name: "Deleted Pages",
             groupId: "trash-group",
             deletedAt: new Date(),
             systemKey: "deleted-pages",
@@ -152,7 +155,7 @@ describe("SectionTabs", () => {
         groups={[
           {
             id: "trash-group",
-            name: "Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡â€ŒÙ‡Ø§",
+            name: "Trash",
             notebookCount: 1,
             systemKey: "deleted-items",
           },
@@ -160,7 +163,7 @@ describe("SectionTabs", () => {
         notebooks={[
           {
             id: "trash-pages",
-            name: "ØµÙØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡",
+            name: "Deleted Pages",
             groupId: "trash-group",
             deletedAt: new Date(),
             systemKey: "deleted-pages",
