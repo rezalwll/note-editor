@@ -7,6 +7,7 @@ import { SectionTabs } from "@/components/section-tabs";
 
 const mocks = vi.hoisted(() => ({
   createNotebook: vi.fn(),
+  createGroup: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
   openMenu: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock("@/components/context-menu", () => ({
 vi.mock("@/app/actions", () => ({
   archiveNotebookInlineAction: vi.fn(),
   assignNotebookGroupInlineAction: vi.fn(),
-  createNotebookGroupInlineAction: vi.fn(),
+  createNotebookGroupInlineAction: mocks.createGroup,
   createNotebookInlineAction: mocks.createNotebook,
   deleteNotebookPermanentlyInlineAction: vi.fn(),
   deleteNotebookGroupInlineAction: vi.fn(),
@@ -49,6 +50,11 @@ describe("SectionTabs", () => {
     mocks.createNotebook.mockResolvedValue({
       id: "notebook-2",
       pageId: "page-2",
+    });
+    mocks.createGroup.mockResolvedValue({
+      id: "group-2",
+      notebookId: "notebook-3",
+      pageId: "page-3",
     });
   });
 
@@ -109,6 +115,28 @@ describe("SectionTabs", () => {
 
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(mocks.createNotebook).not.toHaveBeenCalled();
+  });
+
+  it("creates a new group with an untitled notebook and opens its page", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SectionTabs
+        groups={[]}
+        notebooks={[]}
+      />,
+    );
+
+    await user.click(screen.getByText("دسته جدید"));
+
+    const input = screen.getByRole("textbox");
+    await user.type(input, "Projects{Enter}");
+
+    await waitFor(() => {
+      expect(mocks.createGroup).toHaveBeenCalledWith("Projects");
+    });
+    expect(mocks.push).toHaveBeenCalledWith("/pages/page-3");
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
   it("hides the new notebook button when the active page belongs to trash", () => {

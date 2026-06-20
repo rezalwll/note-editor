@@ -465,16 +465,36 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       startTransition(async () => {
         const result = await createNotebookGroupInlineAction(nextName);
 
-        if ("id" in result && result.id) {
+        if (
+          "id" in result &&
+          result.id &&
+          "notebookId" in result &&
+          result.notebookId &&
+          "pageId" in result &&
+          result.pageId
+        ) {
           updateGroups({
             type: "append",
             group: {
               id: result.id,
               name: nextName,
-              notebookCount: 0,
+              notebookCount: 1,
+            },
+          });
+          updateNotebooks({
+            type: "append",
+            notebook: {
+              id: result.notebookId,
+              name: "دفتر بدون عنوان",
+              groupId: result.id,
+              groupName: nextName,
+              pageIds: [result.pageId],
             },
           });
           setManualGroupKey(result.id);
+          setSelectedNotebookIds([result.notebookId]);
+          router.push(`/pages/${result.pageId}`);
+          router.refresh();
         }
       });
       return;

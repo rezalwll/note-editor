@@ -295,7 +295,14 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     startTransition(async () => {
       const result = await createNotebookGroupInlineAction(nextName);
 
-      if (!("id" in result) || !result.id) {
+      if (
+        !("id" in result) ||
+        !result.id ||
+        !("notebookId" in result) ||
+        !result.notebookId ||
+        !("pageId" in result) ||
+        !result.pageId
+      ) {
         return;
       }
 
@@ -304,15 +311,17 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         {
           id: result.id,
           name: nextName,
-          notebookCount: 0,
+          notebookCount: 1,
           systemKey: null,
         },
       ]);
       setExpandedGroupIds((current) => [...current, result.id]);
       setSelectedGroupId(result.id);
-      setSelectedNotebookId(null);
+      setSelectedNotebookId(result.notebookId);
       setDraftGroupName("");
       setIsCreatingGroup(false);
+      closeAll();
+      router.push(`/pages/${result.pageId}`);
       router.refresh();
     });
   }

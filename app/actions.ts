@@ -111,7 +111,7 @@ async function getOwnedPage(userId: string, id: string) {
 async function getOwnedGroup(userId: string, id: string) {
   return prisma.notebookGroup.findFirst({
     where: { id, userId },
-    select: { id: true, systemKey: true },
+    select: { id: true, name: true, systemKey: true },
   });
 }
 
@@ -410,15 +410,40 @@ export async function createNotebookGroupInlineAction(name: string) {
     return { error: "نام دسته الزامی است." };
   }
 
-  const group = await prisma.notebookGroup.create({
-    data: {
-      userId: user.id,
-      name: parsed.data.name,
-    },
+  const { group, notebook, page } = await prisma.$transaction(async (tx) => {
+    const group = await tx.notebookGroup.create({
+      data: {
+        userId: user.id,
+        name: parsed.data.name,
+      },
+    });
+
+    const notebook = await tx.notebook.create({
+      data: {
+        userId: user.id,
+        name: "دفتر بدون عنوان",
+        description: undefined,
+        groupId: group.id,
+      },
+    });
+
+    const page = await tx.page.create({
+      data: {
+        userId: user.id,
+        notebookId: notebook.id,
+        title: defaultInlinePageTitle,
+        bodyHtml: "<p></p>",
+        bodyText: "",
+      },
+    });
+
+    return { group, notebook, page };
   });
 
   revalidatePath("/");
-  return { id: group.id };
+  revalidatePath(`/notebooks/${notebook.id}`);
+  revalidatePath(`/pages/${page.id}`);
+  return { id: group.id, notebookId: notebook.id, pageId: page.id };
 }
 
 export async function renameNotebookGroupInlineAction(id: string, name: string) {
@@ -490,6 +515,18 @@ export async function deleteNotebookGroupInlineAction(id: string) {
     prisma.notebookGroup.delete({
       where: { id: group.id },
     }),
+    ...(notebookIds.length === 0
+      ? [
+          prisma.notebook.create({
+            data: {
+              userId: user.id,
+              groupId: trashGroup.id,
+              name: group.name || "دسته بدون عنوان",
+              deletedAt,
+            },
+          }),
+        ]
+      : []),
   ]);
 
   revalidatePath("/");
