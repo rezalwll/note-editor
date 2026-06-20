@@ -88,7 +88,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const [selectedNotebookIds, setSelectedNotebookIds] = useState<string[]>([]);
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [createdNotebookId, setCreatedNotebookId] = useState<string | null>(null);
+  const [draftNotebook, setDraftNotebook] = useState<NotebookTab | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftGroupName, setDraftGroupName] = useState("");
   const [manualGroupKey, setManualGroupKey] = useState<string | null>(null);
@@ -98,13 +98,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const notebookInputRef = useRef<HTMLInputElement | null>(null);
   const groupInputRef = useRef<HTMLInputElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
+  const createNotebookInFlightRef = useRef(false);
   const [items, updateNotebooks] = useOptimistic(
     notebooks,
     (
       current,
       action:
         | { type: "append"; notebook: NotebookTab }
-        | { type: "replace"; notebookId: string; notebook: NotebookTab }
         | { type: "rename"; notebookId: string; name: string }
         | { type: "remove-many"; notebookIds: string[] }
         | {
@@ -117,10 +117,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       switch (action.type) {
         case "append":
           return [...current, action.notebook];
-        case "replace":
-          return current.map((notebook) =>
-            notebook.id === action.notebookId ? action.notebook : notebook,
-          );
         case "rename":
           return current.map((notebook) =>
             notebook.id === action.notebookId
@@ -143,6 +139,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           );
       }
     },
+  );
+  const displayItems = useMemo(
+    () =>
+      draftNotebook && !items.some((item) => item.id === draftNotebook.id)
+        ? [...items, draftNotebook]
+        : items,
+    [draftNotebook, items],
   );
   const [groupItems, updateGroups] = useOptimistic(
     groups,
@@ -168,10 +171,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
   const activeNotebookId =
     pathname.match(/^\/notebooks\/([^/]+)/)?.[1] ??
-    items.find((notebook) => pathname.includes(notebook.id))?.id ??
+    displayItems.find((notebook) => pathname.includes(notebook.id))?.id ??
     null;
   const currentActiveNotebookGroupKey =
-    items.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
+    displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
     UNGROUPED_KEY;
   const activeGroupKey = manualGroupKey ?? currentActiveNotebookGroupKey;
 
@@ -209,12 +212,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
   const activeGroupNotebooks = useMemo(
     () =>
-      items.filter((notebook) =>
+      displayItems.filter((notebook) =>
         activeGroupKey === UNGROUPED_KEY
           ? notebook.groupId === null
           : notebook.groupId === activeGroupKey,
       ),
-    [activeGroupKey, items],
+    [activeGroupKey, displayItems],
   );
   const activeGroupNotebookSignature = useMemo(
     () =>
@@ -242,7 +245,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       return;
     }
 
-    const pinnedNotebookId = editingNotebookId ?? createdNotebookId ?? activeNotebookId;
+    const pinnedNotebookId = editingNotebookId ?? activeNotebookId;
     const overflowIds = getOverflowNotebookIds(
       notebookElements
         .map((element) => {
@@ -264,7 +267,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     setOverflowNotebookIds((current) =>
       current.join(",") === overflowIds.join(",") ? current : overflowIds,
     );
-  }, [activeGroupNotebookSignature, activeNotebookId, createdNotebookId, editingNotebookId]);
+  }, [activeGroupNotebookSignature, activeNotebookId, editingNotebookId]);
 
   const visibleNotebooks = useMemo(() => {
     const hiddenIds = new Set(overflowNotebookIds);
@@ -280,10 +283,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     const grouped = groupItems.map((group) => ({
       id: group.id,
       name: group.name,
-      notebookCount: items.filter((item) => item.groupId === group.id).length,
+      notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
       systemKey: group.systemKey ?? null,
     }));
-    const ungroupedCount = items.filter((item) => item.groupId === null).length;
+    const ungroupedCount = displayItems.filter((item) => item.groupId === null).length;
 
     return [
       ...grouped,
@@ -294,7 +297,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         systemKey: null,
       },
     ];
-  }, [groupItems, items]);
+  }, [displayItems, groupItems]);
 
   function getGroupPillTheme(index: number) {
     return GROUP_PILL_PALETTE[index % GROUP_PILL_PALETTE.length];
@@ -307,7 +310,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function beginCreateNotebook() {
-    if (isPending || isTrashGroup(activeGroupKey)) {
+    if (isPending || draftNotebook || isTrashGroup(activeGroupKey)) {
       return;
     }
 
@@ -316,16 +319,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     const nextGroupName =
       groupItems.find((group) => group.id === activeGroupKey)?.name ?? null;
 
-    updateNotebooks({
-      type: "append",
-      notebook: {
-        id: tempNotebookId,
-        name: "",
-        groupId: nextGroupId,
-        groupName: nextGroupName,
-      },
+    setDraftNotebook({
+      id: tempNotebookId,
+      name: "",
+      groupId: nextGroupId,
+      groupName: nextGroupName,
     });
-    setCreatedNotebookId(tempNotebookId);
     setEditingNotebookId(tempNotebookId);
     setDraftName("");
     setManualGroupKey(nextGroupId ?? UNGROUPED_KEY);
@@ -351,9 +350,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function cancelNotebookEdit() {
-    if (editingNotebookId && createdNotebookId === editingNotebookId) {
-      updateNotebooks({ type: "remove-many", notebookIds: [editingNotebookId] });
-      setCreatedNotebookId(null);
+    if (editingNotebookId && draftNotebook?.id === editingNotebookId) {
+      setDraftNotebook(null);
       setSelectedNotebookIds([]);
     }
 
@@ -386,41 +384,47 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     const targetNotebookId = editingNotebookId;
     const nextName = draftName.trim() || "دفتر بدون عنوان";
 
-    setEditingNotebookId(null);
-    setDraftName("");
+    if (draftNotebook?.id === targetNotebookId) {
+      if (createNotebookInFlightRef.current) {
+        return;
+      }
 
-    if (createdNotebookId === targetNotebookId) {
-      setCreatedNotebookId(null);
-      const notebookGroupId =
-        items.find((notebook) => notebook.id === targetNotebookId)?.groupId ?? null;
-      const notebookGroupName =
-        items.find((notebook) => notebook.id === targetNotebookId)?.groupName ?? null;
+      const notebookGroupId = draftNotebook.groupId;
+      const notebookGroupName = draftNotebook.groupName ?? null;
+      createNotebookInFlightRef.current = true;
 
       startTransition(async () => {
-        const result = await createNotebookInlineAction(nextName, notebookGroupId);
+        try {
+          const result = await createNotebookInlineAction(nextName, notebookGroupId);
 
-        if (!("id" in result) || !result.id) {
-          updateNotebooks({ type: "remove-many", notebookIds: [targetNotebookId] });
-          setSelectedNotebookIds([]);
-          return;
+          if (!("id" in result) || !result.id) {
+            return;
+          }
+
+          updateNotebooks({
+            type: "append",
+            notebook: {
+              id: result.id,
+              name: nextName,
+              groupId: notebookGroupId,
+              groupName: notebookGroupName,
+            },
+          });
+          setDraftNotebook(null);
+          setEditingNotebookId(null);
+          setDraftName("");
+          setSelectedNotebookIds([result.id]);
+          router.push(`/notebooks/${result.id}`);
+          router.refresh();
+        } finally {
+          createNotebookInFlightRef.current = false;
         }
-
-        updateNotebooks({
-          type: "replace",
-          notebookId: targetNotebookId,
-          notebook: {
-            id: result.id,
-            name: nextName,
-            groupId: notebookGroupId,
-            groupName: notebookGroupName,
-          },
-        });
-        setSelectedNotebookIds([result.id]);
-        router.push(`/notebooks/${result.id}`);
-        router.refresh();
       });
       return;
     }
+
+    setEditingNotebookId(null);
+    setDraftName("");
 
     startTransition(async () => {
       updateNotebooks({
@@ -483,7 +487,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
   function archiveNotebooks(notebookIds: string[]) {
     const fallbackNotebookId =
-      items.find((item) => !notebookIds.includes(item.id))?.id ?? null;
+      displayItems.find((item) => !notebookIds.includes(item.id))?.id ?? null;
     const shouldRedirect = activeNotebookId ? notebookIds.includes(activeNotebookId) : false;
 
     startTransition(async () => {
@@ -546,7 +550,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       return;
     }
 
-    const trashNotebookIds = items
+    const trashNotebookIds = displayItems
       .filter((notebook) => notebook.groupId === trashGroup.id)
       .map((notebook) => notebook.id);
 
@@ -876,6 +880,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 <input
                   ref={notebookInputRef}
                   autoFocus
+                  disabled={isPending}
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
                   onBlur={submitNotebookRename}
