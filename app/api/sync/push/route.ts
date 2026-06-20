@@ -15,6 +15,7 @@ import {
   sanitizeNoteHtml,
 } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
+import { moveNotebookToTrash, movePageToTrash } from "@/lib/trash";
 
 const notebookPayloadSchema = z.object({
   id: z.string(),
@@ -138,9 +139,16 @@ export async function POST(request: Request) {
       }
 
       if (item.operation === "archive") {
-        const archived = await prisma.notebook.update({
-          where: { id: existing?.id ?? payload.id },
-          data: { archived: true },
+        if (!existing) {
+          return NextResponse.json(
+            { error: "Notebook to archive was not found." },
+            { status: 404 },
+          );
+        }
+
+        await moveNotebookToTrash(user.id, existing.id);
+        const archived = await prisma.notebook.findUniqueOrThrow({
+          where: { id: existing.id },
         });
 
         notebooks.set(archived.id, toNotebookResponse(archived));
@@ -212,9 +220,23 @@ export async function POST(request: Request) {
       : extractPlainText(safeHtml);
 
     if (item.operation === "archive") {
-      const archived = await prisma.page.update({
-        where: { id: existing?.id ?? payload.id },
-        data: { archived: true },
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Page to archive was not found." },
+          { status: 404 },
+        );
+      }
+
+      const moved = await movePageToTrash(user.id, existing.id);
+      if (!moved) {
+        return NextResponse.json(
+          { error: "Page could not be moved to trash." },
+          { status: 409 },
+        );
+      }
+
+      const archived = await prisma.page.findUniqueOrThrow({
+        where: { id: existing.id },
       });
 
       pages.set(archived.id, toPageResponse(archived));

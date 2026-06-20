@@ -48,6 +48,7 @@ export const getSidebarData = cache(async (userId: string) => {
             title: true,
             updatedAt: true,
             deletedAt: true,
+            originalNotebookId: true,
           },
         },
       },

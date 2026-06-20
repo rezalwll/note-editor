@@ -19,6 +19,7 @@ import {
   createNotebookGroupInlineAction,
   emptyTrashInlineAction,
   createNotebookInlineAction,
+  deleteNotebookPermanentlyInlineAction,
   deleteNotebookGroupInlineAction,
   renameNotebookGroupInlineAction,
   renameNotebookInlineAction,
@@ -33,6 +34,7 @@ type NotebookTab = {
   name: string;
   groupId: string | null;
   groupName?: string | null;
+  systemKey?: string | null;
   deletedAt?: Date | null;
 };
 
@@ -485,7 +487,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     });
   }
 
-  function archiveNotebooks(notebookIds: string[]) {
+  function deleteNotebooks(notebookIds: string[], permanently = false) {
     const fallbackNotebookId =
       displayItems.find((item) => !notebookIds.includes(item.id))?.id ?? null;
     const shouldRedirect = activeNotebookId ? notebookIds.includes(activeNotebookId) : false;
@@ -494,12 +496,24 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       updateNotebooks({ type: "remove-many", notebookIds });
       setSelectedNotebookIds([]);
 
-      const results = await Promise.all(
-        notebookIds.map((notebookId) => archiveNotebookInlineAction(notebookId)),
-      );
-      const trashGroupId = results.find(
-        (result) => "trashGroupId" in result && Boolean(result.trashGroupId),
-      )?.trashGroupId;
+      let trashGroupId: string | undefined;
+
+      if (permanently) {
+        await Promise.all(
+          notebookIds.map((notebookId) =>
+            deleteNotebookPermanentlyInlineAction(notebookId),
+          ),
+        );
+      } else {
+        const results = await Promise.all(
+          notebookIds.map((notebookId) =>
+            archiveNotebookInlineAction(notebookId),
+          ),
+        );
+        trashGroupId = results.find(
+          (result) => "trashGroupId" in result && Boolean(result.trashGroupId),
+        )?.trashGroupId;
+      }
 
       if (shouldRedirect) {
         router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/");
@@ -794,6 +808,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           const isActive = activeNotebookId === notebook.id;
           const isEditing = editingNotebookId === notebook.id;
           const isSelected = selectedNotebookIds.includes(notebook.id);
+          const isDeleted = Boolean(notebook.deletedAt);
+          const isSystemNotebook = Boolean(notebook.systemKey);
           const selectionIds =
             isSelected && selectedNotebookIds.length > 1
               ? selectedNotebookIds
@@ -826,26 +842,40 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                             label: "باز کردن دفتر",
                             onSelect: () => router.push(`/notebooks/${notebook.id}`),
                           },
-                          {
-                            id: "rename",
-                            label: "تغییر نام دفتر",
-                            onSelect: () => beginRenameNotebook(notebook),
-                          },
+                          ...(!isSystemNotebook
+                            ? [
+                                {
+                                  id: "rename",
+                                  label: "تغییر نام دفتر",
+                                  onSelect: () => beginRenameNotebook(notebook),
+                                },
+                              ]
+                            : []),
                           { id: "separator-open", separator: true as const },
                         ]
                       : []),
-                    {
-                      id: "move-ungrouped",
-                      label: "انتقال به بدون دسته",
-                      onSelect: () => moveNotebooksToGroup(selectionIds, null),
-                    },
-                    ...groupItems
-                      .filter((group) => group.id !== notebook.groupId)
-                      .map((group) => ({
-                        id: `move-${group.id}`,
-                        label: `انتقال به ${group.name}`,
-                        onSelect: () => moveNotebooksToGroup(selectionIds, group.id),
-                      })),
+                    ...(!isSystemNotebook
+                      ? [
+                          {
+                            id: "move-ungrouped",
+                            label: "انتقال به بدون دسته",
+                            onSelect: () =>
+                              moveNotebooksToGroup(selectionIds, null),
+                          },
+                          ...groupItems
+                            .filter(
+                              (group) =>
+                                group.id !== notebook.groupId &&
+                                group.systemKey !== TRASH_GROUP_KEY,
+                            )
+                            .map((group) => ({
+                              id: `move-${group.id}`,
+                              label: `انتقال به ${group.name}`,
+                              onSelect: () =>
+                                moveNotebooksToGroup(selectionIds, group.id),
+                            })),
+                        ]
+                      : []),
                     { id: "separator-delete", separator: true as const },
                     {
                       id: "delete",
@@ -854,7 +884,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                           ? "حذف دفترهای انتخاب‌شده"
                           : "حذف دفتر",
                       danger: true,
-                      onSelect: () => archiveNotebooks(selectionIds),
+                      onSelect: () => deleteNotebooks(selectionIds, isDeleted),
                     },
                   ],
                 });

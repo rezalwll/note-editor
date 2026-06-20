@@ -5,7 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { CirclePlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { archivePageInlineAction, createPageInlineAction } from "@/app/actions";
+import {
+  archivePageInlineAction,
+  createPageInlineAction,
+  deletePagePermanentlyInlineAction,
+  restorePageInlineAction,
+} from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
@@ -19,6 +24,7 @@ type NotebookSummary = {
     title: string;
     updatedAt: Date;
     deletedAt?: Date | null;
+    originalNotebookId?: string | null;
   }>;
 };
 
@@ -138,6 +144,55 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     startTransition(async () => {
       setSelectedPageIds([]);
       await Promise.all(pageIds.map((pageId) => archivePageInlineAction(pageId)));
+
+      if (shouldRedirect) {
+        router.push(
+          fallbackPage
+            ? `/pages/${fallbackPage.id}`
+            : `/notebooks/${activeNotebook.id}`,
+        );
+      }
+
+      router.refresh();
+    });
+  }
+
+  function restorePages(pageIds: string[]) {
+    const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1];
+
+    startTransition(async () => {
+      setSelectedPageIds([]);
+      const results = await Promise.all(
+        pageIds.map((pageId) => restorePageInlineAction(pageId)),
+      );
+      const restored = results.find(
+        (result) => "notebookId" in result && Boolean(result.notebookId),
+      );
+
+      if (activePageId && pageIds.includes(activePageId) && restored) {
+        router.push(`/pages/${activePageId}`);
+      }
+
+      router.refresh();
+    });
+  }
+
+  function deletePagesPermanently(pageIds: string[]) {
+    if (!activeNotebook) {
+      return;
+    }
+
+    const fallbackPage = activeNotebook.pages.find(
+      (page) => !pageIds.includes(page.id),
+    );
+    const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1];
+    const shouldRedirect = activePageId ? pageIds.includes(activePageId) : false;
+
+    startTransition(async () => {
+      setSelectedPageIds([]);
+      await Promise.all(
+        pageIds.map((pageId) => deletePagePermanentlyInlineAction(pageId)),
+      );
 
       if (shouldRedirect) {
         router.push(
@@ -314,13 +369,45 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                     setSelectedPageIds([page.id]);
                   }
 
+                  const selectedPages = activeNotebook.pages.filter((item) =>
+                    selectedIds.includes(item.id),
+                  );
+                  const canRestore = selectedPages.every(
+                    (item) => Boolean(item.originalNotebookId),
+                  );
+                  const isTrashNotebook = Boolean(activeNotebook.deletedAt);
+
                   openMenu(event, {
                   title:
                     selectedIds.length > 1
                       ? `${selectedIds.length} صفحه انتخاب شده`
                       : page.title,
-                    items:
-                      selectedIds.length > 1
+                    items: isTrashNotebook
+                      ? [
+                          ...(canRestore
+                            ? [
+                                {
+                                  id: "restore-pages",
+                                  label:
+                                    selectedIds.length > 1
+                                      ? "بازیابی صفحه‌های انتخاب‌شده"
+                                      : "بازیابی صفحه",
+                                  onSelect: () => restorePages(selectedIds),
+                                },
+                                { id: "separator-restore", separator: true as const },
+                              ]
+                            : []),
+                          {
+                            id: "delete-pages-permanently",
+                            label:
+                              selectedIds.length > 1
+                                ? "حذف دائمی صفحه‌های انتخاب‌شده"
+                                : "حذف دائمی صفحه",
+                            danger: true,
+                            onSelect: () => deletePagesPermanently(selectedIds),
+                          },
+                        ]
+                      : selectedIds.length > 1
                         ? [
                             {
                               id: "delete-pages",

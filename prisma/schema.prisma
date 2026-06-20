@@ -27,6 +27,7 @@ model Notebook {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
   groupId     String?  @map("group_id")
+  systemKey   String?  @map("system_key")
   name        String
   description String?
   archived    Boolean  @default(false)
@@ -40,6 +41,7 @@ model Notebook {
   @@index([userId, groupId, archived])
   @@index([userId, updatedAt])
   @@index([userId, deletedAt])
+  @@unique([userId, systemKey])
   @@map("notebooks")
 }
 
@@ -63,6 +65,7 @@ model Page {
   id         String       @id @default(cuid())
   userId     String       @map("user_id")
   notebookId String       @map("notebook_id")
+  originalNotebookId String? @map("original_notebook_id")
   title      String
   bodyHtml   String       @db.Text @map("body_html")
   bodyText   String       @db.Text @map("body_text")
@@ -76,6 +79,7 @@ model Page {
   attachments Attachment[]
 
   @@index([userId, notebookId, archived])
+  @@index([userId, originalNotebookId])
   @@index([userId, updatedAt])
   @@index([userId, deletedAt])
   @@map("pages")

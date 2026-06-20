@@ -20,7 +20,18 @@ import {
   getRateLimitState,
   recordFailedAttempt,
 } from "@/lib/rate-limit";
-import { emptyTrash, ensureTrashGroup, purgeExpiredTrash, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
+import {
+  deleteTrashNotebooks,
+  deleteTrashPage,
+  emptyTrash,
+  ensureTrashGroup,
+  moveNotebookToTrash,
+  movePageToTrash,
+  purgeExpiredTrash,
+  restoreNotebooksToGroup,
+  restorePageFromTrash,
+  TRASH_GROUP_SYSTEM_KEY,
+} from "@/lib/trash";
 import { normalizeUsername } from "@/lib/users";
 
 export type AuthActionState = {
@@ -45,6 +56,8 @@ const notebookSchema = z.object({
 const notebookGroupSchema = z.object({
   name: z.string().trim().min(1).max(80),
 });
+
+const notebookNameSchema = z.string().trim().min(1).max(80);
 
 const pageSchema = z.object({
   notebookId: z.string().cuid(),
@@ -77,7 +90,14 @@ function getSafeRedirectTarget(value: FormDataEntryValue | null) {
 async function getOwnedNotebook(userId: string, id: string) {
   return prisma.notebook.findFirst({
     where: { id, userId },
-    select: { id: true, userId: true, archived: true, groupId: true, deletedAt: true },
+    select: {
+      id: true,
+      userId: true,
+      archived: true,
+      groupId: true,
+      systemKey: true,
+      deletedAt: true,
+    },
   });
 }
 
@@ -93,32 +113,6 @@ async function getOwnedGroup(userId: string, id: string) {
     where: { id, userId },
     select: { id: true, systemKey: true },
   });
-}
-
-async function moveNotebookToTrash(userId: string, notebookId: string) {
-  const trashGroup = await ensureTrashGroup(userId);
-  const deletedAt = new Date();
-
-  await prisma.$transaction([
-    prisma.notebook.update({
-      where: { id: notebookId },
-      data: {
-        groupId: trashGroup.id,
-        deletedAt,
-      },
-    }),
-    prisma.page.updateMany({
-      where: {
-        userId,
-        notebookId,
-      },
-      data: {
-        deletedAt,
-      },
-    }),
-  ]);
-
-  return trashGroup.id;
 }
 
 function isDuplicateUsernameError(error: unknown) {
@@ -365,6 +359,11 @@ export async function createNotebookInlineAction(
 ) {
   const user = await requireUser();
   await purgeExpiredTrash(user.id);
+  const parsedName = notebookNameSchema.safeParse(name);
+
+  if (!parsedName.success) {
+    return { error: "نام دفتر معتبر نیست." };
+  }
 
   if (groupId) {
     const group = await getOwnedGroup(user.id, groupId);
@@ -377,7 +376,7 @@ export async function createNotebookInlineAction(
   const notebook = await prisma.notebook.create({
     data: {
       userId: user.id,
-      name: name.trim(),
+      name: parsedName.data,
       description: undefined,
       groupId: groupId ?? null,
     },
@@ -502,6 +501,18 @@ export async function assignNotebookGroupInlineAction(
     return { error: "انتخاب دسته معتبر نیست." };
   }
 
+  const notebooks = await prisma.notebook.findMany({
+    where: { userId: user.id, id: { in: parsedNotebookIds.data } },
+    select: { id: true, systemKey: true },
+  });
+
+  if (
+    notebooks.length !== parsedNotebookIds.data.length ||
+    notebooks.some((notebook) => notebook.systemKey)
+  ) {
+    return { error: "دفتر معتبر نیست." };
+  }
+
   if (parsedGroupId.data) {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
@@ -510,17 +521,11 @@ export async function assignNotebookGroupInlineAction(
     }
   }
 
-  await prisma.notebook.updateMany({
-    where: {
-      userId: user.id,
-      id: {
-        in: parsedNotebookIds.data,
-      },
-    },
-    data: {
-      groupId: parsedGroupId.data,
-    },
-  });
+  await restoreNotebooksToGroup(
+    user.id,
+    parsedNotebookIds.data,
+    parsedGroupId.data,
+  );
 
   revalidatePath("/");
   return { success: true };
@@ -531,7 +536,7 @@ export async function renameNotebookInlineAction(id: string, name: string) {
   await purgeExpiredTrash(user.id);
 
   const notebookId = z.string().cuid().safeParse(id);
-  const notebookName = z.string().trim().max(80).safeParse(name);
+  const notebookName = notebookNameSchema.safeParse(name);
 
   if (!notebookId.success || !notebookName.success) {
     return { error: "نام دفتر معتبر نیست." };
@@ -539,7 +544,7 @@ export async function renameNotebookInlineAction(id: string, name: string) {
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
-  if (!notebook) {
+  if (!notebook || notebook.systemKey) {
     return { error: "دفتر پیدا نشد." };
   }
 
@@ -569,7 +574,7 @@ export async function updateNotebookAction(formData: FormData) {
 
   const notebook = await getOwnedNotebook(user.id, id.data);
 
-  if (!notebook) {
+  if (!notebook || notebook.systemKey) {
     return;
   }
 
@@ -593,7 +598,7 @@ export async function archiveNotebookAction(formData: FormData) {
 
   const notebook = await getOwnedNotebook(user.id, id.data);
 
-  if (!notebook) {
+  if (!notebook || notebook.systemKey || notebook.deletedAt) {
     return;
   }
 
@@ -614,7 +619,7 @@ export async function archiveNotebookInlineAction(id: string) {
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
-  if (!notebook) {
+  if (!notebook || notebook.systemKey || notebook.deletedAt) {
     return { error: "دفتر پیدا نشد." };
   }
 
@@ -622,6 +627,23 @@ export async function archiveNotebookInlineAction(id: string) {
 
   revalidatePath("/");
   return { success: true, trashGroupId };
+}
+
+export async function deleteNotebookPermanentlyInlineAction(id: string) {
+  const user = await requireUser();
+  const notebookId = z.string().cuid().safeParse(id);
+
+  if (!notebookId.success) {
+    return { error: "دفتر معتبر نیست." };
+  }
+
+  const deletedCount = await deleteTrashNotebooks(user.id, [notebookId.data]);
+  if (deletedCount === 0) {
+    return { error: "دفتر حذف‌شده پیدا نشد." };
+  }
+
+  revalidatePath("/");
+  return { success: true };
 }
 
 export async function createPageAction(formData: FormData) {
@@ -700,22 +722,14 @@ export async function archivePageAction(formData: FormData) {
     return;
   }
 
-  const page = await prisma.page.findFirst({
-    where: { id: pageId.data, userId: user.id },
-    select: { id: true, notebookId: true },
-  });
-
-  if (!page) {
+  const result = await movePageToTrash(user.id, pageId.data);
+  if (!result) {
     return;
   }
 
-  await prisma.page.update({
-    where: { id: page.id },
-    data: { archived: true },
-  });
-
-  revalidatePath(`/notebooks/${page.notebookId}`);
-  redirect(`/notebooks/${page.notebookId}`);
+  revalidatePath(`/notebooks/${result.notebookId}`);
+  revalidatePath("/");
+  redirect(`/notebooks/${result.notebookId}`);
 }
 
 export async function archivePageInlineAction(pageId: string) {
@@ -727,24 +741,55 @@ export async function archivePageInlineAction(pageId: string) {
     return { error: "صفحه معتبر نیست." };
   }
 
-  const page = await prisma.page.findFirst({
-    where: { id: parsedPageId.data, userId: user.id },
-    select: { id: true, notebookId: true },
-  });
-
-  if (!page) {
+  const result = await movePageToTrash(user.id, parsedPageId.data);
+  if (!result) {
     return { error: "صفحه پیدا نشد." };
   }
 
-  await prisma.page.update({
-    where: { id: page.id },
-    data: { archived: true },
-  });
-
-  revalidatePath(`/notebooks/${page.notebookId}`);
+  revalidatePath(`/notebooks/${result.notebookId}`);
   revalidatePath(`/pages/${parsedPageId.data}`);
   revalidatePath("/");
-  return { success: true, notebookId: page.notebookId };
+  return {
+    success: true,
+    notebookId: result.notebookId,
+    trashNotebookId: result.trashNotebookId,
+  };
+}
+
+export async function restorePageInlineAction(pageId: string) {
+  const user = await requireUser();
+  const parsedPageId = z.string().cuid().safeParse(pageId);
+
+  if (!parsedPageId.success) {
+    return { error: "صفحه معتبر نیست." };
+  }
+
+  const result = await restorePageFromTrash(user.id, parsedPageId.data);
+  if (!result) {
+    return { error: "دفتر اصلی صفحه پیدا نشد." };
+  }
+
+  revalidatePath(`/notebooks/${result.notebookId}`);
+  revalidatePath(`/pages/${parsedPageId.data}`);
+  revalidatePath("/");
+  return { success: true, notebookId: result.notebookId };
+}
+
+export async function deletePagePermanentlyInlineAction(pageId: string) {
+  const user = await requireUser();
+  const parsedPageId = z.string().cuid().safeParse(pageId);
+
+  if (!parsedPageId.success) {
+    return { error: "صفحه معتبر نیست." };
+  }
+
+  const deleted = await deleteTrashPage(user.id, parsedPageId.data);
+  if (!deleted) {
+    return { error: "صفحه حذف‌شده پیدا نشد." };
+  }
+
+  revalidatePath("/");
+  return { success: true };
 }
 
 export async function updateTagsAction(formData: FormData) {

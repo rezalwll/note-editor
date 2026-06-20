@@ -1,7 +1,10 @@
 import EmbeddedPostgres from "embedded-postgres";
+import { existsSync } from "node:fs";
+
+const databaseDir = "./.local/postgres-win";
 
 const pg = new EmbeddedPostgres({
-  databaseDir: "./.local/postgres-win",
+  databaseDir,
   user: "postgres",
   password: "postgres",
   port: 5432,
@@ -24,7 +27,9 @@ async function shutdown(signal) {
 }
 
 async function main() {
-  await pg.initialise();
+  if (!existsSync(`${databaseDir}/PG_VERSION`)) {
+    await pg.initialise();
+  }
   await pg.start();
   await pg.createDatabase("notebook").catch((error) => {
     const message = String(error);

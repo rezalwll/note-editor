@@ -27,11 +27,13 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
     name: notebook.name,
     groupId: notebook.group?.id ?? null,
     groupName: notebook.group?.name ?? null,
+    systemKey: notebook.systemKey,
     pages: notebook.pages.map((page) => ({
       id: page.id,
       title: page.title,
       updatedAt: page.updatedAt,
       deletedAt: page.deletedAt,
+      originalNotebookId: page.originalNotebookId,
     })),
     deletedAt: notebook.deletedAt,
   }));
@@ -79,6 +81,8 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                 name: notebook.name,
                 groupId: notebook.groupId,
                 groupName: notebook.groupName,
+                systemKey: notebook.systemKey,
+                deletedAt: notebook.deletedAt,
               }))}
             />
             <div className="h-[4px] bg-[linear-gradient(90deg,var(--color-lavender),var(--color-periwinkle),var(--color-sky),var(--color-mint))]" />

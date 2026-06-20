@@ -34,6 +34,7 @@ vi.mock("@/app/actions", () => ({
   assignNotebookGroupInlineAction: vi.fn(),
   createNotebookGroupInlineAction: vi.fn(),
   createNotebookInlineAction: mocks.createNotebook,
+  deleteNotebookPermanentlyInlineAction: vi.fn(),
   deleteNotebookGroupInlineAction: vi.fn(),
   emptyTrashInlineAction: vi.fn(),
   renameNotebookGroupInlineAction: vi.fn(),
