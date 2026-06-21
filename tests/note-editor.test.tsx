@@ -2,7 +2,10 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteEditor } from "@/components/editor/note-editor";
-import { serializeFreeformDocument } from "@/lib/notes";
+import {
+  parseFreeformDocument,
+  serializeFreeformDocument,
+} from "@/lib/notes";
 
 const mocks = vi.hoisted(() => ({
   openMenu: vi.fn(),
@@ -58,18 +61,20 @@ function mockEditorRects(
   page: HTMLDivElement,
   width: number,
 ) {
-  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
-    x: 0,
-    y: 120,
-    top: 120,
-    left: 0,
-    bottom: 920,
-    right: width,
-    width,
-    height: 800,
-    toJSON: () => ({}),
-  });
-  vi.spyOn(page, "getBoundingClientRect").mockReturnValue({
+  const canvasRectSpy = vi
+    .spyOn(canvas, "getBoundingClientRect")
+    .mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: width,
+      width,
+      height: 800,
+      toJSON: () => ({}),
+    });
+  const pageRectSpy = vi.spyOn(page, "getBoundingClientRect").mockReturnValue({
     x: 0,
     y: 0,
     top: 0,
@@ -80,6 +85,8 @@ function mockEditorRects(
     height: 1000,
     toJSON: () => ({}),
   });
+
+  return { canvasRectSpy, pageRectSpy };
 }
 
 describe("NoteEditor pointer placement", () => {
@@ -110,39 +117,44 @@ describe("NoteEditor pointer placement", () => {
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
   });
 
-  it("mounts and focuses a real block at the mobile pointer-up position", async () => {
-    setViewport(390);
-    const { container } = renderEditor(
-      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
-    );
-    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
-    const page = canvas.parentElement as HTMLDivElement;
-    mockEditorRects(canvas, page, 390);
+  it.each([32, 358])(
+    "mounts and focuses a full-width mobile block regardless of horizontal tap %i",
+    async (clientX) => {
+      setViewport(390);
+      const { container } = renderEditor(
+        serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+      );
+      const canvas = container.querySelector(
+        ".freeform-canvas",
+      ) as HTMLDivElement;
+      const page = canvas.parentElement as HTMLDivElement;
+      mockEditorRects(canvas, page, 390);
 
-    fireEvent.pointerDown(canvas, {
-      button: 0,
-      clientX: 40,
-      clientY: 620,
-      pointerId: 1,
-    });
-    fireEvent.pointerUp(canvas, {
-      button: 0,
-      clientX: 40,
-      clientY: 620,
-      pointerId: 1,
-    });
-
-    await waitFor(() => {
-      const textareas = container.querySelectorAll("textarea");
-      expect(textareas).toHaveLength(2);
-      expect(document.activeElement).toBe(textareas[1]);
-      expect(textareas[1].parentElement).toHaveStyle({
-        left: "16px",
-        top: "500px",
-        width: "240px",
+      fireEvent.pointerDown(canvas, {
+        button: 0,
+        clientX,
+        clientY: 620,
+        pointerId: 1,
       });
-    });
-  });
+      fireEvent.pointerUp(canvas, {
+        button: 0,
+        clientX,
+        clientY: 620,
+        pointerId: 1,
+      });
+
+      await waitFor(() => {
+        const textareas = container.querySelectorAll("textarea");
+        expect(textareas).toHaveLength(2);
+        expect(document.activeElement).toBe(textareas[1]);
+        expect(textareas[1].parentElement).toHaveStyle({
+          left: "16px",
+          top: "500px",
+          width: "358px",
+        });
+      });
+    },
+  );
 
   it("ignores mobile drags instead of creating accidental blocks", async () => {
     setViewport(390);
@@ -219,6 +231,105 @@ describe("NoteEditor pointer placement", () => {
     expect(mocks.enqueuePageUpsert).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps desktop coordinates unchanged while editing in the mobile column", async () => {
+    setViewport(390);
+    const initialHtml = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        { id: "scattered", x: 280, y: 320, width: 240, text: "original" },
+      ],
+    });
+    const { container } = renderEditor(initialHtml);
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(textarea.parentElement).toHaveStyle({
+        left: "16px",
+        top: "320px",
+        width: "358px",
+      });
+    });
+
+    textarea.focus();
+    fireEvent.change(textarea, { target: { value: "edited on mobile" } });
+
+    await waitFor(
+      () => {
+        expect(mocks.enqueuePageUpsert).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1500 },
+    );
+
+    const savedPage = mocks.enqueuePageUpsert.mock.calls[0][0];
+    const savedDocument = parseFreeformDocument(savedPage.bodyHtml);
+    expect(savedDocument?.blocks[0]).toMatchObject({
+      x: 280,
+      y: 320,
+      width: 240,
+      text: "edited on mobile",
+    });
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("restores desktop geometry after a vertical-only mobile drag", async () => {
+    setViewport(390);
+    const initialHtml = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        { id: "movable", x: 280, y: 320, width: 240, text: "move me" },
+      ],
+    });
+    const { container } = renderEditor(initialHtml);
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    const { canvasRectSpy } = mockEditorRects(canvas, page, 390);
+    const block = container.querySelector(
+      '[data-testid="note-block-movable"]',
+    ) as HTMLDivElement;
+
+    await waitFor(() => {
+      expect(block).toHaveStyle({ left: "16px", top: "320px", width: "358px" });
+    });
+
+    fireEvent.pointerDown(block.querySelector("button") as HTMLButtonElement, {
+      button: 0,
+      clientX: 370,
+      clientY: 445,
+      pointerId: 10,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 30,
+      clientY: 600,
+      pointerId: 10,
+    });
+    fireEvent.pointerUp(window, { pointerId: 10 });
+
+    await waitFor(() => {
+      expect(block).toHaveStyle({ left: "16px", top: "475px", width: "358px" });
+    });
+
+    setViewport(1200);
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: 1200,
+      width: 1200,
+      height: 800,
+      toJSON: () => ({}),
+    });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(block).toHaveStyle({ left: "280px", top: "475px", width: "240px" });
+    });
+  });
+
   it("keeps desktop freeform placement and drag affordances", async () => {
     setViewport(1200);
     const { container } = renderEditor(
@@ -247,6 +358,11 @@ describe("NoteEditor pointer placement", () => {
     await waitFor(() => {
       expect(container.querySelectorAll("textarea")).toHaveLength(2);
       expect(document.activeElement).toBe(container.querySelectorAll("textarea")[1]);
+      expect(container.querySelectorAll("textarea")[1].parentElement).toHaveStyle({
+        left: "372px",
+        top: "140px",
+        width: "240px",
+      });
     });
     expect(container.querySelector('button[aria-label="جابجایی بلوک"]')).not.toBeNull();
   });

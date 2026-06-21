@@ -56,6 +56,7 @@ type CanvasCoordinates = {
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
+const MOBILE_BREAKPOINT = 768;
 const BLOCK_MIN_WIDTH = 180;
 const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
@@ -70,7 +71,16 @@ function createId() {
 }
 
 function getCanvasInset(canvasWidth: number) {
-  return canvasWidth >= 768 ? PAGE_SIDE_PADDING_DESKTOP : PAGE_SIDE_PADDING_MOBILE;
+  return canvasWidth >= MOBILE_BREAKPOINT
+    ? PAGE_SIDE_PADDING_DESKTOP
+    : PAGE_SIDE_PADDING_MOBILE;
+}
+
+function getMobileColumnLayout(canvasWidth: number) {
+  return {
+    x: PAGE_SIDE_PADDING_MOBILE,
+    width: Math.max(0, canvasWidth - PAGE_SIDE_PADDING_MOBILE * 2),
+  };
 }
 
 function getBlockRightGutter(canvasWidth: number) {
@@ -260,7 +270,9 @@ export function NoteEditor({
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
-    typeof window !== "undefined" ? window.innerWidth >= 768 : true,
+    typeof window !== "undefined"
+      ? window.innerWidth >= MOBILE_BREAKPOINT
+      : true,
   );
   const [canvasWidth, setCanvasWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200,
@@ -473,7 +485,7 @@ export function NoteEditor({
         return;
       }
 
-      const nextIsDesktopViewport = canvasWidth >= 768;
+      const nextIsDesktopViewport = canvasWidth >= MOBILE_BREAKPOINT;
 
       setCanvasWidth(canvasWidth);
       setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
@@ -675,16 +687,21 @@ export function NoteEditor({
 
     const pageRect = pageRef.current.getBoundingClientRect();
     const canvasRect = canvasRef.current.getBoundingClientRect();
+    const isMobileCanvas = canvasRect.width < MOBILE_BREAKPOINT;
+    const mobileLayout = getMobileColumnLayout(canvasRect.width);
     const boundedBlockWidth = Math.min(blockWidth, getBlockMaxWidth(canvasRect.width));
-    const x = getCanvasBoundedX(
-      canvasRect.width,
-      clientX - canvasRect.left - boundedBlockWidth + BLOCK_RTL_CLICK_ANCHOR,
-      boundedBlockWidth,
-    );
+    const width = isMobileCanvas ? mobileLayout.width : boundedBlockWidth;
+    const x = isMobileCanvas
+      ? mobileLayout.x
+      : getCanvasBoundedX(
+          canvasRect.width,
+          clientX - canvasRect.left - boundedBlockWidth + BLOCK_RTL_CLICK_ANCHOR,
+          boundedBlockWidth,
+        );
     const canvasOffsetTop = canvasRect.top - pageRect.top;
     const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
-    return { x, y, width: boundedBlockWidth };
+    return { x, y, width };
   }
 
   function isEditorControlTarget(target: HTMLElement) {
@@ -789,6 +806,11 @@ export function NoteEditor({
     updateBlock(id, (block) => {
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
+
+      if (activeCanvasWidth < MOBILE_BREAKPOINT) {
+        return { ...block, text };
+      }
+
       const isLegacyColumnBlock = typeof block.width !== "number";
       const previousWidth = getRenderedBlockWidth(block, activeCanvasWidth);
       const nextWidth = isLegacyColumnBlock
@@ -997,6 +1019,7 @@ export function NoteEditor({
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
+    const isMobileCanvas = rect.width < MOBILE_BREAKPOINT;
     const currentBlock = blocks.find(
       (block) => block.id === dragStateRef.current?.id,
     );
@@ -1016,7 +1039,9 @@ export function NoteEditor({
     setBlocks((current) =>
       current.map((block) =>
         block.id === dragStateRef.current?.id
-          ? { ...block, x: nextX, y: nextY, width: blockWidth }
+          ? isMobileCanvas
+            ? { ...block, y: nextY }
+            : { ...block, x: nextX, y: nextY, width: blockWidth }
           : block,
       ),
     );
@@ -1177,8 +1202,14 @@ export function NoteEditor({
     selectSingleBlock(block.id);
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const blockWidth = getRenderedBlockWidth(block, rect.width);
-    const renderedX = getCanvasBoundedX(rect.width, block.x, blockWidth);
+    const isMobileCanvas = rect.width < MOBILE_BREAKPOINT;
+    const mobileLayout = getMobileColumnLayout(rect.width);
+    const blockWidth = isMobileCanvas
+      ? mobileLayout.width
+      : getRenderedBlockWidth(block, rect.width);
+    const renderedX = isMobileCanvas
+      ? mobileLayout.x
+      : getCanvasBoundedX(rect.width, block.x, blockWidth);
     dragStateRef.current = {
       id: block.id,
       pointerOffsetX: event.clientX - rect.left - renderedX,
@@ -1297,8 +1328,13 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
-                const blockWidth = getRenderedBlockWidth(block, canvasWidth);
-                const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
+                const mobileLayout = getMobileColumnLayout(canvasWidth);
+                const blockWidth = isDesktopViewport
+                  ? getRenderedBlockWidth(block, canvasWidth)
+                  : mobileLayout.width;
+                const blockX = isDesktopViewport
+                  ? getCanvasBoundedX(canvasWidth, block.x, blockWidth)
+                  : mobileLayout.x;
                 const isSelected = selectedBlockIds.includes(block.id);
 
                 return (
