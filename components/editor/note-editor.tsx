@@ -687,12 +687,14 @@ export function NoteEditor({
     y: number,
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
+    mobileGapBefore?: number,
   ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
       width,
+      mobileGapBefore,
       text: "",
       align: "right",
     };
@@ -729,6 +731,41 @@ export function NoteEditor({
     }
 
     return orderedBlocks.length;
+  }
+
+  function getMobileGapBefore(index: number, clientY: number) {
+    const previousBlock = index > 0 ? orderedBlocks[index - 1] : null;
+    const previousElement = previousBlock
+      ? blockRefs.current[previousBlock.id]
+      : null;
+    const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
+    const naturalTop = previousElement
+      ? previousElement.getBoundingClientRect().bottom + MOBILE_BLOCK_GAP
+      : canvasTop;
+
+    return Math.max(0, Math.round(clientY - naturalTop));
+  }
+
+  function moveOnlyEmptyMobileBlock(clientY: number) {
+    if (blocks.length !== 1 || blocks[0].text.trim()) {
+      return false;
+    }
+
+    const block = blocks[0];
+    const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
+    const mobileGapBefore = Math.max(0, Math.round(clientY - canvasTop));
+
+    flushSync(() => {
+      setBlocks((current) =>
+        current.map((item) =>
+          item.id === block.id ? { ...item, mobileGapBefore } : item,
+        ),
+      );
+      setActiveBlockId(block.id);
+      setSelectedBlockIds([block.id]);
+    });
+    focusBlockWhenReady(block.id);
+    return true;
   }
 
   function getMobileCoordinatesForInsertion(index: number): CanvasCoordinates {
@@ -864,9 +901,21 @@ export function NoteEditor({
     }
 
     event.preventDefault();
+
+    if (moveOnlyEmptyMobileBlock(event.clientY)) {
+      return;
+    }
+
     const insertionIndex = getMobileInsertionIndex(event.clientY);
     const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
-    addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
+    const mobileGapBefore = getMobileGapBefore(insertionIndex, event.clientY);
+    addBlockAt(
+      coordinates.x,
+      coordinates.y,
+      true,
+      coordinates.width,
+      mobileGapBefore,
+    );
   }
 
   function handlePagePointerCancel() {
@@ -1461,7 +1510,9 @@ export function NoteEditor({
                           top: `${block.y}px`,
                           width: `${blockWidth}px`,
                         }
-                      : undefined
+                      : block.mobileGapBefore
+                        ? { paddingTop: `${block.mobileGapBefore}px` }
+                        : undefined
                   }
                   className={`rounded-md ${
                     isDesktopViewport ? "group absolute" : "mb-6 w-full"

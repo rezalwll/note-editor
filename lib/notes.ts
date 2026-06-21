@@ -61,6 +61,7 @@ const freeformBlockSchema = z.object({
   x: z.number(),
   y: z.number(),
   width: z.number().optional(),
+  mobileGapBefore: z.number().nonnegative().optional(),
   text: z.string(),
   align: z.enum(["right", "center", "justify"]).optional(),
   bold: z.boolean().optional(),

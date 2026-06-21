@@ -200,6 +200,7 @@ describe("NoteEditor mobile reflow", () => {
         "پایین",
       ]);
       expect(document.activeElement).toBe(nextTextareas[1]);
+      expect(nextTextareas[1].parentElement).toHaveStyle({ paddingTop: "48px" });
     });
 
     fireEvent.pointerUp(canvas, {
@@ -209,6 +210,48 @@ describe("NoteEditor mobile reflow", () => {
       pointerId: 2,
     });
     expect(container.querySelectorAll("textarea")).toHaveLength(3);
+  });
+
+  it("moves the initial empty mobile block to the tapped vertical position", async () => {
+    setViewportWidth(390);
+    const initialHtml = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [],
+    });
+
+    const { container } = renderEditor(initialHtml);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-layout-mode="stacked"]')).not.toBeNull();
+    });
+
+    const canvas = container.querySelector(
+      '[data-layout-mode="stacked"]',
+    ) as HTMLDivElement;
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: 390,
+      width: 390,
+      height: 800,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 620,
+    });
+
+    await waitFor(() => {
+      const textareas = Array.from(container.querySelectorAll("textarea"));
+      expect(textareas).toHaveLength(1);
+      expect(textareas[0].parentElement).toHaveStyle({ paddingTop: "500px" });
+      expect(document.activeElement).toBe(textareas[0]);
+    });
   });
 
   it("keeps desktop freeform creation enabled", async () => {

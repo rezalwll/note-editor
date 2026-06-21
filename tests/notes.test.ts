@@ -26,6 +26,23 @@ describe("note content", () => {
     expect(parsed && extractFreeformPlainText(parsed)).toBe("خط اول خط دوم");
   });
 
+  it("preserves mobile vertical spacing", () => {
+    const serialized = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        {
+          id: "mobile-block",
+          x: 16,
+          y: 24,
+          mobileGapBefore: 180,
+          text: "Mobile note",
+        },
+      ],
+    });
+
+    expect(parseFreeformDocument(serialized)?.blocks[0].mobileGapBefore).toBe(180);
+  });
+
   it("sanitizes executable markup while preserving note text", () => {
     const html = sanitizeNoteHtml(
       '<p>متن امن</p><script>alert(1)</script><img src="x" onerror="alert(2)">',
