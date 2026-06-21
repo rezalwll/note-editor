@@ -764,7 +764,26 @@ export function NoteEditor({
 
   function handlePagePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     if (!isDesktopViewport) {
+      const target = event.target as HTMLElement;
       pagePointerStartRef.current = null;
+
+      if (isEditorControlTarget(target)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const lastMobileBlock = orderedBlocks.at(-1);
+
+      if (lastMobileBlock) {
+        focusBlockWhenReady(lastMobileBlock.id, lastMobileBlock.text.length);
+        setActiveBlockId(lastMobileBlock.id);
+        setSelectedBlockIds([lastMobileBlock.id]);
+        return;
+      }
+
+      const coordinates = getNextMobileBlockCoordinates(blocks, canvasWidth);
+      addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
       return;
     }
 

@@ -95,7 +95,7 @@ describe("NoteEditor mobile reflow", () => {
     expect(ordered.map((block) => block.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("renders stacked blocks on mobile and disables blank-canvas creation", async () => {
+  it("renders stacked blocks on mobile and focuses the last block on blank taps", async () => {
     setViewportWidth(390);
     const initialHtml = serializeFreeformDocument({
       type: "freeform-v1",
@@ -160,6 +160,9 @@ describe("NoteEditor mobile reflow", () => {
     });
 
     expect(container.querySelectorAll("textarea")).toHaveLength(2);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(textareas[1]);
+    });
   });
 
   it("keeps desktop freeform creation enabled", async () => {
