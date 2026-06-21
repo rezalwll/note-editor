@@ -291,7 +291,7 @@ describe("NoteEditor mobile reflow", () => {
     await waitFor(() => {
       expect(container.querySelectorAll("textarea")).toHaveLength(2);
       expect(container.querySelectorAll("textarea")[1].parentElement).toHaveStyle({
-        paddingTop: "24px",
+        paddingTop: "152px",
       });
     });
 
@@ -319,15 +319,7 @@ describe("NoteEditor mobile reflow", () => {
     setViewportWidth(390);
     const initialHtml = serializeFreeformDocument({
       type: "freeform-v1",
-      blocks: [
-        {
-          id: "empty-block",
-          x: 48,
-          y: 72,
-          text: "",
-          align: "right",
-        },
-      ],
+      blocks: [],
     });
 
     const { container } = renderEditor(initialHtml);
@@ -367,10 +359,7 @@ describe("NoteEditor mobile reflow", () => {
     fireEvent.blur(container.querySelector("textarea") as HTMLTextAreaElement);
 
     await waitFor(() => {
-      const block = container.querySelector(
-        '[data-testid="note-block-empty-block"]',
-      ) as HTMLDivElement;
-      expect(block.style.paddingTop).toBe("");
+      expect(container.querySelectorAll("textarea")).toHaveLength(0);
     });
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
@@ -391,7 +380,7 @@ describe("NoteEditor mobile reflow", () => {
 
     await waitFor(() => {
       expect(container.querySelector('[data-layout-mode="freeform"]')).not.toBeNull();
-      expect(container.querySelectorAll("textarea")).toHaveLength(1);
+      expect(container.querySelectorAll("textarea")).toHaveLength(0);
     });
 
     canvasRectSpy.mockReturnValue({
@@ -409,10 +398,7 @@ describe("NoteEditor mobile reflow", () => {
 
     await waitFor(() => {
       expect(container.querySelector('[data-layout-mode="stacked"]')).not.toBeNull();
-      const block = container.querySelector(
-        '[data-testid="note-block-empty-block"]',
-      ) as HTMLDivElement;
-      expect(block.style.paddingTop).toBe("");
+      expect(container.querySelectorAll("textarea")).toHaveLength(0);
     });
   });
 

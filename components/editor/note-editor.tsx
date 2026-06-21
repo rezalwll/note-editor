@@ -1,10 +1,23 @@
 "use client";
 
 import { GripVertical } from "lucide-react";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
+import {
+  commitMobileDraft,
+  findMobileInsertIndex,
+  mobileDraftReducer,
+  removeMobileBlockPreservingGap,
+} from "@/components/editor/freeform/mobile-draft";
 import {
   dispatchEditorCommand,
   type EditorCommand,
@@ -47,25 +60,6 @@ type CanvasCoordinates = {
   y: number;
   width: number;
 };
-
-type MobileGapAdjustment = {
-  blockId: string;
-  gapBefore: number;
-  previousGapBefore?: number;
-};
-
-type PendingMobileEdit =
-  | {
-      kind: "insert";
-      blockId: string;
-      adjustedBlockId?: string;
-      previousAdjustedGapBefore?: number;
-    }
-  | {
-      kind: "move-empty";
-      blockId: string;
-      previousGapBefore?: number;
-    };
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
@@ -172,9 +166,7 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   const parsed = parseFreeformDocument(initialHtml);
 
   if (parsed) {
-    return parsed.blocks.length > 0
-      ? parsed.blocks
-      : [{ id: createId(), x: PAGE_SIDE_PADDING_DESKTOP, y: 72, text: "", align: "right" }];
+    return parsed.blocks.filter((block) => block.text.trim());
   }
 
   const plainText = initialHtml
@@ -182,15 +174,17 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
     .replace(/\s+/g, " ")
     .trim();
 
-  return [
-    {
-      id: createId(),
-      x: PAGE_SIDE_PADDING_DESKTOP,
-      y: 72,
-      text: plainText,
-      align: "right",
-    },
-  ];
+  return plainText
+    ? [
+        {
+          id: createId(),
+          x: PAGE_SIDE_PADDING_DESKTOP,
+          y: 72,
+          text: plainText,
+          align: "right",
+        },
+      ]
+    : [];
 }
 
 function toSnapshot(block: FreeformBlock): BlockSnapshot {
@@ -233,45 +227,6 @@ export function sortBlocksForMobile(blocks: FreeformBlock[]) {
   return [...blocks].sort(
     (left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id),
   );
-}
-
-function restorePendingMobileEdit(
-  blocks: FreeformBlock[],
-  pendingEdit: PendingMobileEdit,
-) {
-  if (pendingEdit.kind === "move-empty") {
-    return blocks.map((block) =>
-      block.id === pendingEdit.blockId
-        ? { ...block, mobileGapBefore: pendingEdit.previousGapBefore }
-        : block,
-    );
-  }
-
-  return blocks
-    .filter((block) => block.id !== pendingEdit.blockId)
-    .map((block) =>
-      block.id === pendingEdit.adjustedBlockId
-        ? {
-            ...block,
-            mobileGapBefore: pendingEdit.previousAdjustedGapBefore,
-          }
-        : block,
-    );
-}
-
-function getPersistableBlocks(
-  blocks: FreeformBlock[],
-  pendingEdit: PendingMobileEdit | null,
-) {
-  if (!pendingEdit) {
-    return blocks;
-  }
-
-  const pendingBlock = blocks.find((block) => block.id === pendingEdit.blockId);
-
-  return pendingBlock?.text.trim()
-    ? blocks
-    : restorePendingMobileEdit(blocks, pendingEdit);
 }
 
 function getNextMobileBlockCoordinates(
@@ -333,8 +288,10 @@ export function NoteEditor({
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  const [pendingMobileEdit, setPendingMobileEdit] =
-    useState<PendingMobileEdit | null>(null);
+  const [mobileDraft, dispatchMobileDraft] = useReducer(
+    mobileDraftReducer,
+    null,
+  );
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
@@ -371,17 +328,13 @@ export function NoteEditor({
     clientY: number;
   } | null>(null);
 
-  const persistableBlocks = useMemo(
-    () => getPersistableBlocks(blocks, pendingMobileEdit),
-    [blocks, pendingMobileEdit],
-  );
   const serializedDocument = useMemo(
     () =>
       serializeFreeformDocument({
         type: "freeform-v1",
-        blocks: persistableBlocks,
+        blocks,
       }),
-    [persistableBlocks],
+    [blocks],
   );
 
   const bodyText = useMemo(() => {
@@ -396,6 +349,28 @@ export function NoteEditor({
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
   const orderedBlocks = useMemo(() => sortBlocksForMobile(blocks), [blocks]);
+  const mobileRenderBlocks = useMemo(() => {
+    if (!mobileDraft) {
+      return orderedBlocks;
+    }
+
+    const draftBlock: FreeformBlock = {
+      id: mobileDraft.id,
+      x: mobileDraft.x,
+      y: mobileDraft.y,
+      width: mobileDraft.width,
+      mobileGapBefore: mobileDraft.gapBefore,
+      text: mobileDraft.text,
+      align: "right",
+    };
+    const next = [...orderedBlocks];
+    next.splice(
+      Math.min(Math.max(mobileDraft.insertIndex, 0), next.length),
+      0,
+      draftBlock,
+    );
+    return next;
+  }, [mobileDraft, orderedBlocks]);
 
   function getCanvasBoundedX(
     targetCanvasWidth: number,
@@ -564,31 +539,19 @@ export function NoteEditor({
         }, MOBILE_STACK_TOP);
 
     setLowestBlockBottom(nextLowestBlockBottom);
-  }, [blocks, canvasWidth, isDesktopViewport, orderedBlocks]);
+  }, [blocks, canvasWidth, isDesktopViewport, mobileDraft, orderedBlocks]);
 
-  const finalizePendingMobileEditForDesktop = useEffectEvent(() => {
-    if (!pendingMobileEdit) {
+  const clearMobileDraftForDesktop = useEffectEvent(() => {
+    if (!mobileDraft) {
       return;
     }
 
-    const pendingBlock = blocks.find(
-      (block) => block.id === pendingMobileEdit.blockId,
-    );
-
-    if (pendingBlock?.text.trim()) {
-      setPendingMobileEdit(null);
-      return;
-    }
-
-    setBlocks((current) =>
-      restorePendingMobileEdit(current, pendingMobileEdit),
-    );
-    setPendingMobileEdit(null);
+    dispatchMobileDraft({ type: "clear" });
     setActiveBlockId((current) =>
-      current === pendingMobileEdit.blockId ? null : current,
+      current === mobileDraft.id ? null : current,
     );
     setSelectedBlockIds((current) =>
-      current.filter((id) => id !== pendingMobileEdit.blockId),
+      current.filter((id) => id !== mobileDraft.id),
     );
   });
 
@@ -603,7 +566,7 @@ export function NoteEditor({
       const nextIsDesktopViewport = canvasWidth >= 768;
 
       if (nextIsDesktopViewport) {
-        finalizePendingMobileEditForDesktop();
+        clearMobileDraftForDesktop();
       }
 
       setCanvasWidth(canvasWidth);
@@ -770,38 +733,18 @@ export function NoteEditor({
     y: number,
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
-    mobileGapBefore?: number,
-    mobileGapAdjustment?: MobileGapAdjustment,
-    trackPendingMobileInsertion = false,
   ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
       width,
-      mobileGapBefore,
       text: "",
       align: "right",
     };
 
     const addBlock = () => {
-      setBlocks((current) => [
-        ...current.map((item) =>
-          item.id === mobileGapAdjustment?.blockId
-            ? { ...item, mobileGapBefore: mobileGapAdjustment.gapBefore }
-            : item,
-        ),
-        block,
-      ]);
-      if (trackPendingMobileInsertion) {
-        setPendingMobileEdit({
-          kind: "insert",
-          blockId: block.id,
-          adjustedBlockId: mobileGapAdjustment?.blockId,
-          previousAdjustedGapBefore:
-            mobileGapAdjustment?.previousGapBefore,
-        });
-      }
+      setBlocks((current) => [...current, block]);
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
     };
@@ -816,22 +759,16 @@ export function NoteEditor({
   }
 
   function getMobileInsertionIndex(clientY: number) {
-    for (const [index, block] of orderedBlocks.entries()) {
-      const element = blockRefs.current[block.id];
-
-      if (!element) {
-        continue;
-      }
-
-      const rect = element.getBoundingClientRect();
-      const blockMidpoint = rect.top + rect.height / 2;
-
-      if (clientY < blockMidpoint) {
-        return index;
-      }
-    }
-
-    return orderedBlocks.length;
+    return findMobileInsertIndex(
+      clientY,
+      orderedBlocks.map((block) => {
+        const rect = blockRefs.current[block.id]?.getBoundingClientRect();
+        return {
+          top: rect?.top ?? Number.POSITIVE_INFINITY,
+          bottom: rect?.bottom ?? Number.POSITIVE_INFINITY,
+        };
+      }),
+    );
   }
 
   function getMobileGapBefore(index: number, clientY: number) {
@@ -847,17 +784,16 @@ export function NoteEditor({
     return Math.max(0, Math.round(clientY - naturalTop));
   }
 
-  function getNextMobileGapAdjustment(index: number, clientY: number) {
+  function getNextMobileGapBefore(index: number, clientY: number) {
     const nextBlock = orderedBlocks[index];
     const nextElement = nextBlock ? blockRefs.current[nextBlock.id] : null;
 
     if (!nextBlock || !nextElement) {
-      return undefined;
+      return null;
     }
 
     return {
       blockId: nextBlock.id,
-      previousGapBefore: nextBlock.mobileGapBefore,
       gapBefore: Math.max(
         0,
         Math.round(
@@ -869,65 +805,65 @@ export function NoteEditor({
     };
   }
 
-  function moveOnlyEmptyMobileBlock(clientY: number) {
-    if (blocks.length !== 1 || blocks[0].text.trim()) {
-      return false;
-    }
-
-    const block = blocks[0];
-    const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
-    const mobileGapBefore = Math.max(0, Math.round(clientY - canvasTop));
-    const previousGapBefore =
-      pendingMobileEdit?.kind === "move-empty" &&
-      pendingMobileEdit.blockId === block.id
-        ? pendingMobileEdit.previousGapBefore
-        : block.mobileGapBefore;
+  function placeMobileDraft(clientY: number) {
+    const insertIndex = getMobileInsertionIndex(clientY);
+    const coordinates = getMobileCoordinatesForInsertion(insertIndex);
+    const nextGap = getNextMobileGapBefore(insertIndex, clientY);
+    const draftId = createId();
 
     flushSync(() => {
-      setBlocks((current) =>
-        current.map((item) =>
-          item.id === block.id ? { ...item, mobileGapBefore } : item,
-        ),
-      );
-      setPendingMobileEdit({
-        kind: "move-empty",
-        blockId: block.id,
-        previousGapBefore,
+      dispatchMobileDraft({
+        type: "place",
+        draft: {
+          id: draftId,
+          insertIndex,
+          x: coordinates.x,
+          y: coordinates.y,
+          width: coordinates.width,
+          gapBefore: getMobileGapBefore(insertIndex, clientY),
+          nextBlockId: nextGap?.blockId,
+          nextGapBefore: nextGap?.gapBefore,
+          text: "",
+        },
       });
-      setActiveBlockId(block.id);
-      setSelectedBlockIds([block.id]);
+      setActiveBlockId(draftId);
+      setSelectedBlockIds([draftId]);
     });
-    focusBlockWhenReady(block.id);
-    return true;
+    focusBlockWhenReady(draftId);
   }
 
-  function settlePendingMobileEdit(blockId = pendingMobileEdit?.blockId) {
-    if (!pendingMobileEdit || blockId !== pendingMobileEdit.blockId) {
-      return false;
+  function updateMobileDraftText(text: string) {
+    if (!mobileDraft) {
+      return;
     }
 
-    const pendingBlock = blocks.find(
-      (block) => block.id === pendingMobileEdit.blockId,
-    );
-
-    if (pendingBlock?.text.trim()) {
-      setPendingMobileEdit(null);
-      return true;
+    if (!text.trim()) {
+      dispatchMobileDraft({ type: "update-text", text });
+      return;
     }
 
+    const committedDraft = { ...mobileDraft, text };
     flushSync(() => {
-      setBlocks((current) =>
-        restorePendingMobileEdit(current, pendingMobileEdit),
-      );
-      setPendingMobileEdit(null);
-      setActiveBlockId((current) =>
-        current === pendingMobileEdit.blockId ? null : current,
-      );
-      setSelectedBlockIds((current) =>
-        current.filter((id) => id !== pendingMobileEdit.blockId),
-      );
+      setBlocks((current) => commitMobileDraft(current, committedDraft));
+      dispatchMobileDraft({ type: "clear" });
+      setActiveBlockId(committedDraft.id);
+      setSelectedBlockIds([committedDraft.id]);
     });
-    return true;
+    focusBlockWhenReady(committedDraft.id, text.length);
+  }
+
+  function clearMobileDraft() {
+    if (!mobileDraft) {
+      return;
+    }
+
+    dispatchMobileDraft({ type: "clear" });
+    setActiveBlockId((current) =>
+      current === mobileDraft.id ? null : current,
+    );
+    setSelectedBlockIds((current) =>
+      current.filter((id) => id !== mobileDraft.id),
+    );
   }
 
   function getMobileCoordinatesForInsertion(index: number): CanvasCoordinates {
@@ -1002,18 +938,6 @@ export function NoteEditor({
   function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!isDesktopViewport) {
       pagePointerStartRef.current = null;
-      const target = event.target as HTMLElement;
-      const pendingElement = pendingMobileEdit
-        ? blockRefs.current[pendingMobileEdit.blockId]
-        : null;
-
-      if (
-        pendingMobileEdit &&
-        target !== pendingElement &&
-        !isEditorControlTarget(target)
-      ) {
-        settlePendingMobileEdit();
-      }
       return;
     }
 
@@ -1075,27 +999,7 @@ export function NoteEditor({
     }
 
     event.preventDefault();
-
-    if (moveOnlyEmptyMobileBlock(event.clientY)) {
-      return;
-    }
-
-    const insertionIndex = getMobileInsertionIndex(event.clientY);
-    const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
-    const mobileGapBefore = getMobileGapBefore(insertionIndex, event.clientY);
-    const mobileGapAdjustment = getNextMobileGapAdjustment(
-      insertionIndex,
-      event.clientY,
-    );
-    addBlockAt(
-      coordinates.x,
-      coordinates.y,
-      true,
-      coordinates.width,
-      mobileGapBefore,
-      mobileGapAdjustment,
-      true,
-    );
+    placeMobileDraft(event.clientY);
   }
 
   function handlePagePointerCancel() {
@@ -1183,10 +1087,6 @@ export function NoteEditor({
   }
 
   function removeBlockIfEmpty(id: string) {
-    if (settlePendingMobileEdit(id)) {
-      return;
-    }
-
     setBlocks((current) => {
       const target = current.find((block) => block.id === id);
 
@@ -1194,54 +1094,38 @@ export function NoteEditor({
         return current;
       }
 
-      if (current.length === 1) {
-        return current;
-      }
-
-      return current.filter((block) => block.id !== id);
+      return isDesktopViewport
+        ? current.filter((block) => block.id !== id)
+        : removeMobileBlockPreservingGap(
+            current,
+            id,
+            Math.max(blockRefs.current[id]?.offsetHeight ?? 28, 28),
+            MOBILE_BLOCK_GAP,
+          );
     });
+    setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 
   function deleteBlock(id: string) {
-    const shouldRestorePendingEdit =
-      pendingMobileEdit?.blockId === id ||
-      (pendingMobileEdit?.kind === "insert" &&
-        pendingMobileEdit.adjustedBlockId === id);
-
-    setBlocks((current) => {
-      const restored =
-        pendingMobileEdit && shouldRestorePendingEdit
-          ? restorePendingMobileEdit(current, pendingMobileEdit)
-          : current;
-      return restored.filter((block) => block.id !== id);
-    });
-    if (shouldRestorePendingEdit) {
-      setPendingMobileEdit(null);
-    }
+    setBlocks((current) =>
+      isDesktopViewport
+        ? current.filter((block) => block.id !== id)
+        : removeMobileBlockPreservingGap(
+            current,
+            id,
+            Math.max(blockRefs.current[id]?.offsetHeight ?? 28, 28),
+            MOBILE_BLOCK_GAP,
+          ),
+    );
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 
   function deleteBlocks(ids: string[]) {
-    const shouldRestorePendingEdit = Boolean(
-      pendingMobileEdit &&
-        (ids.includes(pendingMobileEdit.blockId) ||
-          (pendingMobileEdit.kind === "insert" &&
-            pendingMobileEdit.adjustedBlockId &&
-            ids.includes(pendingMobileEdit.adjustedBlockId))),
+    setBlocks((current) =>
+      current.filter((block) => !ids.includes(block.id)),
     );
-
-    setBlocks((current) => {
-      const restored =
-        pendingMobileEdit && shouldRestorePendingEdit
-          ? restorePendingMobileEdit(current, pendingMobileEdit)
-          : current;
-      return restored.filter((block) => !ids.includes(block.id));
-    });
-    if (shouldRestorePendingEdit) {
-      setPendingMobileEdit(null);
-    }
     setActiveBlockId((current) =>
       current && ids.includes(current) ? null : current,
     );
@@ -1708,14 +1592,23 @@ export function NoteEditor({
               tabIndex={-1}
             />
 
-            {(isDesktopViewport ? blocks : orderedBlocks).map(
-              (block, blockIndex) => {
+            {(isDesktopViewport ? blocks : mobileRenderBlocks).map(
+              (block) => {
+                const isMobileDraft =
+                  !isDesktopViewport && mobileDraft?.id === block.id;
                 const blockWidth = getRenderedBlockWidth(block, canvasWidth);
                 const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
                 const isSelected = selectedBlockIds.includes(block.id);
+                const canonicalMobileIndex = orderedBlocks.findIndex(
+                  (item) => item.id === block.id,
+                );
                 const mobileGapBefore =
-                  block.mobileGapBefore ??
-                  (blockIndex === 0 ? 0 : MOBILE_BLOCK_GAP);
+                  isMobileDraft
+                    ? mobileDraft.gapBefore
+                    : mobileDraft?.nextBlockId === block.id
+                      ? (mobileDraft.nextGapBefore ?? 0)
+                      : block.mobileGapBefore ??
+                        (canonicalMobileIndex <= 0 ? 0 : MOBILE_BLOCK_GAP);
 
                 return (
                 <div
@@ -1753,10 +1646,29 @@ export function NoteEditor({
                       blockRefs.current[block.id] = element;
                     }}
                     value={block.text}
-                    onChange={(event) => updateBlockText(block.id, event.target.value)}
-                    onKeyDown={(event) => handleBlockKeyDown(event, block)}
-                    onFocus={() => selectSingleBlock(block.id)}
-                    onBlur={() => removeBlockIfEmpty(block.id)}
+                    onChange={(event) =>
+                      isMobileDraft
+                        ? updateMobileDraftText(event.target.value)
+                        : updateBlockText(block.id, event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (!isMobileDraft) {
+                        handleBlockKeyDown(event, block);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!isMobileDraft && mobileDraft) {
+                        clearMobileDraft();
+                      }
+                      selectSingleBlock(block.id);
+                    }}
+                    onBlur={() => {
+                      if (isMobileDraft) {
+                        clearMobileDraft();
+                        return;
+                      }
+                      removeBlockIfEmpty(block.id);
+                    }}
                     onMouseDown={(event) => {
                       if (event.ctrlKey || event.metaKey) {
                         event.preventDefault();
@@ -1776,6 +1688,9 @@ export function NoteEditor({
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      if (isMobileDraft) {
+                        return;
+                      }
                       if (!selectedBlockIds.includes(block.id)) {
                         selectSingleBlock(block.id);
                       }
@@ -1919,7 +1834,7 @@ export function NoteEditor({
               },
             )}
 
-            {blocks.length === 0 ? (
+            {blocks.length === 0 && !mobileDraft ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">
                 {isDesktopViewport
                   ? "روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید."
