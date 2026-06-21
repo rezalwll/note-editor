@@ -95,7 +95,7 @@ describe("NoteEditor mobile reflow", () => {
     expect(ordered.map((block) => block.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("renders stacked blocks on mobile and focuses the last block on blank taps", async () => {
+  it("renders stacked blocks on mobile and inserts a new block near the tap position", async () => {
     setViewportWidth(390);
     const initialHtml = serializeFreeformDocument({
       type: "freeform-v1",
@@ -139,6 +139,28 @@ describe("NoteEditor mobile reflow", () => {
     });
 
     const textareas = Array.from(container.querySelectorAll("textarea"));
+    vi.spyOn(textareas[0], "getBoundingClientRect").mockReturnValue({
+      x: 16,
+      y: 140,
+      top: 140,
+      left: 16,
+      bottom: 168,
+      right: 374,
+      width: 358,
+      height: 28,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(textareas[1], "getBoundingClientRect").mockReturnValue({
+      x: 16,
+      y: 320,
+      top: 320,
+      left: 16,
+      bottom: 348,
+      right: 374,
+      width: 358,
+      height: 28,
+      toJSON: () => ({}),
+    });
     expect(textareas.map((element) => element.value)).toEqual(["بالا", "پایین"]);
     expect(container.querySelector('[data-layout="stacked"]')?.getAttribute("style")).toBeNull();
     expect(container.querySelector('button[aria-label="جابجایی بلوک"]')).toBeNull();
@@ -149,19 +171,27 @@ describe("NoteEditor mobile reflow", () => {
     fireEvent.pointerDown(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 180,
+      clientY: 240,
       pointerId: 1,
     });
     fireEvent.pointerUp(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 180,
+      clientY: 240,
       pointerId: 1,
     });
 
-    expect(container.querySelectorAll("textarea")).toHaveLength(2);
     await waitFor(() => {
-      expect(document.activeElement).toBe(textareas[1]);
+      expect(container.querySelectorAll("textarea")).toHaveLength(3);
+    });
+    await waitFor(() => {
+      const nextTextareas = Array.from(container.querySelectorAll("textarea"));
+      expect(nextTextareas.map((element) => element.value)).toEqual([
+        "بالا",
+        "",
+        "پایین",
+      ]);
+      expect(document.activeElement).toBe(nextTextareas[1]);
     });
   });
 

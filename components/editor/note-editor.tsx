@@ -715,6 +715,67 @@ export function NoteEditor({
     addBlock();
   }
 
+  function getMobileInsertionIndex(clientY: number) {
+    for (const [index, block] of orderedBlocks.entries()) {
+      const element = blockRefs.current[block.id];
+
+      if (!element) {
+        continue;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const blockMidpoint = rect.top + rect.height / 2;
+
+      if (clientY < blockMidpoint) {
+        return index;
+      }
+    }
+
+    return orderedBlocks.length;
+  }
+
+  function getMobileCoordinatesForInsertion(index: number): CanvasCoordinates {
+    const width = getBlockMaxWidth(canvasWidth);
+    const x = getCanvasInset(canvasWidth);
+    const previousBlock = index > 0 ? orderedBlocks[index - 1] : null;
+    const nextBlock = index < orderedBlocks.length ? orderedBlocks[index] : null;
+
+    if (!previousBlock && !nextBlock) {
+      return {
+        x,
+        y: MOBILE_STACK_TOP,
+        width,
+      };
+    }
+
+    if (!previousBlock && nextBlock) {
+      return {
+        x,
+        y: Math.max(0, nextBlock.y - estimateBlockHeight("") - MOBILE_BLOCK_GAP),
+        width,
+      };
+    }
+
+    if (previousBlock && nextBlock) {
+      const midpointY = (previousBlock.y + nextBlock.y) / 2;
+
+      return {
+        x,
+        y: midpointY > previousBlock.y ? midpointY : previousBlock.y + 0.5,
+        width,
+      };
+    }
+
+    const fallbackY =
+      previousBlock!.y + estimateBlockHeight(previousBlock!.text) + MOBILE_BLOCK_GAP;
+
+    return {
+      x,
+      y: fallbackY,
+      width,
+    };
+  }
+
   function getCanvasCoordinates(
     clientX: number,
     clientY: number,
@@ -772,17 +833,8 @@ export function NoteEditor({
       }
 
       event.preventDefault();
-
-      const lastMobileBlock = orderedBlocks.at(-1);
-
-      if (lastMobileBlock) {
-        focusBlockWhenReady(lastMobileBlock.id, lastMobileBlock.text.length);
-        setActiveBlockId(lastMobileBlock.id);
-        setSelectedBlockIds([lastMobileBlock.id]);
-        return;
-      }
-
-      const coordinates = getNextMobileBlockCoordinates(blocks, canvasWidth);
+      const insertionIndex = getMobileInsertionIndex(event.clientY);
+      const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
       addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
       return;
     }
