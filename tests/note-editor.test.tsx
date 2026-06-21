@@ -5,7 +5,10 @@ import {
   NoteEditor,
   sortBlocksForMobile,
 } from "@/components/editor/note-editor";
-import { serializeFreeformDocument } from "@/lib/notes";
+import {
+  parseFreeformDocument,
+  serializeFreeformDocument,
+} from "@/lib/notes";
 
 const mocks = vi.hoisted(() => ({
   openMenu: vi.fn(),
@@ -215,13 +218,99 @@ describe("NoteEditor mobile reflow", () => {
       pointerId: 2,
     });
     expect(container.querySelectorAll("textarea")).toHaveLength(3);
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 240,
+      pointerId: 3,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 240,
+      pointerId: 3,
+    });
+    fireEvent.click(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 240,
+    });
+
+    await waitFor(() => {
+      const nextTextareas = Array.from(container.querySelectorAll("textarea"));
+      expect(nextTextareas).toHaveLength(3);
+      expect(nextTextareas.filter((element) => !element.value)).toHaveLength(1);
+      expect(nextTextareas[1].parentElement).toHaveStyle({
+        paddingTop: "72px",
+      });
+      expect(nextTextareas[2].parentElement).toHaveStyle({
+        paddingTop: "52px",
+      });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
+
+    fireEvent.blur(container.querySelectorAll("textarea")[1]);
+
+    await waitFor(() => {
+      const restoredTextareas = Array.from(container.querySelectorAll("textarea"));
+      expect(restoredTextareas.map((element) => element.value)).toEqual([
+        "بالا",
+        "پایین",
+      ]);
+      expect(restoredTextareas[1].parentElement).toHaveStyle({
+        paddingTop: "24px",
+      });
+    });
+
+    fireEvent.click(canvas, { clientX: 40, clientY: 180 });
+    let draft = container.querySelectorAll("textarea")[1];
+    fireEvent.change(draft, { target: { value: "temporary" } });
+    fireEvent.change(draft, { target: { value: "" } });
+    fireEvent.blur(draft);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("textarea")).toHaveLength(2);
+      expect(container.querySelectorAll("textarea")[1].parentElement).toHaveStyle({
+        paddingTop: "24px",
+      });
+    });
+
+    fireEvent.click(canvas, { clientX: 40, clientY: 180 });
+    draft = container.querySelectorAll("textarea")[1];
+    fireEvent.change(draft, { target: { value: "saved mobile block" } });
+    fireEvent.blur(draft);
+
+    await waitFor(
+      () => {
+        expect(mocks.enqueuePageUpsert).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1500 },
+    );
+    const savedPage = mocks.enqueuePageUpsert.mock.calls[0][0];
+    const savedDocument = parseFreeformDocument(savedPage.bodyHtml);
+    expect(savedDocument?.blocks.map((block) => block.text)).toEqual([
+      "پایین",
+      "بالا",
+      "saved mobile block",
+    ]);
   });
 
   it("moves the initial empty mobile block to the tapped vertical position", async () => {
     setViewportWidth(390);
     const initialHtml = serializeFreeformDocument({
       type: "freeform-v1",
-      blocks: [],
+      blocks: [
+        {
+          id: "empty-block",
+          x: 48,
+          y: 72,
+          text: "",
+          align: "right",
+        },
+      ],
     });
 
     const { container } = renderEditor(initialHtml);
@@ -233,7 +322,7 @@ describe("NoteEditor mobile reflow", () => {
     const canvas = container.querySelector(
       '[data-layout-mode="stacked"]',
     ) as HTMLDivElement;
-    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+    const canvasRectSpy = vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
       x: 0,
       y: 120,
       top: 120,
@@ -256,6 +345,57 @@ describe("NoteEditor mobile reflow", () => {
       expect(textareas).toHaveLength(1);
       expect(textareas[0].parentElement).toHaveStyle({ paddingTop: "500px" });
       expect(document.activeElement).toBe(textareas[0]);
+    });
+
+    fireEvent.blur(container.querySelector("textarea") as HTMLTextAreaElement);
+
+    await waitFor(() => {
+      const block = container.querySelector(
+        '[data-testid="note-block-empty-block"]',
+      ) as HTMLDivElement;
+      expect(block.style.paddingTop).toBe("");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
+
+    fireEvent.click(canvas, { clientX: 40, clientY: 620 });
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: 1200,
+      width: 1200,
+      height: 800,
+      toJSON: () => ({}),
+    });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-layout-mode="freeform"]')).not.toBeNull();
+      expect(container.querySelectorAll("textarea")).toHaveLength(1);
+    });
+
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: 390,
+      width: 390,
+      height: 800,
+      toJSON: () => ({}),
+    });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-layout-mode="stacked"]')).not.toBeNull();
+      const block = container.querySelector(
+        '[data-testid="note-block-empty-block"]',
+      ) as HTMLDivElement;
+      expect(block.style.paddingTop).toBe("");
     });
   });
 

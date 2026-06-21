@@ -51,7 +51,21 @@ type CanvasCoordinates = {
 type MobileGapAdjustment = {
   blockId: string;
   gapBefore: number;
+  previousGapBefore?: number;
 };
+
+type PendingMobileEdit =
+  | {
+      kind: "insert";
+      blockId: string;
+      adjustedBlockId?: string;
+      previousAdjustedGapBefore?: number;
+    }
+  | {
+      kind: "move-empty";
+      blockId: string;
+      previousGapBefore?: number;
+    };
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
@@ -221,6 +235,45 @@ export function sortBlocksForMobile(blocks: FreeformBlock[]) {
   );
 }
 
+function restorePendingMobileEdit(
+  blocks: FreeformBlock[],
+  pendingEdit: PendingMobileEdit,
+) {
+  if (pendingEdit.kind === "move-empty") {
+    return blocks.map((block) =>
+      block.id === pendingEdit.blockId
+        ? { ...block, mobileGapBefore: pendingEdit.previousGapBefore }
+        : block,
+    );
+  }
+
+  return blocks
+    .filter((block) => block.id !== pendingEdit.blockId)
+    .map((block) =>
+      block.id === pendingEdit.adjustedBlockId
+        ? {
+            ...block,
+            mobileGapBefore: pendingEdit.previousAdjustedGapBefore,
+          }
+        : block,
+    );
+}
+
+function getPersistableBlocks(
+  blocks: FreeformBlock[],
+  pendingEdit: PendingMobileEdit | null,
+) {
+  if (!pendingEdit) {
+    return blocks;
+  }
+
+  const pendingBlock = blocks.find((block) => block.id === pendingEdit.blockId);
+
+  return pendingBlock?.text.trim()
+    ? blocks
+    : restorePendingMobileEdit(blocks, pendingEdit);
+}
+
 function getNextMobileBlockCoordinates(
   blocks: FreeformBlock[],
   targetCanvasWidth: number,
@@ -280,6 +333,8 @@ export function NoteEditor({
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  const [pendingMobileEdit, setPendingMobileEdit] =
+    useState<PendingMobileEdit | null>(null);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
@@ -316,13 +371,17 @@ export function NoteEditor({
     clientY: number;
   } | null>(null);
 
+  const persistableBlocks = useMemo(
+    () => getPersistableBlocks(blocks, pendingMobileEdit),
+    [blocks, pendingMobileEdit],
+  );
   const serializedDocument = useMemo(
     () =>
       serializeFreeformDocument({
         type: "freeform-v1",
-        blocks,
+        blocks: persistableBlocks,
       }),
-    [blocks],
+    [persistableBlocks],
   );
 
   const bodyText = useMemo(() => {
@@ -520,6 +579,32 @@ export function NoteEditor({
     setLowestBlockBottom(nextLowestBlockBottom);
   }, [blocks, canvasWidth, isDesktopViewport, orderedBlocks]);
 
+  const finalizePendingMobileEditForDesktop = useEffectEvent(() => {
+    if (!pendingMobileEdit) {
+      return;
+    }
+
+    const pendingBlock = blocks.find(
+      (block) => block.id === pendingMobileEdit.blockId,
+    );
+
+    if (pendingBlock?.text.trim()) {
+      setPendingMobileEdit(null);
+      return;
+    }
+
+    setBlocks((current) =>
+      restorePendingMobileEdit(current, pendingMobileEdit),
+    );
+    setPendingMobileEdit(null);
+    setActiveBlockId((current) =>
+      current === pendingMobileEdit.blockId ? null : current,
+    );
+    setSelectedBlockIds((current) =>
+      current.filter((id) => id !== pendingMobileEdit.blockId),
+    );
+  });
+
   useEffect(() => {
     const normalizeBlockLayout = () => {
       const canvasWidth = canvasRef.current?.getBoundingClientRect().width;
@@ -528,9 +613,15 @@ export function NoteEditor({
         return;
       }
 
+      const nextIsDesktopViewport = canvasWidth >= 768;
+
+      if (nextIsDesktopViewport) {
+        finalizePendingMobileEditForDesktop();
+      }
+
       setCanvasWidth(canvasWidth);
       setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
-      setIsDesktopViewport(canvasWidth >= 768);
+      setIsDesktopViewport(nextIsDesktopViewport);
     };
     let animationFrameId: number | null = null;
     const scheduleNormalizeBlockLayout = () => {
@@ -694,6 +785,7 @@ export function NoteEditor({
     width = BLOCK_DEFAULT_WIDTH,
     mobileGapBefore?: number,
     mobileGapAdjustment?: MobileGapAdjustment,
+    trackPendingMobileInsertion = false,
   ) {
     const block: FreeformBlock = {
       id: createId(),
@@ -714,6 +806,15 @@ export function NoteEditor({
         ),
         block,
       ]);
+      if (trackPendingMobileInsertion) {
+        setPendingMobileEdit({
+          kind: "insert",
+          blockId: block.id,
+          adjustedBlockId: mobileGapAdjustment?.blockId,
+          previousAdjustedGapBefore:
+            mobileGapAdjustment?.previousGapBefore,
+        });
+      }
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
     };
@@ -769,6 +870,7 @@ export function NoteEditor({
 
     return {
       blockId: nextBlock.id,
+      previousGapBefore: nextBlock.mobileGapBefore,
       gapBefore: Math.max(
         0,
         Math.round(
@@ -788,6 +890,11 @@ export function NoteEditor({
     const block = blocks[0];
     const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
     const mobileGapBefore = Math.max(0, Math.round(clientY - canvasTop));
+    const previousGapBefore =
+      pendingMobileEdit?.kind === "move-empty" &&
+      pendingMobileEdit.blockId === block.id
+        ? pendingMobileEdit.previousGapBefore
+        : block.mobileGapBefore;
 
     flushSync(() => {
       setBlocks((current) =>
@@ -795,10 +902,44 @@ export function NoteEditor({
           item.id === block.id ? { ...item, mobileGapBefore } : item,
         ),
       );
+      setPendingMobileEdit({
+        kind: "move-empty",
+        blockId: block.id,
+        previousGapBefore,
+      });
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
     });
     focusBlockWhenReady(block.id);
+    return true;
+  }
+
+  function settlePendingMobileEdit(blockId = pendingMobileEdit?.blockId) {
+    if (!pendingMobileEdit || blockId !== pendingMobileEdit.blockId) {
+      return false;
+    }
+
+    const pendingBlock = blocks.find(
+      (block) => block.id === pendingMobileEdit.blockId,
+    );
+
+    if (pendingBlock?.text.trim()) {
+      setPendingMobileEdit(null);
+      return true;
+    }
+
+    flushSync(() => {
+      setBlocks((current) =>
+        restorePendingMobileEdit(current, pendingMobileEdit),
+      );
+      setPendingMobileEdit(null);
+      setActiveBlockId((current) =>
+        current === pendingMobileEdit.blockId ? null : current,
+      );
+      setSelectedBlockIds((current) =>
+        current.filter((id) => id !== pendingMobileEdit.blockId),
+      );
+    });
     return true;
   }
 
@@ -874,6 +1015,14 @@ export function NoteEditor({
   function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!isDesktopViewport) {
       pagePointerStartRef.current = null;
+      const target = event.target as HTMLElement;
+      const pendingElement = pendingMobileEdit
+        ? blockRefs.current[pendingMobileEdit.blockId]
+        : null;
+
+      if (pendingMobileEdit && target !== pendingElement) {
+        settlePendingMobileEdit();
+      }
       return;
     }
 
@@ -954,6 +1103,7 @@ export function NoteEditor({
       coordinates.width,
       mobileGapBefore,
       mobileGapAdjustment,
+      true,
     );
   }
 
@@ -1042,6 +1192,10 @@ export function NoteEditor({
   }
 
   function removeBlockIfEmpty(id: string) {
+    if (settlePendingMobileEdit(id)) {
+      return;
+    }
+
     setBlocks((current) => {
       const target = current.find((block) => block.id === id);
 
@@ -1059,13 +1213,44 @@ export function NoteEditor({
   }
 
   function deleteBlock(id: string) {
-    setBlocks((current) => current.filter((block) => block.id !== id));
+    const shouldRestorePendingEdit =
+      pendingMobileEdit?.blockId === id ||
+      (pendingMobileEdit?.kind === "insert" &&
+        pendingMobileEdit.adjustedBlockId === id);
+
+    setBlocks((current) => {
+      const restored =
+        pendingMobileEdit && shouldRestorePendingEdit
+          ? restorePendingMobileEdit(current, pendingMobileEdit)
+          : current;
+      return restored.filter((block) => block.id !== id);
+    });
+    if (shouldRestorePendingEdit) {
+      setPendingMobileEdit(null);
+    }
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 
   function deleteBlocks(ids: string[]) {
-    setBlocks((current) => current.filter((block) => !ids.includes(block.id)));
+    const shouldRestorePendingEdit = Boolean(
+      pendingMobileEdit &&
+        (ids.includes(pendingMobileEdit.blockId) ||
+          (pendingMobileEdit.kind === "insert" &&
+            pendingMobileEdit.adjustedBlockId &&
+            ids.includes(pendingMobileEdit.adjustedBlockId))),
+    );
+
+    setBlocks((current) => {
+      const restored =
+        pendingMobileEdit && shouldRestorePendingEdit
+          ? restorePendingMobileEdit(current, pendingMobileEdit)
+          : current;
+      return restored.filter((block) => !ids.includes(block.id));
+    });
+    if (shouldRestorePendingEdit) {
+      setPendingMobileEdit(null);
+    }
     setActiveBlockId((current) =>
       current && ids.includes(current) ? null : current,
     );
