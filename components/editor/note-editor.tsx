@@ -688,14 +688,11 @@ export function NoteEditor({
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
   ) {
-    const nextCoordinates = isDesktopViewport
-      ? { x, y, width }
-      : getNextMobileBlockCoordinates(blocks, canvasWidth);
     const block: FreeformBlock = {
       id: createId(),
-      x: nextCoordinates.x,
-      y: nextCoordinates.y,
-      width: nextCoordinates.width,
+      x,
+      y,
+      width,
       text: "",
       align: "right",
     };
