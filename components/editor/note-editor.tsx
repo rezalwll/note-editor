@@ -740,7 +740,7 @@ export function NoteEditor({
       : null;
     const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
     const naturalTop = previousElement
-      ? previousElement.getBoundingClientRect().bottom + MOBILE_BLOCK_GAP
+      ? previousElement.getBoundingClientRect().bottom
       : canvasTop;
 
     return Math.max(0, Math.round(clientY - naturalTop));
@@ -1493,12 +1493,16 @@ export function NoteEditor({
               tabIndex={-1}
             />
 
-            {(isDesktopViewport ? blocks : orderedBlocks).map((block) => {
-              const blockWidth = getRenderedBlockWidth(block, canvasWidth);
-              const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
-              const isSelected = selectedBlockIds.includes(block.id);
+            {(isDesktopViewport ? blocks : orderedBlocks).map(
+              (block, blockIndex) => {
+                const blockWidth = getRenderedBlockWidth(block, canvasWidth);
+                const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
+                const isSelected = selectedBlockIds.includes(block.id);
+                const mobileGapBefore =
+                  block.mobileGapBefore ??
+                  (blockIndex === 0 ? 0 : MOBILE_BLOCK_GAP);
 
-              return (
+                return (
                 <div
                   key={block.id}
                   data-testid={`note-block-${block.id}`}
@@ -1510,12 +1514,12 @@ export function NoteEditor({
                           top: `${block.y}px`,
                           width: `${blockWidth}px`,
                         }
-                      : block.mobileGapBefore
-                        ? { paddingTop: `${block.mobileGapBefore}px` }
+                      : mobileGapBefore
+                        ? { paddingTop: `${mobileGapBefore}px` }
                         : undefined
                   }
                   className={`rounded-md ${
-                    isDesktopViewport ? "group absolute" : "mb-6 w-full"
+                    isDesktopViewport ? "group absolute" : "w-full"
                   }`}
                 >
                   {isDesktopViewport ? (
@@ -1696,8 +1700,9 @@ export function NoteEditor({
                     dir="rtl"
                   />
                 </div>
-              );
-            })}
+                );
+              },
+            )}
 
             {blocks.length === 0 ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">

@@ -171,13 +171,13 @@ describe("NoteEditor mobile reflow", () => {
     fireEvent.pointerDown(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 240,
+      clientY: 180,
       pointerId: 1,
     });
     fireEvent.pointerUp(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 240,
+      clientY: 180,
       pointerId: 1,
     });
 
@@ -186,7 +186,7 @@ describe("NoteEditor mobile reflow", () => {
     fireEvent.click(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 240,
+      clientY: 180,
     });
 
     await waitFor(() => {
@@ -200,13 +200,15 @@ describe("NoteEditor mobile reflow", () => {
         "پایین",
       ]);
       expect(document.activeElement).toBe(nextTextareas[1]);
-      expect(nextTextareas[1].parentElement).toHaveStyle({ paddingTop: "48px" });
+      expect(nextTextareas[1].parentElement).toHaveStyle({
+        paddingTop: "12px",
+      });
     });
 
     fireEvent.pointerUp(canvas, {
       button: 0,
       clientX: 40,
-      clientY: 240,
+      clientY: 180,
       pointerId: 2,
     });
     expect(container.querySelectorAll("textarea")).toHaveLength(3);
