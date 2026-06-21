@@ -26,8 +26,8 @@ describe("note content", () => {
     expect(parsed && extractFreeformPlainText(parsed)).toBe("خط اول خط دوم");
   });
 
-  it("preserves mobile vertical spacing", () => {
-    const serialized = serializeFreeformDocument({
+  it("ignores legacy mobile gap fields while still parsing the document", () => {
+    const serialized = JSON.stringify({
       type: "freeform-v1",
       blocks: [
         {
@@ -40,7 +40,12 @@ describe("note content", () => {
       ],
     });
 
-    expect(parseFreeformDocument(serialized)?.blocks[0].mobileGapBefore).toBe(180);
+    expect(parseFreeformDocument(serialized)?.blocks[0]).toEqual({
+      id: "mobile-block",
+      x: 16,
+      y: 24,
+      text: "Mobile note",
+    });
   });
 
   it("sanitizes executable markup while preserving note text", () => {

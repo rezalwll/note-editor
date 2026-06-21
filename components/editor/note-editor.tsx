@@ -52,12 +52,10 @@ type CanvasCoordinates = {
   x: number;
   y: number;
   width: number;
-  isMobile: boolean;
 };
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
-const MOBILE_BREAKPOINT = 768;
 const BLOCK_MIN_WIDTH = 180;
 const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
@@ -72,16 +70,7 @@ function createId() {
 }
 
 function getCanvasInset(canvasWidth: number) {
-  return canvasWidth >= MOBILE_BREAKPOINT
-    ? PAGE_SIDE_PADDING_DESKTOP
-    : PAGE_SIDE_PADDING_MOBILE;
-}
-
-function getMobileColumnLayout(canvasWidth: number) {
-  return {
-    x: PAGE_SIDE_PADDING_MOBILE,
-    width: Math.max(0, canvasWidth - PAGE_SIDE_PADDING_MOBILE * 2),
-  };
+  return canvasWidth >= 768 ? PAGE_SIDE_PADDING_DESKTOP : PAGE_SIDE_PADDING_MOBILE;
 }
 
 function getBlockRightGutter(canvasWidth: number) {
@@ -271,9 +260,7 @@ export function NoteEditor({
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
-    typeof window !== "undefined"
-      ? window.innerWidth >= MOBILE_BREAKPOINT
-      : true,
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
   const [canvasWidth, setCanvasWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200,
@@ -430,7 +417,7 @@ export function NoteEditor({
   }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId, userId]);
 
   useEffect(() => {
-    if (isDesktopViewport || !isHydrated || !activeBlockId) {
+    if (!isHydrated || !activeBlockId) {
       return;
     }
 
@@ -439,9 +426,8 @@ export function NoteEditor({
       return;
     }
 
-    // Keep the active mobile editor focused through hydration, as in 7959e9f.
     element.focus();
-  }, [activeBlockId, isDesktopViewport, isHydrated]);
+  }, [activeBlockId, isHydrated]);
 
   useEffect(() => {
     Object.values(blockRefs.current).forEach((element) => {
@@ -500,18 +486,11 @@ export function NoteEditor({
         return;
       }
 
-      const nextIsDesktopViewport = canvasWidth >= MOBILE_BREAKPOINT;
-
       setCanvasWidth(canvasWidth);
-      setViewportHeight(
-        nextIsDesktopViewport
-          ? (window.visualViewport?.height ?? window.innerHeight)
-          : window.innerHeight,
-      );
-      setIsDesktopViewport(nextIsDesktopViewport);
+      setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
+      setIsDesktopViewport(canvasWidth >= 768);
     };
     let animationFrameId: number | null = null;
-    let observedCanvasWidth: number | null = null;
     const scheduleNormalizeBlockLayout = () => {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -523,31 +502,11 @@ export function NoteEditor({
       });
     };
 
-    const scheduleObservedWidthLayout = () => {
-      const nextWidth = canvasRef.current?.getBoundingClientRect().width;
-
-      if (!nextWidth || nextWidth === observedCanvasWidth) {
-        return;
-      }
-
-      observedCanvasWidth = nextWidth;
-      scheduleNormalizeBlockLayout();
-    };
-
-    const handleVisualViewportResize = () => {
-      const nextWidth = canvasRef.current?.getBoundingClientRect().width;
-
-      if (nextWidth && nextWidth >= MOBILE_BREAKPOINT) {
-        scheduleNormalizeBlockLayout();
-      }
-    };
-
     normalizeBlockLayout();
-    observedCanvasWidth = canvasRef.current?.getBoundingClientRect().width ?? null;
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(scheduleObservedWidthLayout);
+        : new ResizeObserver(scheduleNormalizeBlockLayout);
     const visualViewport = window.visualViewport;
 
     if (canvasRef.current) {
@@ -555,7 +514,7 @@ export function NoteEditor({
     }
 
     window.addEventListener("resize", scheduleNormalizeBlockLayout);
-    visualViewport?.addEventListener("resize", handleVisualViewportResize);
+    visualViewport?.addEventListener("resize", scheduleNormalizeBlockLayout);
     return () => {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -563,7 +522,7 @@ export function NoteEditor({
 
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleNormalizeBlockLayout);
-      visualViewport?.removeEventListener("resize", handleVisualViewportResize);
+      visualViewport?.removeEventListener("resize", scheduleNormalizeBlockLayout);
     };
   }, []);
 
@@ -690,19 +649,16 @@ export function NoteEditor({
     x: number,
     y: number,
     shouldFocus = true,
-    width?: number,
+    width = BLOCK_DEFAULT_WIDTH,
   ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
+      width,
       text: "",
       align: "right",
     };
-
-    if (typeof width === "number") {
-      block.width = width;
-    }
 
     const addBlock = () => {
       setBlocks((current) => [...current, block]);
@@ -730,21 +686,16 @@ export function NoteEditor({
 
     const pageRect = pageRef.current.getBoundingClientRect();
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const isMobileCanvas = canvasRect.width < MOBILE_BREAKPOINT;
-    const mobileLayout = getMobileColumnLayout(canvasRect.width);
     const boundedBlockWidth = Math.min(blockWidth, getBlockMaxWidth(canvasRect.width));
-    const width = isMobileCanvas ? mobileLayout.width : boundedBlockWidth;
-    const x = isMobileCanvas
-      ? mobileLayout.x
-      : getCanvasBoundedX(
-          canvasRect.width,
-          clientX - canvasRect.left - boundedBlockWidth + BLOCK_RTL_CLICK_ANCHOR,
-          boundedBlockWidth,
-        );
+    const x = getCanvasBoundedX(
+      canvasRect.width,
+      clientX - canvasRect.left - boundedBlockWidth + BLOCK_RTL_CLICK_ANCHOR,
+      boundedBlockWidth,
+    );
     const canvasOffsetTop = canvasRect.top - pageRect.top;
     const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
-    return { x, y, width, isMobile: isMobileCanvas };
+    return { x, y, width: boundedBlockWidth };
   }
 
   function isEditorControlTarget(target: HTMLElement) {
@@ -789,12 +740,7 @@ export function NoteEditor({
     const coordinates = getCanvasCoordinates(event.clientX, event.clientY);
 
     if (coordinates) {
-      addBlockAt(
-        coordinates.x,
-        coordinates.y,
-        true,
-        coordinates.isMobile ? undefined : coordinates.width,
-      );
+      addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
     }
   }
 
@@ -854,11 +800,6 @@ export function NoteEditor({
     updateBlock(id, (block) => {
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
-
-      if (activeCanvasWidth < MOBILE_BREAKPOINT) {
-        return { ...block, text };
-      }
-
       const isLegacyColumnBlock = typeof block.width !== "number";
       const previousWidth = getRenderedBlockWidth(block, activeCanvasWidth);
       const nextWidth = isLegacyColumnBlock
@@ -1067,7 +1008,6 @@ export function NoteEditor({
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const isMobileCanvas = rect.width < MOBILE_BREAKPOINT;
     const currentBlock = blocks.find(
       (block) => block.id === dragStateRef.current?.id,
     );
@@ -1087,9 +1027,7 @@ export function NoteEditor({
     setBlocks((current) =>
       current.map((block) =>
         block.id === dragStateRef.current?.id
-          ? isMobileCanvas
-            ? { ...block, y: nextY }
-            : { ...block, x: nextX, y: nextY, width: blockWidth }
+          ? { ...block, x: nextX, y: nextY, width: blockWidth }
           : block,
       ),
     );
@@ -1250,14 +1188,8 @@ export function NoteEditor({
     selectSingleBlock(block.id);
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const isMobileCanvas = rect.width < MOBILE_BREAKPOINT;
-    const mobileLayout = getMobileColumnLayout(rect.width);
-    const blockWidth = isMobileCanvas
-      ? mobileLayout.width
-      : getRenderedBlockWidth(block, rect.width);
-    const renderedX = isMobileCanvas
-      ? mobileLayout.x
-      : getCanvasBoundedX(rect.width, block.x, blockWidth);
+    const blockWidth = getRenderedBlockWidth(block, rect.width);
+    const renderedX = getCanvasBoundedX(rect.width, block.x, blockWidth);
     dragStateRef.current = {
       id: block.id,
       pointerOffsetX: event.clientX - rect.left - renderedX,
@@ -1331,14 +1263,7 @@ export function NoteEditor({
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
                           onSelect: () =>
-                            addBlockAt(
-                              coordinates.x,
-                              coordinates.y,
-                              true,
-                              coordinates.isMobile
-                                ? undefined
-                                : coordinates.width,
-                            ),
+                            addBlockAt(coordinates.x, coordinates.y, true, coordinates.width),
                         },
                         { id: "separator-1", separator: true },
                         {
@@ -1358,14 +1283,7 @@ export function NoteEditor({
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
                           onSelect: () =>
-                            addBlockAt(
-                              coordinates.x,
-                              coordinates.y,
-                              true,
-                              coordinates.isMobile
-                                ? undefined
-                                : coordinates.width,
-                            ),
+                            addBlockAt(coordinates.x, coordinates.y, true, coordinates.width),
                         },
                       ],
               });
@@ -1380,16 +1298,11 @@ export function NoteEditor({
             />
 
             {blocks.map((block) => {
-                const mobileLayout = getMobileColumnLayout(canvasWidth);
-                const blockWidth = isDesktopViewport
-                  ? getRenderedBlockWidth(block, canvasWidth)
-                  : mobileLayout.width;
-                const blockX = isDesktopViewport
-                  ? getCanvasBoundedX(canvasWidth, block.x, blockWidth)
-                  : mobileLayout.x;
-                const isSelected = selectedBlockIds.includes(block.id);
+              const blockWidth = getRenderedBlockWidth(block, canvasWidth);
+              const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
+              const isSelected = selectedBlockIds.includes(block.id);
 
-                return (
+              return (
                 <div
                   key={block.id}
                   data-testid={`note-block-${block.id}`}
