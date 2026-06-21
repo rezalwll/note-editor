@@ -822,17 +822,7 @@ export function NoteEditor({
 
   function handlePagePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     if (!isDesktopViewport) {
-      const target = event.target as HTMLElement;
       pagePointerStartRef.current = null;
-
-      if (isEditorControlTarget(target)) {
-        return;
-      }
-
-      event.preventDefault();
-      const insertionIndex = getMobileInsertionIndex(event.clientY);
-      const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
-      addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
       return;
     }
 
@@ -860,6 +850,23 @@ export function NoteEditor({
     if (coordinates) {
       addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
     }
+  }
+
+  function handlePageClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (isDesktopViewport) {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+
+    if (isEditorControlTarget(target)) {
+      return;
+    }
+
+    event.preventDefault();
+    const insertionIndex = getMobileInsertionIndex(event.clientY);
+    const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
+    addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
   }
 
   function handlePagePointerCancel() {
@@ -1328,6 +1335,7 @@ export function NoteEditor({
           onPointerDown={handlePagePointerDown}
           onPointerUp={handlePagePointerUp}
           onPointerCancel={handlePagePointerCancel}
+          onClick={handlePageClick}
           className="pt-0 flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
           style={{
             borderColor: notebookTheme.editorBorder,

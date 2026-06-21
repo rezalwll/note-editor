@@ -181,6 +181,14 @@ describe("NoteEditor mobile reflow", () => {
       pointerId: 1,
     });
 
+    expect(container.querySelectorAll("textarea")).toHaveLength(2);
+
+    fireEvent.click(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 240,
+    });
+
     await waitFor(() => {
       expect(container.querySelectorAll("textarea")).toHaveLength(3);
     });
@@ -193,6 +201,14 @@ describe("NoteEditor mobile reflow", () => {
       ]);
       expect(document.activeElement).toBe(nextTextareas[1]);
     });
+
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 240,
+      pointerId: 2,
+    });
+    expect(container.querySelectorAll("textarea")).toHaveLength(3);
   });
 
   it("keeps desktop freeform creation enabled", async () => {
