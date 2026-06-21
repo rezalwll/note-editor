@@ -5,19 +5,12 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
-  useReducer,
   useRef,
   useState,
 } from "react";
 import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
-import {
-  commitMobileDraft,
-  findMobileInsertIndex,
-  mobileDraftReducer,
-  removeMobileBlockPreservingGap,
-} from "@/components/editor/freeform/mobile-draft";
 import {
   dispatchEditorCommand,
   type EditorCommand,
@@ -70,8 +63,6 @@ const BLOCK_RTL_CLICK_ANCHOR = 12;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
-const MOBILE_BLOCK_GAP = 24;
-const MOBILE_STACK_TOP = 24;
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 function createId() {
@@ -166,7 +157,17 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   const parsed = parseFreeformDocument(initialHtml);
 
   if (parsed) {
-    return parsed.blocks.filter((block) => block.text.trim());
+    return parsed.blocks.length > 0
+      ? parsed.blocks
+      : [
+          {
+            id: createId(),
+            x: PAGE_SIDE_PADDING_DESKTOP,
+            y: 72,
+            text: "",
+            align: "right",
+          },
+        ];
   }
 
   const plainText = initialHtml
@@ -174,17 +175,15 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
     .replace(/\s+/g, " ")
     .trim();
 
-  return plainText
-    ? [
-        {
-          id: createId(),
-          x: PAGE_SIDE_PADDING_DESKTOP,
-          y: 72,
-          text: plainText,
-          align: "right",
-        },
-      ]
-    : [];
+  return [
+    {
+      id: createId(),
+      x: PAGE_SIDE_PADDING_DESKTOP,
+      y: 72,
+      text: plainText,
+      align: "right",
+    },
+  ];
 }
 
 function toSnapshot(block: FreeformBlock): BlockSnapshot {
@@ -215,34 +214,6 @@ function getCurrentLineRange(text: string, position: number) {
     lineStart,
     lineEnd,
     lineText: text.slice(lineStart, lineEnd),
-  };
-}
-
-function estimateBlockHeight(text: string) {
-  const lineCount = Math.max(text.split("\n").length, 1);
-  return Math.max(28, lineCount * 28);
-}
-
-export function sortBlocksForMobile(blocks: FreeformBlock[]) {
-  return [...blocks].sort(
-    (left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id),
-  );
-}
-
-function getNextMobileBlockCoordinates(
-  blocks: FreeformBlock[],
-  targetCanvasWidth: number,
-): CanvasCoordinates {
-  const width = getBlockMaxWidth(targetCanvasWidth);
-  const nextY = sortBlocksForMobile(blocks).reduce(
-    (currentY, block) => currentY + estimateBlockHeight(block.text) + MOBILE_BLOCK_GAP,
-    MOBILE_STACK_TOP,
-  );
-
-  return {
-    x: getCanvasInset(targetCanvasWidth),
-    y: nextY,
-    width,
   };
 }
 
@@ -288,10 +259,6 @@ export function NoteEditor({
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  const [mobileDraft, dispatchMobileDraft] = useReducer(
-    mobileDraftReducer,
-    null,
-  );
   const [isDesktopViewport, setIsDesktopViewport] = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
@@ -348,29 +315,6 @@ export function NoteEditor({
 
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
-  const orderedBlocks = useMemo(() => sortBlocksForMobile(blocks), [blocks]);
-  const mobileRenderBlocks = useMemo(() => {
-    if (!mobileDraft) {
-      return orderedBlocks;
-    }
-
-    const draftBlock: FreeformBlock = {
-      id: mobileDraft.id,
-      x: mobileDraft.x,
-      y: mobileDraft.y,
-      width: mobileDraft.width,
-      mobileGapBefore: mobileDraft.gapBefore,
-      text: mobileDraft.text,
-      align: "right",
-    };
-    const next = [...orderedBlocks];
-    next.splice(
-      Math.min(Math.max(mobileDraft.insertIndex, 0), next.length),
-      0,
-      draftBlock,
-    );
-    return next;
-  }, [mobileDraft, orderedBlocks]);
 
   function getCanvasBoundedX(
     targetCanvasWidth: number,
@@ -483,25 +427,15 @@ export function NoteEditor({
     });
 
     if (!selectionRestoreRef.current) {
-      const nextLowestBlockBottom = isDesktopViewport
-        ? blocks.reduce((max, block) => {
-            const element = blockRefs.current[block.id];
-            const blockHeight = Math.max(
-              element?.scrollHeight ?? 28,
-              element?.offsetHeight ?? 28,
-              28,
-            );
-            return Math.max(max, block.y + blockHeight);
-          }, 0)
-        : orderedBlocks.reduce((currentY, block) => {
-            const element = blockRefs.current[block.id];
-            const blockHeight = Math.max(
-              element?.scrollHeight ?? 28,
-              element?.offsetHeight ?? 28,
-              28,
-            );
-            return currentY + blockHeight + MOBILE_BLOCK_GAP;
-          }, MOBILE_STACK_TOP);
+      const nextLowestBlockBottom = blocks.reduce((max, block) => {
+        const element = blockRefs.current[block.id];
+        const blockHeight = Math.max(
+          element?.scrollHeight ?? 28,
+          element?.offsetHeight ?? 28,
+          28,
+        );
+        return Math.max(max, block.y + blockHeight);
+      }, 0);
 
       setLowestBlockBottom(nextLowestBlockBottom);
       return;
@@ -518,42 +452,18 @@ export function NoteEditor({
     element.focus();
     element.setSelectionRange(restore.start, restore.end);
 
-    const nextLowestBlockBottom = isDesktopViewport
-      ? blocks.reduce((max, block) => {
-          const blockElement = blockRefs.current[block.id];
-          const blockHeight = Math.max(
-            blockElement?.scrollHeight ?? 28,
-            blockElement?.offsetHeight ?? 28,
-            28,
-          );
-          return Math.max(max, block.y + blockHeight);
-        }, 0)
-      : orderedBlocks.reduce((currentY, block) => {
-          const blockElement = blockRefs.current[block.id];
-          const blockHeight = Math.max(
-            blockElement?.scrollHeight ?? 28,
-            blockElement?.offsetHeight ?? 28,
-            28,
-          );
-          return currentY + blockHeight + MOBILE_BLOCK_GAP;
-        }, MOBILE_STACK_TOP);
+    const nextLowestBlockBottom = blocks.reduce((max, block) => {
+      const blockElement = blockRefs.current[block.id];
+      const blockHeight = Math.max(
+        blockElement?.scrollHeight ?? 28,
+        blockElement?.offsetHeight ?? 28,
+        28,
+      );
+      return Math.max(max, block.y + blockHeight);
+    }, 0);
 
     setLowestBlockBottom(nextLowestBlockBottom);
-  }, [blocks, canvasWidth, isDesktopViewport, mobileDraft, orderedBlocks]);
-
-  const clearMobileDraftForDesktop = useEffectEvent(() => {
-    if (!mobileDraft) {
-      return;
-    }
-
-    dispatchMobileDraft({ type: "clear" });
-    setActiveBlockId((current) =>
-      current === mobileDraft.id ? null : current,
-    );
-    setSelectedBlockIds((current) =>
-      current.filter((id) => id !== mobileDraft.id),
-    );
-  });
+  }, [blocks, canvasWidth]);
 
   useEffect(() => {
     const normalizeBlockLayout = () => {
@@ -564,10 +474,6 @@ export function NoteEditor({
       }
 
       const nextIsDesktopViewport = canvasWidth >= 768;
-
-      if (nextIsDesktopViewport) {
-        clearMobileDraftForDesktop();
-      }
 
       setCanvasWidth(canvasWidth);
       setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
@@ -758,156 +664,6 @@ export function NoteEditor({
     addBlock();
   }
 
-  function getMobileInsertionIndex(clientY: number) {
-    return findMobileInsertIndex(
-      clientY,
-      orderedBlocks.map((block) => {
-        const rect = blockRefs.current[block.id]?.getBoundingClientRect();
-        return {
-          top: rect?.top ?? Number.POSITIVE_INFINITY,
-          bottom: rect?.bottom ?? Number.POSITIVE_INFINITY,
-        };
-      }),
-    );
-  }
-
-  function getMobileGapBefore(index: number, clientY: number) {
-    const previousBlock = index > 0 ? orderedBlocks[index - 1] : null;
-    const previousElement = previousBlock
-      ? blockRefs.current[previousBlock.id]
-      : null;
-    const canvasTop = canvasRef.current?.getBoundingClientRect().top ?? clientY;
-    const naturalTop = previousElement
-      ? previousElement.getBoundingClientRect().bottom
-      : canvasTop;
-
-    return Math.max(0, Math.round(clientY - naturalTop));
-  }
-
-  function getNextMobileGapBefore(index: number, clientY: number) {
-    const nextBlock = orderedBlocks[index];
-    const nextElement = nextBlock ? blockRefs.current[nextBlock.id] : null;
-
-    if (!nextBlock || !nextElement) {
-      return null;
-    }
-
-    return {
-      blockId: nextBlock.id,
-      gapBefore: Math.max(
-        0,
-        Math.round(
-          nextElement.getBoundingClientRect().top -
-            clientY -
-            estimateBlockHeight(""),
-        ),
-      ),
-    };
-  }
-
-  function placeMobileDraft(clientY: number) {
-    const insertIndex = getMobileInsertionIndex(clientY);
-    const coordinates = getMobileCoordinatesForInsertion(insertIndex);
-    const nextGap = getNextMobileGapBefore(insertIndex, clientY);
-    const draftId = createId();
-
-    flushSync(() => {
-      dispatchMobileDraft({
-        type: "place",
-        draft: {
-          id: draftId,
-          insertIndex,
-          x: coordinates.x,
-          y: coordinates.y,
-          width: coordinates.width,
-          gapBefore: getMobileGapBefore(insertIndex, clientY),
-          nextBlockId: nextGap?.blockId,
-          nextGapBefore: nextGap?.gapBefore,
-          text: "",
-        },
-      });
-      setActiveBlockId(draftId);
-      setSelectedBlockIds([draftId]);
-    });
-    focusBlockWhenReady(draftId);
-  }
-
-  function updateMobileDraftText(text: string) {
-    if (!mobileDraft) {
-      return;
-    }
-
-    if (!text.trim()) {
-      dispatchMobileDraft({ type: "update-text", text });
-      return;
-    }
-
-    const committedDraft = { ...mobileDraft, text };
-    flushSync(() => {
-      setBlocks((current) => commitMobileDraft(current, committedDraft));
-      dispatchMobileDraft({ type: "clear" });
-      setActiveBlockId(committedDraft.id);
-      setSelectedBlockIds([committedDraft.id]);
-    });
-    focusBlockWhenReady(committedDraft.id, text.length);
-  }
-
-  function clearMobileDraft() {
-    if (!mobileDraft) {
-      return;
-    }
-
-    dispatchMobileDraft({ type: "clear" });
-    setActiveBlockId((current) =>
-      current === mobileDraft.id ? null : current,
-    );
-    setSelectedBlockIds((current) =>
-      current.filter((id) => id !== mobileDraft.id),
-    );
-  }
-
-  function getMobileCoordinatesForInsertion(index: number): CanvasCoordinates {
-    const width = getBlockMaxWidth(canvasWidth);
-    const x = getCanvasInset(canvasWidth);
-    const previousBlock = index > 0 ? orderedBlocks[index - 1] : null;
-    const nextBlock = index < orderedBlocks.length ? orderedBlocks[index] : null;
-
-    if (!previousBlock && !nextBlock) {
-      return {
-        x,
-        y: MOBILE_STACK_TOP,
-        width,
-      };
-    }
-
-    if (!previousBlock && nextBlock) {
-      return {
-        x,
-        y: Math.max(0, nextBlock.y - estimateBlockHeight("") - MOBILE_BLOCK_GAP),
-        width,
-      };
-    }
-
-    if (previousBlock && nextBlock) {
-      const midpointY = (previousBlock.y + nextBlock.y) / 2;
-
-      return {
-        x,
-        y: midpointY > previousBlock.y ? midpointY : previousBlock.y + 0.5,
-        width,
-      };
-    }
-
-    const fallbackY =
-      previousBlock!.y + estimateBlockHeight(previousBlock!.text) + MOBILE_BLOCK_GAP;
-
-    return {
-      x,
-      y: fallbackY,
-      width,
-    };
-  }
-
   function getCanvasCoordinates(
     clientX: number,
     clientY: number,
@@ -936,11 +692,6 @@ export function NoteEditor({
   }
 
   function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!isDesktopViewport) {
-      pagePointerStartRef.current = null;
-      return;
-    }
-
     const target = event.target as HTMLElement;
 
     if (event.button !== 0 || isEditorControlTarget(target)) {
@@ -956,11 +707,6 @@ export function NoteEditor({
   }
 
   function handlePagePointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    if (!isDesktopViewport) {
-      pagePointerStartRef.current = null;
-      return;
-    }
-
     const target = event.target as HTMLElement;
     const pointerStart = pagePointerStartRef.current;
     pagePointerStartRef.current = null;
@@ -985,21 +731,6 @@ export function NoteEditor({
     if (coordinates) {
       addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
     }
-  }
-
-  function handlePageClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (isDesktopViewport) {
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-
-    if (isEditorControlTarget(target)) {
-      return;
-    }
-
-    event.preventDefault();
-    placeMobileDraft(event.clientY);
   }
 
   function handlePagePointerCancel() {
@@ -1056,13 +787,6 @@ export function NoteEditor({
 
   function updateBlockText(id: string, text: string) {
     updateBlock(id, (block) => {
-      if (!isDesktopViewport) {
-        return {
-          ...block,
-          text,
-        };
-      }
-
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
       const isLegacyColumnBlock = typeof block.width !== "number";
@@ -1094,30 +818,17 @@ export function NoteEditor({
         return current;
       }
 
-      return isDesktopViewport
-        ? current.filter((block) => block.id !== id)
-        : removeMobileBlockPreservingGap(
-            current,
-            id,
-            Math.max(blockRefs.current[id]?.offsetHeight ?? 28, 28),
-            MOBILE_BLOCK_GAP,
-          );
+      if (current.length === 1) {
+        return current;
+      }
+
+      return current.filter((block) => block.id !== id);
     });
-    setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 
   function deleteBlock(id: string) {
-    setBlocks((current) =>
-      isDesktopViewport
-        ? current.filter((block) => block.id !== id)
-        : removeMobileBlockPreservingGap(
-            current,
-            id,
-            Math.max(blockRefs.current[id]?.offsetHeight ?? 28, 28),
-            MOBILE_BLOCK_GAP,
-          ),
-    );
+    setBlocks((current) => current.filter((block) => block.id !== id));
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
@@ -1457,7 +1168,7 @@ export function NoteEditor({
     event: React.PointerEvent<HTMLButtonElement>,
     block: FreeformBlock,
   ) {
-    if (!isDesktopViewport || !canvasRef.current) {
+    if (!canvasRef.current) {
       return;
     }
 
@@ -1483,7 +1194,6 @@ export function NoteEditor({
           onPointerDown={handlePagePointerDown}
           onPointerUp={handlePagePointerUp}
           onPointerCancel={handlePagePointerCancel}
-          onClick={handlePageClick}
           className="pt-0 flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
           style={{
             borderColor: notebookTheme.editorBorder,
@@ -1506,20 +1216,14 @@ export function NoteEditor({
 
           <div
             ref={canvasRef}
-            data-layout-mode={isDesktopViewport ? "freeform" : "stacked"}
-            className={`freeform-canvas flex-1 bg-white ${
-              isDesktopViewport ? "relative" : "px-4"
-            }`}
+            data-layout-mode="freeform"
+            className="freeform-canvas relative flex-1 bg-white"
             style={{
               minHeight: `${
                 isDesktopViewport ? desktopCanvasMinHeight : mobileCanvasMinHeight
               }px`,
             }}
             onContextMenu={(event) => {
-              if (!isDesktopViewport) {
-                return;
-              }
-
               const target = event.target as HTMLElement;
 
               if (isEditorControlTarget(target)) {
@@ -1592,83 +1296,41 @@ export function NoteEditor({
               tabIndex={-1}
             />
 
-            {(isDesktopViewport ? blocks : mobileRenderBlocks).map(
-              (block) => {
-                const isMobileDraft =
-                  !isDesktopViewport && mobileDraft?.id === block.id;
+            {blocks.map((block) => {
                 const blockWidth = getRenderedBlockWidth(block, canvasWidth);
                 const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
                 const isSelected = selectedBlockIds.includes(block.id);
-                const canonicalMobileIndex = orderedBlocks.findIndex(
-                  (item) => item.id === block.id,
-                );
-                const mobileGapBefore =
-                  isMobileDraft
-                    ? mobileDraft.gapBefore
-                    : mobileDraft?.nextBlockId === block.id
-                      ? (mobileDraft.nextGapBefore ?? 0)
-                      : block.mobileGapBefore ??
-                        (canonicalMobileIndex <= 0 ? 0 : MOBILE_BLOCK_GAP);
 
                 return (
                 <div
                   key={block.id}
                   data-testid={`note-block-${block.id}`}
-                  data-layout={isDesktopViewport ? "freeform" : "stacked"}
-                  style={
-                    isDesktopViewport
-                      ? {
-                          left: `${blockX}px`,
-                          top: `${block.y}px`,
-                          width: `${blockWidth}px`,
-                        }
-                      : mobileGapBefore
-                        ? { paddingTop: `${mobileGapBefore}px` }
-                        : undefined
-                  }
-                  className={`rounded-md ${
-                    isDesktopViewport ? "group absolute" : "w-full"
-                  }`}
+                  data-layout="freeform"
+                  style={{
+                    left: `${blockX}px`,
+                    top: `${block.y}px`,
+                    width: `${blockWidth}px`,
+                  }}
+                  className="group absolute rounded-md"
                 >
-                  {isDesktopViewport ? (
-                    <button
-                      type="button"
-                      onPointerDown={(event) => startDraggingBlock(event, block)}
-                      className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
-                      aria-label="جابجایی بلوک"
-                    >
-                      <GripVertical className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onPointerDown={(event) => startDraggingBlock(event, block)}
+                    className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
+                    aria-label="جابجایی بلوک"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </button>
 
                   <textarea
                     ref={(element) => {
                       blockRefs.current[block.id] = element;
                     }}
                     value={block.text}
-                    onChange={(event) =>
-                      isMobileDraft
-                        ? updateMobileDraftText(event.target.value)
-                        : updateBlockText(block.id, event.target.value)
-                    }
-                    onKeyDown={(event) => {
-                      if (!isMobileDraft) {
-                        handleBlockKeyDown(event, block);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (!isMobileDraft && mobileDraft) {
-                        clearMobileDraft();
-                      }
-                      selectSingleBlock(block.id);
-                    }}
-                    onBlur={() => {
-                      if (isMobileDraft) {
-                        clearMobileDraft();
-                        return;
-                      }
-                      removeBlockIfEmpty(block.id);
-                    }}
+                    onChange={(event) => updateBlockText(block.id, event.target.value)}
+                    onKeyDown={(event) => handleBlockKeyDown(event, block)}
+                    onFocus={() => selectSingleBlock(block.id)}
+                    onBlur={() => removeBlockIfEmpty(block.id)}
                     onMouseDown={(event) => {
                       if (event.ctrlKey || event.metaKey) {
                         event.preventDefault();
@@ -1688,9 +1350,6 @@ export function NoteEditor({
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      if (isMobileDraft) {
-                        return;
-                      }
                       if (!selectedBlockIds.includes(block.id)) {
                         selectSingleBlock(block.id);
                       }
@@ -1831,14 +1490,11 @@ export function NoteEditor({
                   />
                 </div>
                 );
-              },
-            )}
+              })}
 
-            {blocks.length === 0 && !mobileDraft ? (
+            {blocks.length === 0 ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">
-                {isDesktopViewport
-                  ? "روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید."
-                  : "نوشتن را از بالای صفحه شروع کنید تا متن به‌صورت پیوسته ادامه پیدا کند."}
+                روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید.
               </div>
             ) : null}
           </div>
