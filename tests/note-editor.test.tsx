@@ -86,6 +86,10 @@ function mockEditorRects(
   return { canvasRectSpy, pageRectSpy };
 }
 
+function syncLayout() {
+  fireEvent(window, new Event("resize"));
+}
+
 describe("NoteEditor freeform placement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,6 +136,7 @@ describe("NoteEditor freeform placement", () => {
       const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
       const page = canvas.parentElement as HTMLDivElement;
       mockEditorRects(canvas, page, 390);
+      syncLayout();
 
       fireEvent.pointerDown(canvas, {
         button: 0,
@@ -170,6 +175,7 @@ describe("NoteEditor freeform placement", () => {
     const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
     const page = canvas.parentElement as HTMLDivElement;
     mockEditorRects(canvas, page, 390);
+    syncLayout();
     const block = container.querySelector(
       '[data-testid="note-block-movable"]',
     ) as HTMLDivElement;
@@ -207,6 +213,7 @@ describe("NoteEditor freeform placement", () => {
     const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
     const page = canvas.parentElement as HTMLDivElement;
     mockEditorRects(canvas, page, 390);
+    syncLayout();
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
     await waitFor(() => {
@@ -230,6 +237,7 @@ describe("NoteEditor freeform placement", () => {
     const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
     const page = canvas.parentElement as HTMLDivElement;
     mockEditorRects(canvas, page, 390);
+    syncLayout();
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
     fireEvent.pointerDown(textarea, {
@@ -273,6 +281,7 @@ describe("NoteEditor freeform placement", () => {
     const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
     const page = canvas.parentElement as HTMLDivElement;
     mockEditorRects(canvas, page, 1200);
+    syncLayout();
 
     fireEvent.pointerDown(canvas, {
       button: 0,

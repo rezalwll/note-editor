@@ -56,6 +56,8 @@ type CanvasCoordinates = {
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
+const DEFAULT_CANVAS_WIDTH = 1200;
+const DEFAULT_VIEWPORT_HEIGHT = 900;
 const BLOCK_MIN_WIDTH = 180;
 const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
@@ -259,15 +261,9 @@ export function NoteEditor({
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  const [isDesktopViewport, setIsDesktopViewport] = useState(
-    typeof window !== "undefined" ? window.innerWidth >= 768 : true,
-  );
-  const [canvasWidth, setCanvasWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1200,
-  );
-  const [viewportHeight, setViewportHeight] = useState(
-    typeof window !== "undefined" ? window.innerHeight : 900,
-  );
+  const [isDesktopViewport, setIsDesktopViewport] = useState(true);
+  const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
+  const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [lowestBlockBottom, setLowestBlockBottom] = useState(0);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
