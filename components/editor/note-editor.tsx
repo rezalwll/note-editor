@@ -57,6 +57,8 @@ const BLOCK_RTL_CLICK_ANCHOR = 12;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
+const MOBILE_BLOCK_GAP = 24;
+const MOBILE_STACK_TOP = 24;
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 function createId() {
@@ -203,6 +205,34 @@ function getCurrentLineRange(text: string, position: number) {
   };
 }
 
+function estimateBlockHeight(text: string) {
+  const lineCount = Math.max(text.split("\n").length, 1);
+  return Math.max(28, lineCount * 28);
+}
+
+export function sortBlocksForMobile(blocks: FreeformBlock[]) {
+  return [...blocks].sort(
+    (left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id),
+  );
+}
+
+function getNextMobileBlockCoordinates(
+  blocks: FreeformBlock[],
+  targetCanvasWidth: number,
+): CanvasCoordinates {
+  const width = getBlockMaxWidth(targetCanvasWidth);
+  const nextY = sortBlocksForMobile(blocks).reduce(
+    (currentY, block) => currentY + estimateBlockHeight(block.text) + MOBILE_BLOCK_GAP,
+    MOBILE_STACK_TOP,
+  );
+
+  return {
+    x: getCanvasInset(targetCanvasWidth),
+    y: nextY,
+    width,
+  };
+}
+
 export function NoteEditor({
   userId,
   notebookId,
@@ -301,7 +331,7 @@ export function NoteEditor({
 
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
-  const selectedBlocks = blocks.filter((block) => selectedBlockIds.includes(block.id));
+  const orderedBlocks = useMemo(() => sortBlocksForMobile(blocks), [blocks]);
 
   function getCanvasBoundedX(
     targetCanvasWidth: number,
@@ -427,15 +457,25 @@ export function NoteEditor({
     });
 
     if (!selectionRestoreRef.current) {
-      const nextLowestBlockBottom = blocks.reduce((max, block) => {
-        const element = blockRefs.current[block.id];
-        const blockHeight = Math.max(
-          element?.scrollHeight ?? 28,
-          element?.offsetHeight ?? 28,
-          28,
-        );
-        return Math.max(max, block.y + blockHeight);
-      }, 0);
+      const nextLowestBlockBottom = isDesktopViewport
+        ? blocks.reduce((max, block) => {
+            const element = blockRefs.current[block.id];
+            const blockHeight = Math.max(
+              element?.scrollHeight ?? 28,
+              element?.offsetHeight ?? 28,
+              28,
+            );
+            return Math.max(max, block.y + blockHeight);
+          }, 0)
+        : orderedBlocks.reduce((currentY, block) => {
+            const element = blockRefs.current[block.id];
+            const blockHeight = Math.max(
+              element?.scrollHeight ?? 28,
+              element?.offsetHeight ?? 28,
+              28,
+            );
+            return currentY + blockHeight + MOBILE_BLOCK_GAP;
+          }, MOBILE_STACK_TOP);
 
       setLowestBlockBottom(nextLowestBlockBottom);
       return;
@@ -452,18 +492,28 @@ export function NoteEditor({
     element.focus();
     element.setSelectionRange(restore.start, restore.end);
 
-    const nextLowestBlockBottom = blocks.reduce((max, block) => {
-      const blockElement = blockRefs.current[block.id];
-      const blockHeight = Math.max(
-        blockElement?.scrollHeight ?? 28,
-        blockElement?.offsetHeight ?? 28,
-        28,
-      );
-      return Math.max(max, block.y + blockHeight);
-    }, 0);
+    const nextLowestBlockBottom = isDesktopViewport
+      ? blocks.reduce((max, block) => {
+          const blockElement = blockRefs.current[block.id];
+          const blockHeight = Math.max(
+            blockElement?.scrollHeight ?? 28,
+            blockElement?.offsetHeight ?? 28,
+            28,
+          );
+          return Math.max(max, block.y + blockHeight);
+        }, 0)
+      : orderedBlocks.reduce((currentY, block) => {
+          const blockElement = blockRefs.current[block.id];
+          const blockHeight = Math.max(
+            blockElement?.scrollHeight ?? 28,
+            blockElement?.offsetHeight ?? 28,
+            28,
+          );
+          return currentY + blockHeight + MOBILE_BLOCK_GAP;
+        }, MOBILE_STACK_TOP);
 
     setLowestBlockBottom(nextLowestBlockBottom);
-  }, [blocks, canvasWidth]);
+  }, [blocks, canvasWidth, isDesktopViewport, orderedBlocks]);
 
   useEffect(() => {
     const normalizeBlockLayout = () => {
@@ -638,11 +688,14 @@ export function NoteEditor({
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
   ) {
+    const nextCoordinates = isDesktopViewport
+      ? { x, y, width }
+      : getNextMobileBlockCoordinates(blocks, canvasWidth);
     const block: FreeformBlock = {
       id: createId(),
-      x,
-      y,
-      width,
+      x: nextCoordinates.x,
+      y: nextCoordinates.y,
+      width: nextCoordinates.width,
       text: "",
       align: "right",
     };
@@ -690,6 +743,11 @@ export function NoteEditor({
   }
 
   function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isDesktopViewport) {
+      pagePointerStartRef.current = null;
+      return;
+    }
+
     const target = event.target as HTMLElement;
 
     if (event.button !== 0 || isEditorControlTarget(target)) {
@@ -705,6 +763,11 @@ export function NoteEditor({
   }
 
   function handlePagePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isDesktopViewport) {
+      pagePointerStartRef.current = null;
+      return;
+    }
+
     const target = event.target as HTMLElement;
     const pointerStart = pagePointerStartRef.current;
     pagePointerStartRef.current = null;
@@ -785,6 +848,13 @@ export function NoteEditor({
 
   function updateBlockText(id: string, text: string) {
     updateBlock(id, (block) => {
+      if (!isDesktopViewport) {
+        return {
+          ...block,
+          text,
+        };
+      }
+
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
       const isLegacyColumnBlock = typeof block.width !== "number";
@@ -1164,7 +1234,7 @@ export function NoteEditor({
     event: React.PointerEvent<HTMLButtonElement>,
     block: FreeformBlock,
   ) {
-    if (!canvasRef.current) {
+    if (!isDesktopViewport || !canvasRef.current) {
       return;
     }
 
@@ -1212,13 +1282,20 @@ export function NoteEditor({
 
           <div
             ref={canvasRef}
-            className="freeform-canvas relative flex-1 bg-white"
+            data-layout-mode={isDesktopViewport ? "freeform" : "stacked"}
+            className={`freeform-canvas flex-1 bg-white ${
+              isDesktopViewport ? "relative" : "px-4"
+            }`}
             style={{
               minHeight: `${
                 isDesktopViewport ? desktopCanvasMinHeight : mobileCanvasMinHeight
               }px`,
             }}
             onContextMenu={(event) => {
+              if (!isDesktopViewport) {
+                return;
+              }
+
               const target = event.target as HTMLElement;
 
               if (isEditorControlTarget(target)) {
@@ -1291,7 +1368,7 @@ export function NoteEditor({
               tabIndex={-1}
             />
 
-            {blocks.map((block) => {
+            {(isDesktopViewport ? blocks : orderedBlocks).map((block) => {
               const blockWidth = getRenderedBlockWidth(block, canvasWidth);
               const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
               const isSelected = selectedBlockIds.includes(block.id);
@@ -1299,21 +1376,31 @@ export function NoteEditor({
               return (
                 <div
                   key={block.id}
-                  style={{
-                    left: `${blockX}px`,
-                    top: `${block.y}px`,
-                    width: `${blockWidth}px`,
-                  }}
-                  className="group absolute rounded-md"
+                  data-testid={`note-block-${block.id}`}
+                  data-layout={isDesktopViewport ? "freeform" : "stacked"}
+                  style={
+                    isDesktopViewport
+                      ? {
+                          left: `${blockX}px`,
+                          top: `${block.y}px`,
+                          width: `${blockWidth}px`,
+                        }
+                      : undefined
+                  }
+                  className={`rounded-md ${
+                    isDesktopViewport ? "group absolute" : "mb-6 w-full"
+                  }`}
                 >
-                  <button
-                    type="button"
-                    onPointerDown={(event) => startDraggingBlock(event, block)}
-                    className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
-                    aria-label="جابجایی بلوک"
-                  >
-                    <GripVertical className="h-3.5 w-3.5" />
-                  </button>
+                  {isDesktopViewport ? (
+                    <button
+                      type="button"
+                      onPointerDown={(event) => startDraggingBlock(event, block)}
+                      className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
+                      aria-label="جابجایی بلوک"
+                    >
+                      <GripVertical className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
 
                   <textarea
                     ref={(element) => {
@@ -1487,7 +1574,9 @@ export function NoteEditor({
 
             {blocks.length === 0 ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">
-                روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید.
+                {isDesktopViewport
+                  ? "روی هرجای صفحه کلیک کنید و نوشتن را شروع کنید."
+                  : "نوشتن را از بالای صفحه شروع کنید تا متن به‌صورت پیوسته ادامه پیدا کند."}
               </div>
             ) : null}
           </div>
