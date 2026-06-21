@@ -498,19 +498,6 @@ export function NoteEditor({
   }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId, userId]);
 
   useEffect(() => {
-    if (!isHydrated || !activeBlockId) {
-      return;
-    }
-
-    const element = blockRefs.current[activeBlockId];
-    if (!element || document.activeElement === element) {
-      return;
-    }
-
-    element.focus();
-  }, [activeBlockId, isHydrated]);
-
-  useEffect(() => {
     Object.values(blockRefs.current).forEach((element) => {
       if (!element) {
         return;
@@ -1020,7 +1007,11 @@ export function NoteEditor({
         ? blockRefs.current[pendingMobileEdit.blockId]
         : null;
 
-      if (pendingMobileEdit && target !== pendingElement) {
+      if (
+        pendingMobileEdit &&
+        target !== pendingElement &&
+        !isEditorControlTarget(target)
+      ) {
         settlePendingMobileEdit();
       }
       return;

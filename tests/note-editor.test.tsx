@@ -252,7 +252,23 @@ describe("NoteEditor mobile reflow", () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
 
-    fireEvent.blur(container.querySelectorAll("textarea")[1]);
+    const pendingTextarea = container.querySelectorAll("textarea")[1];
+    const intendedTextarea = container.querySelectorAll("textarea")[2];
+    expect(document.activeElement).toBe(pendingTextarea);
+    fireEvent.pointerDown(intendedTextarea, {
+      button: 0,
+      clientX: 40,
+      clientY: 320,
+      pointerId: 4,
+    });
+    intendedTextarea.focus();
+    fireEvent.pointerUp(intendedTextarea, {
+      button: 0,
+      clientX: 40,
+      clientY: 320,
+      pointerId: 4,
+    });
+    fireEvent.click(intendedTextarea, { clientX: 40, clientY: 320 });
 
     await waitFor(() => {
       const restoredTextareas = Array.from(container.querySelectorAll("textarea"));
@@ -263,6 +279,7 @@ describe("NoteEditor mobile reflow", () => {
       expect(restoredTextareas[1].parentElement).toHaveStyle({
         paddingTop: "24px",
       });
+      expect(document.activeElement).toBe(intendedTextarea);
     });
 
     fireEvent.click(canvas, { clientX: 40, clientY: 180 });
