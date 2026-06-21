@@ -48,6 +48,11 @@ type CanvasCoordinates = {
   width: number;
 };
 
+type MobileGapAdjustment = {
+  blockId: string;
+  gapBefore: number;
+};
+
 const PAGE_SIDE_PADDING_DESKTOP = 48;
 const PAGE_SIDE_PADDING_MOBILE = 16;
 const BLOCK_MIN_WIDTH = 180;
@@ -688,6 +693,7 @@ export function NoteEditor({
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
     mobileGapBefore?: number,
+    mobileGapAdjustment?: MobileGapAdjustment,
   ) {
     const block: FreeformBlock = {
       id: createId(),
@@ -700,7 +706,14 @@ export function NoteEditor({
     };
 
     const addBlock = () => {
-      setBlocks((current) => [...current, block]);
+      setBlocks((current) => [
+        ...current.map((item) =>
+          item.id === mobileGapAdjustment?.blockId
+            ? { ...item, mobileGapBefore: mobileGapAdjustment.gapBefore }
+            : item,
+        ),
+        block,
+      ]);
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
     };
@@ -744,6 +757,27 @@ export function NoteEditor({
       : canvasTop;
 
     return Math.max(0, Math.round(clientY - naturalTop));
+  }
+
+  function getNextMobileGapAdjustment(index: number, clientY: number) {
+    const nextBlock = orderedBlocks[index];
+    const nextElement = nextBlock ? blockRefs.current[nextBlock.id] : null;
+
+    if (!nextBlock || !nextElement) {
+      return undefined;
+    }
+
+    return {
+      blockId: nextBlock.id,
+      gapBefore: Math.max(
+        0,
+        Math.round(
+          nextElement.getBoundingClientRect().top -
+            clientY -
+            estimateBlockHeight(""),
+        ),
+      ),
+    };
   }
 
   function moveOnlyEmptyMobileBlock(clientY: number) {
@@ -909,12 +943,17 @@ export function NoteEditor({
     const insertionIndex = getMobileInsertionIndex(event.clientY);
     const coordinates = getMobileCoordinatesForInsertion(insertionIndex);
     const mobileGapBefore = getMobileGapBefore(insertionIndex, event.clientY);
+    const mobileGapAdjustment = getNextMobileGapAdjustment(
+      insertionIndex,
+      event.clientY,
+    );
     addBlockAt(
       coordinates.x,
       coordinates.y,
       true,
       coordinates.width,
       mobileGapBefore,
+      mobileGapAdjustment,
     );
   }
 

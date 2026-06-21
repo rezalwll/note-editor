@@ -203,6 +203,9 @@ describe("NoteEditor mobile reflow", () => {
       expect(nextTextareas[1].parentElement).toHaveStyle({
         paddingTop: "12px",
       });
+      expect(nextTextareas[2].parentElement).toHaveStyle({
+        paddingTop: "112px",
+      });
     });
 
     fireEvent.pointerUp(canvas, {
