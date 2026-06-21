@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   enqueuePageUpsert: vi.fn(),
   processSyncQueue: vi.fn(),
 }));
+const resizeObserverCallbacks: ResizeObserverCallback[] = [];
 
 vi.mock("@/components/context-menu", () => ({
   useContextMenu: () => ({ openMenu: mocks.openMenu }),
@@ -40,6 +41,55 @@ function setViewport(width: number, height = 900) {
     writable: true,
     value: height,
   });
+}
+
+function createDeferred<T>() {
+  let resolve: (value: T) => void = () => {};
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
+function mockVisualViewport(initialHeight: number) {
+  let height = initialHeight;
+  const resizeListeners = new Set<EventListenerOrEventListenerObject>();
+  const viewport = {
+    get height() {
+      return height;
+    },
+    addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      if (type === "resize") {
+        resizeListeners.add(listener);
+      }
+    },
+    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      if (type === "resize") {
+        resizeListeners.delete(listener);
+      }
+    },
+  } as unknown as VisualViewport;
+
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: viewport,
+  });
+
+  return {
+    resize(nextHeight: number) {
+      height = nextHeight;
+      const event = new Event("resize");
+      resizeListeners.forEach((listener) => {
+        if (typeof listener === "function") {
+          listener(event);
+          return;
+        }
+
+        listener.handleEvent(event);
+      });
+    },
+  };
 }
 
 function renderEditor(initialHtml: string) {
@@ -92,6 +142,7 @@ function mockEditorRects(
 describe("NoteEditor pointer placement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resizeObserverCallbacks.length = 0;
     mocks.getLocalPage.mockResolvedValue(null);
     mocks.upsertLocalPage.mockResolvedValue(undefined);
     mocks.enqueuePageUpsert.mockResolvedValue(undefined);
@@ -108,7 +159,16 @@ describe("NoteEditor pointer placement", () => {
       }),
     });
 
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: undefined,
+    });
+
     class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        resizeObserverCallbacks.push(callback);
+      }
+
       observe() {}
       disconnect() {}
       unobserve() {}
@@ -155,6 +215,117 @@ describe("NoteEditor pointer placement", () => {
       });
     },
   );
+
+  it("serializes new mobile pointer blocks without an explicit width", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 320,
+      clientY: 620,
+      pointerId: 11,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 320,
+      clientY: 620,
+      pointerId: 11,
+    });
+
+    const textarea = container.querySelectorAll("textarea")[1];
+    fireEvent.change(textarea, { target: { value: "legacy mobile block" } });
+
+    await waitFor(
+      () => {
+        expect(mocks.enqueuePageUpsert).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1500 },
+    );
+
+    const savedPage = mocks.enqueuePageUpsert.mock.calls[0][0];
+    const savedDocument = parseFreeformDocument(savedPage.bodyHtml);
+    const savedBlock = savedDocument?.blocks.find(
+      (block) => block.text === "legacy mobile block",
+    );
+    expect(savedBlock).toMatchObject({ x: 16, y: 500 });
+    expect(savedBlock?.width).toBeUndefined();
+  });
+
+  it("restores the active mobile textarea when hydration completes", async () => {
+    setViewport(390);
+    const localPage = createDeferred<null>();
+    mocks.getLocalPage.mockReturnValue(localPage.promise);
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 620,
+      pointerId: 12,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 40,
+      clientY: 620,
+      pointerId: 12,
+    });
+
+    const textarea = container.querySelectorAll("textarea")[1];
+    await waitFor(() => expect(document.activeElement).toBe(textarea));
+    fireEvent.change(textarea, { target: { value: "keep focus" } });
+
+    const outsideButton = document.createElement("button");
+    document.body.append(outsideButton);
+    outsideButton.focus();
+    expect(document.activeElement).toBe(outsideButton);
+
+    localPage.resolve(null);
+
+    await waitFor(() => expect(document.activeElement).toBe(textarea));
+    outsideButton.remove();
+  });
+
+  it("ignores mobile keyboard viewport height changes", async () => {
+    setViewport(390, 900);
+    const visualViewport = mockVisualViewport(900);
+    const initialHtml = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [{ id: "keyboard", x: 16, y: 40, text: "keyboard" }],
+    });
+    const { container } = renderEditor(initialHtml);
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    await waitFor(() => expect(canvas).toHaveStyle({ minHeight: "644px" }));
+    textarea.focus();
+    textarea.setSelectionRange(3, 3);
+    const initialCanvasHeight = canvas.style.minHeight;
+
+    visualViewport.resize(400);
+    resizeObserverCallbacks.forEach((callback) => {
+      callback([], {} as ResizeObserver);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(canvas.style.minHeight).toBe(initialCanvasHeight);
+    expect(document.activeElement).toBe(textarea);
+    expect(textarea.selectionStart).toBe(3);
+    expect(textarea.selectionEnd).toBe(3);
+  });
 
   it("ignores mobile drags instead of creating accidental blocks", async () => {
     setViewport(390);

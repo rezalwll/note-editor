@@ -52,6 +52,7 @@ type CanvasCoordinates = {
   x: number;
   y: number;
   width: number;
+  isMobile: boolean;
 };
 
 const PAGE_SIDE_PADDING_DESKTOP = 48;
@@ -429,6 +430,20 @@ export function NoteEditor({
   }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId, userId]);
 
   useEffect(() => {
+    if (isDesktopViewport || !isHydrated || !activeBlockId) {
+      return;
+    }
+
+    const element = blockRefs.current[activeBlockId];
+    if (!element || document.activeElement === element) {
+      return;
+    }
+
+    // Keep the active mobile editor focused through hydration, as in 7959e9f.
+    element.focus();
+  }, [activeBlockId, isDesktopViewport, isHydrated]);
+
+  useEffect(() => {
     Object.values(blockRefs.current).forEach((element) => {
       if (!element) {
         return;
@@ -488,10 +503,15 @@ export function NoteEditor({
       const nextIsDesktopViewport = canvasWidth >= MOBILE_BREAKPOINT;
 
       setCanvasWidth(canvasWidth);
-      setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
+      setViewportHeight(
+        nextIsDesktopViewport
+          ? (window.visualViewport?.height ?? window.innerHeight)
+          : window.innerHeight,
+      );
       setIsDesktopViewport(nextIsDesktopViewport);
     };
     let animationFrameId: number | null = null;
+    let observedCanvasWidth: number | null = null;
     const scheduleNormalizeBlockLayout = () => {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -503,11 +523,31 @@ export function NoteEditor({
       });
     };
 
+    const scheduleObservedWidthLayout = () => {
+      const nextWidth = canvasRef.current?.getBoundingClientRect().width;
+
+      if (!nextWidth || nextWidth === observedCanvasWidth) {
+        return;
+      }
+
+      observedCanvasWidth = nextWidth;
+      scheduleNormalizeBlockLayout();
+    };
+
+    const handleVisualViewportResize = () => {
+      const nextWidth = canvasRef.current?.getBoundingClientRect().width;
+
+      if (nextWidth && nextWidth >= MOBILE_BREAKPOINT) {
+        scheduleNormalizeBlockLayout();
+      }
+    };
+
     normalizeBlockLayout();
+    observedCanvasWidth = canvasRef.current?.getBoundingClientRect().width ?? null;
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(scheduleNormalizeBlockLayout);
+        : new ResizeObserver(scheduleObservedWidthLayout);
     const visualViewport = window.visualViewport;
 
     if (canvasRef.current) {
@@ -515,7 +555,7 @@ export function NoteEditor({
     }
 
     window.addEventListener("resize", scheduleNormalizeBlockLayout);
-    visualViewport?.addEventListener("resize", scheduleNormalizeBlockLayout);
+    visualViewport?.addEventListener("resize", handleVisualViewportResize);
     return () => {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -523,7 +563,7 @@ export function NoteEditor({
 
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleNormalizeBlockLayout);
-      visualViewport?.removeEventListener("resize", scheduleNormalizeBlockLayout);
+      visualViewport?.removeEventListener("resize", handleVisualViewportResize);
     };
   }, []);
 
@@ -650,16 +690,19 @@ export function NoteEditor({
     x: number,
     y: number,
     shouldFocus = true,
-    width = BLOCK_DEFAULT_WIDTH,
+    width?: number,
   ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
-      width,
       text: "",
       align: "right",
     };
+
+    if (typeof width === "number") {
+      block.width = width;
+    }
 
     const addBlock = () => {
       setBlocks((current) => [...current, block]);
@@ -701,7 +744,7 @@ export function NoteEditor({
     const canvasOffsetTop = canvasRect.top - pageRect.top;
     const y = Math.max(24, clientY - pageRect.top - canvasOffsetTop);
 
-    return { x, y, width };
+    return { x, y, width, isMobile: isMobileCanvas };
   }
 
   function isEditorControlTarget(target: HTMLElement) {
@@ -746,7 +789,12 @@ export function NoteEditor({
     const coordinates = getCanvasCoordinates(event.clientX, event.clientY);
 
     if (coordinates) {
-      addBlockAt(coordinates.x, coordinates.y, true, coordinates.width);
+      addBlockAt(
+        coordinates.x,
+        coordinates.y,
+        true,
+        coordinates.isMobile ? undefined : coordinates.width,
+      );
     }
   }
 
@@ -1287,7 +1335,9 @@ export function NoteEditor({
                               coordinates.x,
                               coordinates.y,
                               true,
-                              coordinates.width,
+                              coordinates.isMobile
+                                ? undefined
+                                : coordinates.width,
                             ),
                         },
                         { id: "separator-1", separator: true },
@@ -1312,7 +1362,9 @@ export function NoteEditor({
                               coordinates.x,
                               coordinates.y,
                               true,
-                              coordinates.width,
+                              coordinates.isMobile
+                                ? undefined
+                                : coordinates.width,
                             ),
                         },
                       ],
