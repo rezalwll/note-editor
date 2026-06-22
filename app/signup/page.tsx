@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { UserRoundPlus } from "lucide-react";
 
 import { SignupForm } from "@/components/forms/signup-form";
+import { getSectionDocumentTitle } from "@/lib/page-title";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: getSectionDocumentTitle("ثبت نام"),
+};
 
 export default function SignupPage() {
   return (

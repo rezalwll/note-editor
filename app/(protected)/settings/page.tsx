@@ -1,10 +1,17 @@
+import type { Metadata } from "next";
+
 import { PasswordForm } from "@/components/forms/password-form";
 import { ProfileForm } from "@/components/forms/profile-form";
 import { LogoutForm } from "@/components/forms/logout-form";
 import { WorkspacePortabilityCard } from "@/components/forms/workspace-portability-card";
 import { requireUser } from "@/lib/auth";
+import { getSectionDocumentTitle } from "@/lib/page-title";
 import { prisma } from "@/lib/prisma";
 import { getUserAccent, getUserInitials } from "@/lib/users";
+
+export const metadata: Metadata = {
+  title: getSectionDocumentTitle("تنظیمات"),
+};
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {

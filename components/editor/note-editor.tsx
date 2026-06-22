@@ -28,6 +28,7 @@ import {
   serializeFreeformDocument,
 } from "@/lib/notes";
 import { getNotebookTheme } from "@/lib/notebook-theme";
+import { getPageDocumentTitle } from "@/lib/page-title";
 import { processSyncQueue } from "@/lib/sync/client";
 
 type Attachment = {
@@ -352,6 +353,10 @@ export function NoteEditor({
       window.removeEventListener("offline", handleConnectionChange);
     };
   }, []);
+
+  useEffect(() => {
+    document.title = getPageDocumentTitle(title);
+  }, [title]);
 
   useEffect(() => {
     let isCancelled = false;

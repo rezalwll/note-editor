@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { LockKeyhole } from "lucide-react";
 
 import { LoginForm } from "@/components/forms/login-form";
+import { getSectionDocumentTitle } from "@/lib/page-title";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: getSectionDocumentTitle("ورود"),
+};
 
 export default function LoginPage() {
   return (

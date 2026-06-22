@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 
 import { requireUser } from "@/lib/auth";
+import { getNotebookDocumentTitle } from "@/lib/page-title";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { prisma } from "@/lib/prisma";
 
@@ -8,20 +11,36 @@ type NotebookPageProps = {
   params: Promise<{ id: string }>;
 };
 
-export default async function NotebookPage({ params }: NotebookPageProps) {
-  const { id } = await params;
-  const user = await requireUser();
-
-  const notebook = await prisma.notebook.findFirst({
-    where: { id, userId: user.id },
+const getNotebook = cache(async (id: string, userId: string) =>
+  prisma.notebook.findFirst({
+    where: { id, userId },
     include: {
       pages: {
-        where: { archived: false, userId: user.id },
+        where: { archived: false, userId },
         orderBy: { updatedAt: "desc" },
         take: 1,
       },
     },
-  });
+  }),
+);
+
+export async function generateMetadata({
+  params,
+}: NotebookPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const user = await requireUser();
+  const notebook = await getNotebook(id, user.id);
+
+  return {
+    title: getNotebookDocumentTitle(notebook?.name),
+  };
+}
+
+export default async function NotebookPage({ params }: NotebookPageProps) {
+  const { id } = await params;
+  const user = await requireUser();
+
+  const notebook = await getNotebook(id, user.id);
 
   if (!notebook || notebook.archived) {
     notFound();
