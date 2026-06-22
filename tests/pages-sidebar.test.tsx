@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PagesSidebar } from "@/components/pages-sidebar";
+import { dispatchNotebookRenamed, dispatchPageTitleUpdated } from "@/lib/page-events";
 
 const mocks = vi.hoisted(() => ({
   pathname: "/pages/page-1",
@@ -118,6 +119,70 @@ describe("PagesSidebar", () => {
 
     await waitFor(() => {
       expect(mocks.restorePage).toHaveBeenCalledWith("page-1");
+    });
+  });
+
+  it("updates the visible page title immediately after a title event", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "زیر مجموعه اول",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "عنوان قبلی",
+                updatedAt: new Date("2026-06-22T10:00:00.000Z"),
+                deletedAt: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    dispatchPageTitleUpdated({
+      notebookId: "notebook-1",
+      pageId: "page-1",
+      title: "عنوان جدید",
+      updatedAt: "2026-06-22T11:00:00.000Z",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("عنوان جدید")).toBeInTheDocument();
+    });
+  });
+
+  it("updates the active notebook name immediately after a notebook rename event", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "نام قبلی",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "صفحه اول",
+                updatedAt: new Date(),
+                deletedAt: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    dispatchNotebookRenamed({
+      notebookId: "notebook-1",
+      name: "نام جدید زیر مجموعه",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "نام جدید زیر مجموعه" })).toBeInTheDocument();
     });
   });
 });

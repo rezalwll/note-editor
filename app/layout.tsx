@@ -70,7 +70,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fa" dir="rtl">
-      <body className={`${iranYekanSans.variable} ${iranYekanSerif.variable}`}>
+      <body
+        suppressHydrationWarning
+        className={`${iranYekanSans.variable} ${iranYekanSerif.variable}`}
+      >
         <PwaRuntime />
         {children}
       </body>

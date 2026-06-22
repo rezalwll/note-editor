@@ -12,7 +12,12 @@ import {
   restorePageInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
-import { getPageTitleUpdatedEventName, type PageTitleUpdatedDetail } from "@/lib/page-events";
+import {
+  getNotebookRenamedEventName,
+  getPageTitleUpdatedEventName,
+  type NotebookRenamedDetail,
+  type PageTitleUpdatedDetail,
+} from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
@@ -41,6 +46,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const router = useRouter();
   const { openMenu } = useContextMenu();
   const [isCreating, setIsCreating] = useState(false);
+  const [notebookNameOverrides, setNotebookNameOverrides] = useState<Record<string, string>>({});
   const [pageTitleOverrides, setPageTitleOverrides] = useState<
     Record<string, { title: string; updatedAt: string }>
   >({});
@@ -53,6 +59,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     () =>
       notebooks.map((notebook) => ({
         ...notebook,
+        name: notebookNameOverrides[notebook.id] ?? notebook.name,
         pages: notebook.pages.map((page) => {
           const override = pageTitleOverrides[page.id];
           return override
@@ -64,7 +71,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             : page;
         }),
       })),
-    [notebooks, pageTitleOverrides],
+    [notebookNameOverrides, notebooks, pageTitleOverrides],
   );
 
   const activeNotebook = useMemo(() => {
@@ -115,6 +122,25 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
     window.addEventListener(getPageTitleUpdatedEventName(), listener);
     return () => window.removeEventListener(getPageTitleUpdatedEventName(), listener);
+  }, []);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<NotebookRenamedDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail?.notebookId) {
+        return;
+      }
+
+      setNotebookNameOverrides((current) => ({
+        ...current,
+        [detail.notebookId]: detail.name,
+      }));
+    };
+
+    window.addEventListener(getNotebookRenamedEventName(), listener);
+    return () => window.removeEventListener(getNotebookRenamedEventName(), listener);
   }, []);
 
   function beginCreate() {

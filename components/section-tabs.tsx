@@ -697,17 +697,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 });
               }}
               className={cn(
-                "inline-flex items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
-                isActive ? "h-9 text-[13px] font-semibold" : "h-8",
+                "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
               )}
               style={{
                 borderColor: pillTheme.border,
                 backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
                 color: isTrash ? "#1f2937" : pillTheme.text,
                 boxShadow: isActive
-                  ? `0 0 0 2px rgba(255,255,255,0.72), 0 0 0 4px ${pillTheme.border}18, 0 10px 24px ${pillTheme.border}52`
+                  ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
                   : `0 6px 18px ${pillTheme.border}33`,
-                opacity: isActive ? 1 : 0.92,
+                opacity: 0.92,
               }}
               title={
                 isTrash
@@ -744,7 +743,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   onClick={() => setManualGroupKey(group.id)}
                   className={cn(
                     "inline-flex items-center gap-2",
-                    isActive ? "gap-2.5" : "gap-2",
                   )}
                 >
                   {isTrash ? <Trash2 className="h-3.5 w-3.5" /> : null}
@@ -752,7 +750,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   <span
                     className={cn(
                       "rounded-full px-1.5 py-0.5 text-[10px]",
-                      isActive ? "min-w-5.5 text-[10px]" : "",
                     )}
                     style={{
                       backgroundColor: isTrash

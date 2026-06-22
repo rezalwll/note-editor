@@ -31,7 +31,16 @@ import {
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
-import { getPageTitleUpdatedEventName, type PageTitleUpdatedDetail } from "@/lib/page-events";
+import {
+  dispatchGroupRenamed,
+  dispatchNotebookRenamed,
+  getGroupRenamedEventName,
+  getNotebookRenamedEventName,
+  getPageTitleUpdatedEventName,
+  type GroupRenamedDetail,
+  type NotebookRenamedDetail,
+  type PageTitleUpdatedDetail,
+} from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
@@ -90,6 +99,8 @@ const UNGROUPED_ID = "ungrouped";
 export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [groupNameOverrides, setGroupNameOverrides] = useState<Record<string, string>>({});
+  const [notebookNameOverrides, setNotebookNameOverrides] = useState<Record<string, string>>({});
   const [pageTitleOverrides, setPageTitleOverrides] = useState<
     Record<string, { title: string; updatedAt: string }>
   >({});
@@ -104,10 +115,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
   const [draftNotebookName, setDraftNotebookName] = useState("");
   const [createdGroups, setCreatedGroups] = useState<MobileGroup[]>([]);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(() => [
-    ...groups.map((group) => group.id),
-    UNGROUPED_ID,
-  ]);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(null);
   const [actionSheet, setActionSheet] = useState<ActionSheetState>(null);
@@ -124,6 +132,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     () =>
       notebooks.map((notebook) => ({
         ...notebook,
+        name: notebookNameOverrides[notebook.id] ?? notebook.name,
+        groupName:
+          notebook.groupId && groupNameOverrides[notebook.groupId]
+            ? groupNameOverrides[notebook.groupId]
+            : notebook.groupName,
         pages: notebook.pages.map((page) => {
           const override = pageTitleOverrides[page.id];
           return override
@@ -135,7 +148,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             : page;
         }),
       })),
-    [notebooks, pageTitleOverrides],
+    [groupNameOverrides, notebookNameOverrides, notebooks, pageTitleOverrides],
   );
 
   const routeNotebook = useMemo(() => {
@@ -209,6 +222,44 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }, []);
 
   useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<NotebookRenamedDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail?.notebookId) {
+        return;
+      }
+
+      setNotebookNameOverrides((current) => ({
+        ...current,
+        [detail.notebookId]: detail.name,
+      }));
+    };
+
+    window.addEventListener(getNotebookRenamedEventName(), listener);
+    return () => window.removeEventListener(getNotebookRenamedEventName(), listener);
+  }, []);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<GroupRenamedDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail?.groupId) {
+        return;
+      }
+
+      setGroupNameOverrides((current) => ({
+        ...current,
+        [detail.groupId]: detail.name,
+      }));
+    };
+
+    window.addEventListener(getGroupRenamedEventName(), listener);
+    return () => window.removeEventListener(getGroupRenamedEventName(), listener);
+  }, []);
+
+  useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as InstallPromptEvent);
@@ -277,7 +328,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     () => [
       ...mergedGroups.map((group) => ({
         id: group.id,
-        name: group.name,
+        name: groupNameOverrides[group.id] ?? group.name,
         notebookCount: group.notebookCount,
         systemKey: group.systemKey,
         notebooks: displayNotebooks.filter((notebook) => notebook.groupId === group.id),
@@ -290,7 +341,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         notebooks: displayNotebooks.filter((notebook) => notebook.groupId === null),
       },
     ],
-    [displayNotebooks, mergedGroups],
+    [displayNotebooks, groupNameOverrides, mergedGroups],
   );
 
   const activeGroupId = selectedGroupId ?? (routeNotebook?.groupId ?? UNGROUPED_ID);
@@ -377,6 +428,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     startTransition(async () => {
       await renameNotebookGroupInlineAction(targetGroupId, nextName);
+      dispatchGroupRenamed({ groupId: targetGroupId, name: nextName });
       router.refresh();
     });
   }
@@ -400,6 +452,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     startTransition(async () => {
       await renameNotebookInlineAction(targetNotebookId, nextName);
+      dispatchNotebookRenamed({ notebookId: targetNotebookId, name: nextName });
       router.refresh();
     });
   }
@@ -700,6 +753,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   const canManageGroup =
                     group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items";
                   const isEditing = editingGroupId === group.id;
+                  const isActiveGroup = activeGroupId === group.id;
 
                   return (
                     <div key={group.id}>
@@ -722,6 +776,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                           type="button"
                           onClick={() => toggleGroupSelection(group.id)}
                           className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                          style={{
+                            boxShadow: isActiveGroup
+                              ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
+                              : undefined,
+                          }}
                         >
                           <div className="flex items-center gap-3">
                             <ChevronDown
