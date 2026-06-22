@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error("یکی از دسته‌های این آرشیو متعلق به حساب دیگری است.");
+          throw new Error("یکی از مجموعه‌های این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         });
 
         if (existing && existing.userId !== user.id) {
-          throw new Error("یکی از دفترهای این آرشیو متعلق به حساب دیگری است.");
+          throw new Error("یکی از زیر مجموعه‌های این آرشیو متعلق به حساب دیگری است.");
         }
 
         if (existing) {

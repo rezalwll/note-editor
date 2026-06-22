@@ -68,10 +68,10 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
               style={{ borderColor: theme.accent }}
             >
               <h1 className="text-[22px] font-normal text-[#111]">
-                {notebook.name || "دفتر بدون عنوان"}
+                {notebook.name || "زیر مجموعه بدون عنوان"}
               </h1>
               <p className="mt-3 text-sm text-[#5f6470]">
-                این دفتر هنوز صفحه‌ای ندارد. از ستون سمت راست روی «صفحه جدید» بزنید
+                این زیر مجموعه هنوز صفحه‌ای ندارد. از ستون سمت راست روی «صفحه جدید» بزنید
                 تا نوشتن را شروع کنید.
               </p>
             </div>

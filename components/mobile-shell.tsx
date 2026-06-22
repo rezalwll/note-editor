@@ -202,7 +202,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       })),
       {
         id: UNGROUPED_ID,
-        name: "بدون دسته",
+        name: "بدون مجموعه",
         notebookCount: notebooks.filter((notebook) => notebook.groupId === null).length,
         systemKey: null,
         notebooks: notebooks.filter((notebook) => notebook.groupId === null),
@@ -290,7 +290,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function submitCreateGroup() {
-    const nextName = draftGroupName.trim() || "دسته جدید";
+    const nextName = draftGroupName.trim() || "مجموعه جدید";
 
     startTransition(async () => {
       const result = await createNotebookGroupInlineAction(nextName);
@@ -347,7 +347,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               setProfileOpen(false);
             }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            aria-label="باز کردن دسته‌ها"
+            aria-label="باز کردن مجموعه‌ها"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -388,7 +388,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
           >
             <NotebookTabs className="h-5 w-5" />
-            دسته‌ها
+            مجموعه‌ها
           </button>
           <button
             type="button"
@@ -433,10 +433,10 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                 className="inline-flex items-center gap-2 rounded-full border border-[var(--border-soft)] px-3 py-1.5 text-xs font-semibold text-[#33406d]"
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-                دسته جدید
+                مجموعه جدید
               </button>
               <div className="flex items-center gap-3">
-                <div className="text-sm font-semibold text-[var(--text-strong)]">دسته‌ها</div>
+                <div className="text-sm font-semibold text-[var(--text-strong)]">مجموعه‌ها</div>
                 <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
                   <X className="h-5 w-5" />
                 </button>
@@ -465,7 +465,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                         }
                       }}
                       disabled={isPending}
-                      placeholder="نام دسته جدید"
+                      placeholder="نام مجموعه جدید"
                       className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#708090]"
                       dir="rtl"
                     />
@@ -527,7 +527,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                           })
                         ) : (
                           <div className="rounded-2xl border border-dashed border-[var(--border-soft)] bg-white px-4 py-3 text-right text-xs text-[#708090]">
-                            هنوز دفتری در این دسته نیست
+                            هنوز زیر مجموعه‌ای در این مجموعه نیست
                           </div>
                         )}
                       </div>
@@ -580,7 +580,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               }}
             >
               <div className="mb-2 text-right text-[11px] font-semibold text-[var(--text-muted)]">
-                {activeGroup ? `دفترهای ${activeGroup.name}` : "دفترهای دسته"}
+                {activeGroup ? `زیر مجموعه‌های ${activeGroup.name}` : "زیر مجموعه‌های مجموعه"}
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {activeGroupNotebooks.map((notebook) => {
@@ -641,7 +641,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             <div className="max-h-[calc(78vh-138px)] overflow-y-auto">
               {activeGroupNotebooks.length === 0 ? (
                 <div className="px-4 py-6 text-right text-sm text-[#708090]">
-                  هنوز دفتری برای این دسته انتخاب نشده است.
+                  هنوز زیر مجموعه‌ای برای این مجموعه انتخاب نشده است.
                 </div>
               ) : activeNotebook ? (
                 activeNotebook.pages.length > 0 ? (
@@ -674,12 +674,12 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                     className="px-4 py-6 text-right text-sm"
                     style={{ color: activeTheme.sidebarMuted }}
                   >
-                    این دفتر هنوز صفحه‌ای ندارد.
+                    این زیر مجموعه هنوز صفحه‌ای ندارد.
                   </div>
                 )
               ) : (
                 <div className="px-4 py-6 text-right text-sm text-[#708090]">
-                  یک دفتر را از منوی دسته‌ها انتخاب کنید.
+                  یک زیر مجموعه را از منوی مجموعه‌ها انتخاب کنید.
                 </div>
               )}
             </div>

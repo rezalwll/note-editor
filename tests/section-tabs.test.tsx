@@ -77,7 +77,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    await user.click(screen.getByTitle("دفتر جدید"));
+    await user.click(screen.getByTitle("زیر مجموعه جدید"));
 
     const input = screen.getByRole("textbox");
     expect(input).toBeVisible();
@@ -109,7 +109,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    await user.click(screen.getByTitle("دفتر جدید"));
+    await user.click(screen.getByTitle("زیر مجموعه جدید"));
     const input = screen.getByRole("textbox");
     fireEvent.keyDown(input, { key: "Escape" });
 
@@ -120,14 +120,9 @@ describe("SectionTabs", () => {
   it("creates a new group with an untitled notebook and opens its page", async () => {
     const user = userEvent.setup();
 
-    render(
-      <SectionTabs
-        groups={[]}
-        notebooks={[]}
-      />,
-    );
+    render(<SectionTabs groups={[]} notebooks={[]} />);
 
-    await user.click(screen.getByText("دسته جدید"));
+    await user.click(screen.getByText("مجموعه جدید"));
 
     const input = screen.getByRole("textbox");
     await user.type(input, "Projects{Enter}");
@@ -172,7 +167,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.queryByTitle("دفتر جدید")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
   });
 
   it("removes the new notebook action from the empty-area menu inside trash", () => {

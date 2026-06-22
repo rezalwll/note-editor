@@ -309,7 +309,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       ...grouped,
       {
         id: UNGROUPED_KEY,
-        name: "بدون دسته",
+        name: "بدون مجموعه",
         notebookCount: ungroupedCount,
         systemKey: null,
       },
@@ -400,7 +400,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     }
 
     const targetNotebookId = editingNotebookId;
-    const nextName = draftName.trim() || "دفتر بدون عنوان";
+    const nextName = draftName.trim() || "زیر مجموعه بدون عنوان";
 
     if (draftNotebook?.id === targetNotebookId) {
       if (createNotebookInFlightRef.current) {
@@ -456,7 +456,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function submitGroupRename() {
-    const nextName = draftGroupName.trim() || "دسته بدون عنوان";
+    const nextName = draftGroupName.trim() || "مجموعه بدون عنوان";
 
     if (editingGroupId === "__new__") {
       setEditingGroupId(null);
@@ -485,7 +485,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             type: "append",
             notebook: {
               id: result.notebookId,
-              name: "دفتر بدون عنوان",
+              name: "زیر مجموعه بدون عنوان",
               groupId: result.id,
               groupName: nextName,
               pageIds: [result.pageId],
@@ -634,7 +634,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 color: theme.tabText,
               }}
             >
-              {notebook.name || "دفتر بدون عنوان"}
+              {notebook.name || "زیر مجموعه بدون عنوان"}
             </div>
           );
         })}
@@ -666,7 +666,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   items: [
                     {
                       id: "open-group",
-                      label: "باز کردن دسته",
+                      label: "باز کردن مجموعه",
                       onSelect: () => setManualGroupKey(group.id),
                     },
                     ...(isTrash
@@ -682,13 +682,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       : [
                           {
                             id: "rename-group",
-                            label: "تغییر نام دسته",
+                            label: "تغییر نام مجموعه",
                             onSelect: () => beginRenameGroup(group.id, group.name),
                           },
                           { id: "separator-1", separator: true as const },
                           {
                             id: "delete-group",
-                            label: "حذف دسته",
+                            label: "حذف مجموعه",
                             danger: true,
                             onSelect: () => deleteGroup(group.id),
                           },
@@ -711,7 +711,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               }}
               title={
                 isTrash
-                  ? "دفترها و صفحه‌های حذف‌شده تا ۳۰ روز اینجا نگه‌داری می‌شوند و بعد حذف خواهند شد."
+                  ? "زیر مجموعه‌ها و صفحه‌های حذف‌شده تا ۳۰ روز اینجا نگه‌داری می‌شوند و بعد حذف خواهند شد."
                   : undefined
               }
             >
@@ -787,7 +787,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   cancelGroupEdit();
                 }
               }}
-              placeholder="دسته جدید"
+              placeholder="مجموعه جدید"
               className="w-24 border-none bg-transparent text-xs text-[#30416c] outline-none placeholder:text-[#30416c]/70"
               style={{ caretColor: "#30416c" }}
             />
@@ -799,7 +799,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             className="inline-flex h-8 items-center gap-2 rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)] transition hover:brightness-[1.03]"
           >
             <FolderPlus className="h-3.5 w-3.5" />
-            دسته جدید
+            مجموعه جدید
           </button>
         )}
       </div>
@@ -815,20 +815,20 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
           event.preventDefault();
           openMenu(event, {
-            title: "دفترها",
+            title: "زیر مجموعه‌ها",
             items: [
               ...(!isTrashGroup(activeGroupKey)
                 ? [
                     {
                 id: "new-section",
-                label: "دفتر جدید",
+                label: "زیر مجموعه جدید",
                 onSelect: beginCreateNotebook,
                     },
                   ]
                 : []),
               {
                 id: "new-category",
-                label: "دسته جدید",
+                label: "مجموعه جدید",
                 onSelect: beginCreateGroup,
               },
               ...(selectedNotebookIds.length > 0
@@ -836,7 +836,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     { id: "separator-1", separator: true as const },
                     {
                       id: "clear-selection",
-                      label: `پاک کردن انتخاب ${selectedNotebookIds.length} دفتر`,
+                      label: `پاک کردن انتخاب ${selectedNotebookIds.length} زیر مجموعه`,
                       onSelect: () => setSelectedNotebookIds([]),
                     },
                   ]
@@ -875,21 +875,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 openMenu(event, {
                   title:
                     selectionIds.length > 1
-                      ? `${selectionIds.length} دفتر انتخاب شده`
-                      : notebook.name || "دفتر بدون عنوان",
+                      ? `${selectionIds.length} زیر مجموعه انتخاب شده`
+                      : notebook.name || "زیر مجموعه بدون عنوان",
                   items: [
                     ...(selectionIds.length === 1
                       ? [
                           {
                             id: "open",
-                            label: "باز کردن دفتر",
+                            label: "باز کردن زیر مجموعه",
                             onSelect: () => router.push(`/notebooks/${notebook.id}`),
                           },
                           ...(!isSystemNotebook
                             ? [
                                 {
                                   id: "rename",
-                                  label: "تغییر نام دفتر",
+                                  label: "تغییر نام زیر مجموعه",
                                   onSelect: () => beginRenameNotebook(notebook),
                                 },
                               ]
@@ -901,7 +901,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       ? [
                           {
                             id: "move-ungrouped",
-                            label: "انتقال به بدون دسته",
+                            label: "انتقال به بدون مجموعه",
                             onSelect: () =>
                               moveNotebooksToGroup(selectionIds, null),
                           },
@@ -924,8 +924,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       id: "delete",
                       label:
                         selectionIds.length > 1
-                          ? "حذف دفترهای انتخاب‌شده"
-                          : "حذف دفتر",
+                          ? "حذف زیر مجموعه‌های انتخاب‌شده"
+                          : "حذف زیر مجموعه",
                       danger: true,
                       onSelect: () => deleteNotebooks(selectionIds, isDeleted),
                     },
@@ -986,7 +986,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     setIsOverflowOpen(false);
                   }}
                 >
-                  {notebook.name || "دفتر بدون عنوان"}
+                  {notebook.name || "زیر مجموعه بدون عنوان"}
                 </Link>
               )}
             </div>
@@ -1007,7 +1007,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             {isOverflowOpen ? (
               <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-2xl border border-[var(--border-soft)] bg-white p-2 shadow-[var(--shadow-soft)]">
                 <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                  دفترهای پنهان
+                  زیر مجموعه‌های پنهان
                 </div>
                 <div className="grid gap-1">
                   {overflowNotebooks.map((notebook) => (
@@ -1021,7 +1021,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       }}
                       className="rounded-xl px-3 py-2 text-xs text-[var(--text-strong)] transition hover:bg-[var(--bg-softer)]"
                     >
-                      {notebook.name || "دفتر بدون عنوان"}
+                      {notebook.name || "زیر مجموعه بدون عنوان"}
                     </Link>
                   ))}
                 </div>
@@ -1038,8 +1038,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-100 disabled:cursor-wait disabled:opacity-60"
           title={
             isTrashGroup(activeGroupKey)
-              ? "در دسته حذف‌شده‌ها نمی‌توان دفتر جدید ساخت."
-              : "دفتر جدید"
+              ? "در مجموعه حذف‌شده‌ها نمی‌توان زیر مجموعه جدید ساخت."
+              : "زیر مجموعه جدید"
           }
         >
           <Plus className="h-4 w-4" />

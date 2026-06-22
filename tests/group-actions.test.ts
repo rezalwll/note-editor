@@ -121,7 +121,7 @@ describe("group actions", () => {
     expect(mocks.notebookCreate).toHaveBeenCalledWith({
       data: {
         userId: "user-1",
-        name: "دفتر بدون عنوان",
+        name: "زیر مجموعه بدون عنوان",
         description: undefined,
         groupId: "clgroup000000000000000001",
       },

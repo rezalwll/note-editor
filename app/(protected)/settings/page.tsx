@@ -99,7 +99,7 @@ export default async function SettingsPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-[18px] border border-stone-200 bg-stone-50/70 p-3.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">
-                  دفترها
+                  زیر مجموعه‌ها
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-stone-950">{notebookCount}</p>
               </div>

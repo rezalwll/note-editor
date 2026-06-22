@@ -59,7 +59,7 @@ describe("PagesSidebar", () => {
         notebooks={[
           {
             id: "notebook-1",
-            name: "دفتر اول",
+            name: "زیر مجموعه اول",
             deletedAt: null,
             pages: [
               {

@@ -35,7 +35,7 @@ export function WorkspacePortabilityCard() {
       }
 
       setSuccess(
-        `${payload.imported?.notebooks ?? 0} دفتر و ${payload.imported?.pages ?? 0} صفحه با موفقیت ایمپورت شد.`,
+        `${payload.imported?.notebooks ?? 0} زیر مجموعه و ${payload.imported?.pages ?? 0} صفحه با موفقیت ایمپورت شد.`,
       );
       formRef.current?.reset();
       router.refresh();
@@ -55,7 +55,7 @@ export function WorkspacePortabilityCard() {
       <div className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4">
         <p className="text-sm font-medium text-stone-800">اکسپورت فضای کاری</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          یک فایل ZIP شامل دفترها، صفحه‌ها، برچسب‌ها و فایل‌های پیوست خود دانلود کنید.
+          یک فایل ZIP شامل زیر مجموعه‌ها، صفحه‌ها، برچسب‌ها و فایل‌های پیوست خود دانلود کنید.
         </p>
         <a
           href="/api/profile/export"

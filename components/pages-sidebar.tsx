@@ -293,7 +293,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             disabled={Boolean(activeNotebook.deletedAt)}
             title={
               activeNotebook.deletedAt
-                ? "در دفترهای حذف‌شده نمی‌توان صفحه جدید ساخت."
+                ? "در زیر مجموعه‌های حذف‌شده نمی‌توان صفحه جدید ساخت."
                 : "صفحه جدید"
             }
           >

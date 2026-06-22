@@ -40,7 +40,7 @@ const iranYekanSerif = localFont({
 
 export const metadata: Metadata = {
   title: "notava",
-  description: "notava یک دفترچه خصوصی برای یادداشت‌ها و صفحه‌های مطالعه‌ی شخصی است.",
+  description: "فضای خصوصی notava برای یادداشت‌ها، مجموعه‌ها، زیر مجموعه‌ها و صفحه‌های شخصی است.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
