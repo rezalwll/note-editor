@@ -12,6 +12,7 @@ import {
   restorePageInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
+import { getPageTitleUpdatedEventName, type PageTitleUpdatedDetail } from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
@@ -40,28 +41,49 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const router = useRouter();
   const { openMenu } = useContextMenu();
   const [isCreating, setIsCreating] = useState(false);
+  const [pageTitleOverrides, setPageTitleOverrides] = useState<
+    Record<string, { title: string; updatedAt: string }>
+  >({});
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [draftTitle, setDraftTitle] = useState("");
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const displayNotebooks = useMemo(
+    () =>
+      notebooks.map((notebook) => ({
+        ...notebook,
+        pages: notebook.pages.map((page) => {
+          const override = pageTitleOverrides[page.id];
+          return override
+            ? {
+                ...page,
+                title: override.title,
+                updatedAt: new Date(override.updatedAt),
+              }
+            : page;
+        }),
+      })),
+    [notebooks, pageTitleOverrides],
+  );
+
   const activeNotebook = useMemo(() => {
     const notebookMatch = pathname.match(/^\/notebooks\/([^/]+)/);
     if (notebookMatch) {
-      return notebooks.find((notebook) => notebook.id === notebookMatch[1]) ?? notebooks[0];
+      return displayNotebooks.find((notebook) => notebook.id === notebookMatch[1]) ?? displayNotebooks[0];
     }
 
     const pageMatch = pathname.match(/^\/pages\/([^/]+)/);
     if (pageMatch) {
       return (
-        notebooks.find((notebook) =>
+        displayNotebooks.find((notebook) =>
           notebook.pages.some((page) => page.id === pageMatch[1]),
-        ) ?? notebooks[0]
+        ) ?? displayNotebooks[0]
       );
     }
 
-    return notebooks[0];
-  }, [notebooks, pathname]);
+    return displayNotebooks[0];
+  }, [displayNotebooks, pathname]);
   const activeTheme = activeNotebook
     ? getNotebookTheme(activeNotebook.id)
     : null;
@@ -72,6 +94,28 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       inputRef.current?.select();
     }
   }, [isCreating]);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<PageTitleUpdatedDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail?.pageId) {
+        return;
+      }
+
+      setPageTitleOverrides((current) => ({
+        ...current,
+        [detail.pageId]: {
+          title: detail.title,
+          updatedAt: detail.updatedAt,
+        },
+      }));
+    };
+
+    window.addEventListener(getPageTitleUpdatedEventName(), listener);
+    return () => window.removeEventListener(getPageTitleUpdatedEventName(), listener);
+  }, []);
 
   function beginCreate() {
     if (activeNotebook?.deletedAt) {

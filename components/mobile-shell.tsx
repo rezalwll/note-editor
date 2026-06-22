@@ -31,6 +31,7 @@ import {
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
+import { getPageTitleUpdatedEventName, type PageTitleUpdatedDetail } from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
@@ -89,6 +90,9 @@ const UNGROUPED_ID = "ungrouped";
 export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [pageTitleOverrides, setPageTitleOverrides] = useState<
+    Record<string, { title: string; updatedAt: string }>
+  >({});
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [pagesOpen, setPagesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -116,23 +120,41 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
+  const displayNotebooks = useMemo(
+    () =>
+      notebooks.map((notebook) => ({
+        ...notebook,
+        pages: notebook.pages.map((page) => {
+          const override = pageTitleOverrides[page.id];
+          return override
+            ? {
+                ...page,
+                title: override.title,
+                updatedAt: new Date(override.updatedAt),
+              }
+            : page;
+        }),
+      })),
+    [notebooks, pageTitleOverrides],
+  );
+
   const routeNotebook = useMemo(() => {
     const notebookMatch = pathname.match(/^\/notebooks\/([^/]+)/);
     if (notebookMatch) {
-      return notebooks.find((notebook) => notebook.id === notebookMatch[1]) ?? notebooks[0];
+      return displayNotebooks.find((notebook) => notebook.id === notebookMatch[1]) ?? displayNotebooks[0];
     }
 
     const pageMatch = pathname.match(/^\/pages\/([^/]+)/);
     if (pageMatch) {
       return (
-        notebooks.find((notebook) =>
+        displayNotebooks.find((notebook) =>
           notebook.pages.some((page) => page.id === pageMatch[1]),
-        ) ?? notebooks[0]
+        ) ?? displayNotebooks[0]
       );
     }
 
-    return notebooks[0];
-  }, [notebooks, pathname]);
+    return displayNotebooks[0];
+  }, [displayNotebooks, pathname]);
 
   const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1] ?? null;
 
@@ -163,6 +185,28 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       notebookInputRef.current?.select();
     }
   }, [editingNotebookId]);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<PageTitleUpdatedDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail?.pageId) {
+        return;
+      }
+
+      setPageTitleOverrides((current) => ({
+        ...current,
+        [detail.pageId]: {
+          title: detail.title,
+          updatedAt: detail.updatedAt,
+        },
+      }));
+    };
+
+    window.addEventListener(getPageTitleUpdatedEventName(), listener);
+    return () => window.removeEventListener(getPageTitleUpdatedEventName(), listener);
+  }, []);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -236,17 +280,17 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         name: group.name,
         notebookCount: group.notebookCount,
         systemKey: group.systemKey,
-        notebooks: notebooks.filter((notebook) => notebook.groupId === group.id),
+        notebooks: displayNotebooks.filter((notebook) => notebook.groupId === group.id),
       })),
       {
         id: UNGROUPED_ID,
         name: "بدون مجموعه",
-        notebookCount: notebooks.filter((notebook) => notebook.groupId === null).length,
+        notebookCount: displayNotebooks.filter((notebook) => notebook.groupId === null).length,
         systemKey: null,
-        notebooks: notebooks.filter((notebook) => notebook.groupId === null),
+        notebooks: displayNotebooks.filter((notebook) => notebook.groupId === null),
       },
     ],
-    [mergedGroups, notebooks],
+    [displayNotebooks, mergedGroups],
   );
 
   const activeGroupId = selectedGroupId ?? (routeNotebook?.groupId ?? UNGROUPED_ID);
@@ -254,7 +298,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     groupedNotebooks.find((group) => group.id === activeGroupId) ?? null;
   const activeGroupNotebooks = activeGroup?.notebooks ?? [];
   const explicitNotebook =
-    notebooks.find((notebook) => notebook.id === selectedNotebookId) ?? null;
+    displayNotebooks.find((notebook) => notebook.id === selectedNotebookId) ?? null;
   const activeNotebook =
     explicitNotebook &&
     (explicitNotebook.groupId ?? UNGROUPED_ID) === activeGroupId
@@ -273,11 +317,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       : null;
   const actionNotebook =
     actionSheet?.type === "notebook"
-      ? notebooks.find((notebook) => notebook.id === actionSheet.id) ?? null
+      ? displayNotebooks.find((notebook) => notebook.id === actionSheet.id) ?? null
       : null;
   const actionPage =
     actionSheet?.type === "page"
-      ? notebooks.flatMap((notebook) => notebook.pages).find((page) => page.id === actionSheet.id) ??
+      ? displayNotebooks.flatMap((notebook) => notebook.pages).find((page) => page.id === actionSheet.id) ??
         null
       : null;
 
@@ -379,7 +423,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function selectNotebook(notebookId: string) {
-    const notebook = notebooks.find((item) => item.id === notebookId);
+    const notebook = displayNotebooks.find((item) => item.id === notebookId);
 
     if (!notebook) {
       return;

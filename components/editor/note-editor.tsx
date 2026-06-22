@@ -2,6 +2,7 @@
 
 import { GripVertical } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -27,6 +28,7 @@ import {
   parseFreeformDocument,
   serializeFreeformDocument,
 } from "@/lib/notes";
+import { dispatchPageTitleUpdated } from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { getPageDocumentTitle } from "@/lib/page-title";
 import { processSyncQueue } from "@/lib/sync/client";
@@ -527,7 +529,7 @@ export function NoteEditor({
     };
   }, []);
 
-  const saveNoteLocally = useEffectEvent(async () => {
+  const saveNoteLocally = useCallback(async () => {
     try {
       const updatedAt = new Date().toISOString();
       const localPage: LocalPage = {
@@ -550,6 +552,12 @@ export function NoteEditor({
       lastSavedSnapshotRef.current = snapshot;
       setSyncStatus("pending");
       setIsSavingLocally(false);
+      dispatchPageTitleUpdated({
+        notebookId,
+        pageId,
+        title,
+        updatedAt,
+      });
 
       if (navigator.onLine) {
         await processSyncQueue(userId);
@@ -567,7 +575,35 @@ export function NoteEditor({
       setIsSavingLocally(false);
       setSyncStatus("failed");
     }
-  });
+  }, [
+    bodyText,
+    initialUpdatedAt,
+    notebookId,
+    pageId,
+    serializedDocument,
+    snapshot,
+    title,
+    userId,
+  ]);
+
+  function flushPendingSave() {
+    if (!isHydrated) {
+      return;
+    }
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    if (snapshot === lastSavedSnapshotRef.current) {
+      setIsSavingLocally(false);
+      return;
+    }
+
+    setIsSavingLocally(true);
+    void saveNoteLocally();
+  }
 
   useEffect(() => {
     if (!isHydrated) {
@@ -593,7 +629,7 @@ export function NoteEditor({
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [isHydrated, snapshot]);
+  }, [isHydrated, saveNoteLocally, snapshot]);
 
   useEffect(() => {
     const listener = (event: Event) => {
@@ -700,7 +736,11 @@ export function NoteEditor({
   }
 
   function isEditorControlTarget(target: HTMLElement) {
-    return Boolean(target.closest("textarea") || target.closest("button"));
+    return Boolean(
+      target.closest("textarea") ||
+      target.closest("button") ||
+      target.closest("input"),
+    );
   }
 
   function handlePagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -1217,7 +1257,15 @@ export function NoteEditor({
               className="w-full border-b pb-3 align-top"
               style={{ borderColor: notebookTheme.accent }}
             >
-              <h1 className="mb-2 text-[22px] font-normal text-[#111]">{title}</h1>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                onBlur={flushPendingSave}
+                placeholder="صفحه بدون عنوان"
+                className="mb-2 w-full border-none bg-transparent text-[22px] font-normal text-[#111] outline-none placeholder:text-[#7d7d7d]"
+                dir="rtl"
+                aria-label="عنوان صفحه"
+              />
               <div className="flex flex-row-reverse gap-8 text-[12px] text-[#6f6f6f]">
                 <span>{persianTimeLabel}</span>
                 <span>{persianDateLabel}</span>
@@ -1290,14 +1338,6 @@ export function NoteEditor({
               });
             }}
           >
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="sr-only"
-              aria-hidden="true"
-              tabIndex={-1}
-            />
-
             {blocks.map((block) => {
               const blockWidth = getRenderedBlockWidth(block, canvasWidth);
               const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
