@@ -6,6 +6,7 @@ import {
   ChevronDown,
   CirclePlus,
   Download,
+  EllipsisVertical,
   FileText,
   FolderPlus,
   Menu,
@@ -17,8 +18,16 @@ import {
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
+  archiveNotebookInlineAction,
+  archivePageInlineAction,
   createNotebookGroupInlineAction,
   createPageInlineAction,
+  deleteNotebookGroupInlineAction,
+  deleteNotebookPermanentlyInlineAction,
+  deletePagePermanentlyInlineAction,
+  renameNotebookGroupInlineAction,
+  renameNotebookInlineAction,
+  restorePageInlineAction,
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
@@ -30,11 +39,13 @@ type MobileNotebook = {
   name: string;
   groupId: string | null;
   groupName: string | null;
+  systemKey?: string | null;
   pages: Array<{
     id: string;
     title: string;
     updatedAt: Date;
     deletedAt: Date | null;
+    originalNotebookId?: string | null;
   }>;
   deletedAt: Date | null;
 };
@@ -67,6 +78,12 @@ type MobileGroupSection = {
   notebooks: MobileNotebook[];
 };
 
+type ActionSheetState =
+  | { type: "group"; id: string }
+  | { type: "notebook"; id: string }
+  | { type: "page"; id: string }
+  | null;
+
 const UNGROUPED_ID = "ungrouped";
 
 export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
@@ -79,6 +96,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [draftTitle, setDraftTitle] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [draftGroupName, setDraftGroupName] = useState("");
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
+  const [draftNotebookName, setDraftNotebookName] = useState("");
   const [createdGroups, setCreatedGroups] = useState<MobileGroup[]>([]);
   const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(() => [
     ...groups.map((group) => group.id),
@@ -86,11 +106,13 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   ]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(null);
+  const [actionSheet, setActionSheet] = useState<ActionSheetState>(null);
   const [isPending, startTransition] = useTransition();
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [profilePanelPosition, setProfilePanelPosition] = useState({ top: 0, left: 0 });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const groupInputRef = useRef<HTMLInputElement | null>(null);
+  const notebookInputRef = useRef<HTMLInputElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -112,6 +134,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     return notebooks[0];
   }, [notebooks, pathname]);
 
+  const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1] ?? null;
+
   useEffect(() => {
     if (isCreating) {
       inputRef.current?.focus();
@@ -125,6 +149,20 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       groupInputRef.current?.select();
     }
   }, [isCreatingGroup]);
+
+  useEffect(() => {
+    if (editingGroupId) {
+      groupInputRef.current?.focus();
+      groupInputRef.current?.select();
+    }
+  }, [editingGroupId]);
+
+  useEffect(() => {
+    if (editingNotebookId) {
+      notebookInputRef.current?.focus();
+      notebookInputRef.current?.select();
+    }
+  }, [editingNotebookId]);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -229,10 +267,29 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     ? getNotebookTheme(activeNotebook.id)
     : getNotebookTheme(activeGroupNotebooks[0]?.id ?? "default");
 
+  const actionGroup =
+    actionSheet?.type === "group"
+      ? groupedNotebooks.find((group) => group.id === actionSheet.id) ?? null
+      : null;
+  const actionNotebook =
+    actionSheet?.type === "notebook"
+      ? notebooks.find((notebook) => notebook.id === actionSheet.id) ?? null
+      : null;
+  const actionPage =
+    actionSheet?.type === "page"
+      ? notebooks.flatMap((notebook) => notebook.pages).find((page) => page.id === actionSheet.id) ??
+        null
+      : null;
+
   function closeAll() {
     setSectionsOpen(false);
     setPagesOpen(false);
     setProfileOpen(false);
+    setActionSheet(null);
+  }
+
+  function closeActionSheet() {
+    setActionSheet(null);
   }
 
   function submitCreate() {
@@ -254,6 +311,52 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         router.push(`/pages/${result.id}`);
         router.refresh();
       }
+    });
+  }
+
+  function beginRenameGroup(group: MobileGroupSection) {
+    setDraftGroupName(group.name);
+    setEditingGroupId(group.id);
+    closeActionSheet();
+  }
+
+  function submitRenameGroup() {
+    if (!editingGroupId) {
+      return;
+    }
+
+    const nextName = draftGroupName.trim() || "مجموعه بدون عنوان";
+    const targetGroupId = editingGroupId;
+
+    setEditingGroupId(null);
+    setDraftGroupName("");
+
+    startTransition(async () => {
+      await renameNotebookGroupInlineAction(targetGroupId, nextName);
+      router.refresh();
+    });
+  }
+
+  function beginRenameNotebook(notebook: MobileNotebook) {
+    setDraftNotebookName(notebook.name);
+    setEditingNotebookId(notebook.id);
+    closeActionSheet();
+  }
+
+  function submitRenameNotebook() {
+    if (!editingNotebookId) {
+      return;
+    }
+
+    const nextName = draftNotebookName.trim() || "زیر مجموعه بدون عنوان";
+    const targetNotebookId = editingNotebookId;
+
+    setEditingNotebookId(null);
+    setDraftNotebookName("");
+
+    startTransition(async () => {
+      await renameNotebookInlineAction(targetNotebookId, nextName);
+      router.refresh();
     });
   }
 
@@ -322,6 +425,82 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       setIsCreatingGroup(false);
       closeAll();
       router.push(`/pages/${result.pageId}`);
+      router.refresh();
+    });
+  }
+
+  function deleteGroup(groupId: string) {
+    closeActionSheet();
+
+    startTransition(async () => {
+      const result = await deleteNotebookGroupInlineAction(groupId);
+      if ("trashGroupId" in result && result.trashGroupId) {
+        setSelectedGroupId(result.trashGroupId);
+      }
+      if (activeGroupId === groupId) {
+        setSelectedNotebookId(null);
+      }
+      router.refresh();
+    });
+  }
+
+  function deleteNotebook(notebook: MobileNotebook) {
+    closeActionSheet();
+
+    startTransition(async () => {
+      if (notebook.deletedAt) {
+        await deleteNotebookPermanentlyInlineAction(notebook.id);
+      } else {
+        const result = await archiveNotebookInlineAction(notebook.id);
+        if ("trashGroupId" in result && result.trashGroupId) {
+          setSelectedGroupId(result.trashGroupId);
+        }
+      }
+
+      if (routeNotebook?.id === notebook.id || activePageId) {
+        router.push("/");
+      }
+
+      if (selectedNotebookId === notebook.id) {
+        setSelectedNotebookId(null);
+      }
+
+      router.refresh();
+    });
+  }
+
+  function archivePage(pageId: string) {
+    closeActionSheet();
+
+    startTransition(async () => {
+      const result = await archivePageInlineAction(pageId);
+      if ("notebookId" in result && result.notebookId && activePageId === pageId) {
+        router.push(`/notebooks/${result.notebookId}`);
+      }
+      router.refresh();
+    });
+  }
+
+  function restorePage(pageId: string) {
+    closeActionSheet();
+
+    startTransition(async () => {
+      await restorePageInlineAction(pageId);
+      if (activePageId === pageId) {
+        router.push(`/pages/${pageId}`);
+      }
+      router.refresh();
+    });
+  }
+
+  function deletePagePermanently(pageId: string) {
+    closeActionSheet();
+
+    startTransition(async () => {
+      await deletePagePermanentlyInlineAction(pageId);
+      if (activePageId === pageId) {
+        router.push(activeNotebook ? `/notebooks/${activeNotebook.id}` : "/");
+      }
       router.refresh();
     });
   }
@@ -427,6 +606,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               <button
                 type="button"
                 onClick={() => {
+                  setEditingGroupId(null);
                   setDraftGroupName("");
                   setIsCreatingGroup((current) => !current);
                 }}
@@ -472,68 +652,154 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   </div>
                 ) : null}
 
-                {groupedNotebooks.map((group) => (
-                  <div key={group.id}>
-                    <button
-                      type="button"
-                      onClick={() => toggleGroupSelection(group.id)}
-                      className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <ChevronDown
-                          className={[
-                            "h-4 w-4 text-[#708090] transition",
-                            expandedGroupIds.includes(group.id) ? "rotate-180" : "",
-                          ].join(" ")}
-                        />
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#50607a]">
-                          {group.notebooks.length}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-semibold text-[#23324d]">
-                        {group.systemKey === "deleted-items" ? (
-                          <Trash2 className="h-3.5 w-3.5" />
+                {groupedNotebooks.map((group) => {
+                  const canManageGroup =
+                    group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items";
+                  const isEditing = editingGroupId === group.id;
+
+                  return (
+                    <div key={group.id}>
+                      <div className="flex items-center gap-2">
+                        {canManageGroup ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setActionSheet({ type: "group", id: group.id });
+                            }}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
+                            aria-label={`عملیات ${group.name}`}
+                          >
+                            <EllipsisVertical className="h-4 w-4" />
+                          </button>
                         ) : null}
-                        <span>{group.name}</span>
-                      </div>
-                    </button>
 
-                    {expandedGroupIds.includes(group.id) ? (
-                      <div className="mt-2 grid gap-2 pr-3">
-                        {group.notebooks.length > 0 ? (
-                          group.notebooks.map((notebook) => {
-                            const theme = getNotebookTheme(notebook.id);
-                            const isActiveNotebook = activeNotebook?.id === notebook.id;
-
-                            return (
-                              <button
-                                key={notebook.id}
-                                type="button"
-                                onClick={() => selectNotebook(notebook.id)}
-                                className="rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition"
-                                style={{
-                                  backgroundColor: isActiveNotebook
-                                    ? theme.sidebarActive
-                                    : theme.accentSoft,
-                                  borderColor: isActiveNotebook
-                                    ? theme.accent
-                                    : theme.editorBorder,
-                                  color: theme.sidebarText,
-                                }}
-                              >
-                                {notebook.name}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="rounded-2xl border border-dashed border-[var(--border-soft)] bg-white px-4 py-3 text-right text-xs text-[#708090]">
-                            هنوز زیر مجموعه‌ای در این مجموعه نیست
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupSelection(group.id)}
+                          className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <ChevronDown
+                              className={[
+                                "h-4 w-4 text-[#708090] transition",
+                                expandedGroupIds.includes(group.id) ? "rotate-180" : "",
+                              ].join(" ")}
+                            />
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#50607a]">
+                              {group.notebooks.length}
+                            </span>
                           </div>
-                        )}
+                          <div className="flex items-center gap-2 text-sm font-semibold text-[#23324d]">
+                            {group.systemKey === "deleted-items" ? (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            ) : null}
+                            {isEditing ? (
+                              <input
+                                ref={groupInputRef}
+                                value={draftGroupName}
+                                onChange={(event) => setDraftGroupName(event.target.value)}
+                                onBlur={submitRenameGroup}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    submitRenameGroup();
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    setEditingGroupId(null);
+                                    setDraftGroupName("");
+                                  }
+                                }}
+                                className="min-w-0 border-none bg-transparent text-right text-sm outline-none"
+                                dir="rtl"
+                                onClick={(event) => event.stopPropagation()}
+                              />
+                            ) : (
+                              <span>{group.name}</span>
+                            )}
+                          </div>
+                        </button>
                       </div>
-                    ) : null}
-                  </div>
-                ))}
+
+                      {expandedGroupIds.includes(group.id) ? (
+                        <div className="mt-2 grid gap-2 pr-3">
+                          {group.notebooks.length > 0 ? (
+                            group.notebooks.map((notebook) => {
+                              const theme = getNotebookTheme(notebook.id);
+                              const isActiveNotebook = activeNotebook?.id === notebook.id;
+                              const canManageNotebook = !notebook.systemKey;
+                              const isEditingNotebook = editingNotebookId === notebook.id;
+
+                              return (
+                                <div key={notebook.id} className="flex items-center gap-2">
+                                  {canManageNotebook ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setActionSheet({ type: "notebook", id: notebook.id });
+                                      }}
+                                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border bg-white text-[#50607a] shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                                      style={{ borderColor: theme.editorBorder }}
+                                      aria-label={`عملیات ${notebook.name}`}
+                                    >
+                                      <EllipsisVertical className="h-4 w-4" />
+                                    </button>
+                                  ) : null}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => selectNotebook(notebook.id)}
+                                    className="w-full rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition"
+                                    style={{
+                                      backgroundColor: isActiveNotebook
+                                        ? theme.sidebarActive
+                                        : theme.accentSoft,
+                                      borderColor: isActiveNotebook
+                                        ? theme.accent
+                                        : theme.editorBorder,
+                                      color: theme.sidebarText,
+                                    }}
+                                  >
+                                    {isEditingNotebook ? (
+                                      <input
+                                        ref={notebookInputRef}
+                                        value={draftNotebookName}
+                                        onChange={(event) => setDraftNotebookName(event.target.value)}
+                                        onBlur={submitRenameNotebook}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            submitRenameNotebook();
+                                          }
+                                          if (event.key === "Escape") {
+                                            event.preventDefault();
+                                            setEditingNotebookId(null);
+                                            setDraftNotebookName("");
+                                          }
+                                        }}
+                                        className="w-full border-none bg-transparent text-right text-sm outline-none"
+                                        dir="rtl"
+                                        onClick={(event) => event.stopPropagation()}
+                                      />
+                                    ) : (
+                                      notebook.name
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-[var(--border-soft)] bg-white px-4 py-3 text-right text-xs text-[#708090]">
+                              هنوز زیر مجموعه‌ای در این مجموعه نیست
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -580,7 +846,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               }}
             >
               <div className="mb-2 text-right text-[11px] font-semibold text-[var(--text-muted)]">
-                {activeGroup ? `زیر مجموعه‌های ${activeGroup.name}` : "زیر مجموعه‌های مجموعه"}
+                {activeGroup
+                  ? `زیر مجموعه‌های ${activeGroup.name}`
+                  : "زیر مجموعه‌های مجموعه"}
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {activeGroupNotebooks.map((notebook) => {
@@ -649,24 +917,32 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                     const isActive = pathname === `/pages/${page.id}`;
 
                     return (
-                      <Link
-                        key={page.id}
-                        href={`/pages/${page.id}`}
-                        onClick={closeAll}
-                        className="block border-b px-4 py-3 text-right"
-                        style={{
-                          borderColor: activeTheme.sidebarBorder,
-                          backgroundColor: isActive ? activeTheme.sidebarActive : "transparent",
-                        }}
-                        dir="rtl"
-                      >
-                        <div className="text-sm" style={{ color: activeTheme.sidebarText }}>
-                          {page.title}
-                        </div>
-                        <div className="mt-1 text-[11px]" style={{ color: activeTheme.sidebarMuted }}>
-                          {formatDate(new Date(page.updatedAt))}
-                        </div>
-                      </Link>
+                      <div key={page.id} className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: activeTheme.sidebarBorder }}>
+                        <button
+                          type="button"
+                          onClick={() => setActionSheet({ type: "page", id: page.id })}
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-[#50607a]"
+                          aria-label={`عملیات ${page.title}`}
+                        >
+                          <EllipsisVertical className="h-4 w-4" />
+                        </button>
+                        <Link
+                          href={`/pages/${page.id}`}
+                          onClick={closeAll}
+                          className="block w-full text-right"
+                          style={{
+                            backgroundColor: isActive ? activeTheme.sidebarActive : "transparent",
+                          }}
+                          dir="rtl"
+                        >
+                          <div className="text-sm" style={{ color: activeTheme.sidebarText }}>
+                            {page.title}
+                          </div>
+                          <div className="mt-1 text-[11px]" style={{ color: activeTheme.sidebarMuted }}>
+                            {formatDate(new Date(page.updatedAt))}
+                          </div>
+                        </Link>
+                      </div>
                     );
                   })
                 ) : (
@@ -682,6 +958,95 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   یک زیر مجموعه را از منوی مجموعه‌ها انتخاب کنید.
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {actionSheet ? (
+        <div className="fixed inset-0 z-[140] bg-black/30" onClick={closeActionSheet}>
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white p-4 shadow-[0_-24px_80px_rgba(15,23,42,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 text-center text-sm font-semibold text-[#1f2a37]">
+              {actionGroup?.name ?? actionNotebook?.name ?? actionPage?.title}
+            </div>
+            <div className="grid gap-2">
+              {actionGroup ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => beginRenameGroup(actionGroup)}
+                    className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
+                  >
+                    تغییر نام مجموعه
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteGroup(actionGroup.id)}
+                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
+                  >
+                    حذف مجموعه
+                  </button>
+                </>
+              ) : null}
+
+              {actionNotebook ? (
+                <>
+                  {!actionNotebook.deletedAt ? (
+                    <button
+                      type="button"
+                      onClick={() => beginRenameNotebook(actionNotebook)}
+                      className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
+                    >
+                      تغییر نام زیر مجموعه
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => deleteNotebook(actionNotebook)}
+                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
+                  >
+                    {actionNotebook.deletedAt
+                      ? "حذف دائمی زیر مجموعه"
+                      : "انتقال زیر مجموعه به حذف‌شده‌ها"}
+                  </button>
+                </>
+              ) : null}
+
+              {actionPage ? (
+                <>
+                  {activeNotebook?.deletedAt && actionPage.originalNotebookId ? (
+                    <button
+                      type="button"
+                      onClick={() => restorePage(actionPage.id)}
+                      className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
+                    >
+                      بازیابی صفحه
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      activeNotebook?.deletedAt
+                        ? deletePagePermanently(actionPage.id)
+                        : archivePage(actionPage.id)
+                    }
+                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
+                  >
+                    {activeNotebook?.deletedAt ? "حذف دائمی صفحه" : "حذف صفحه"}
+                  </button>
+                </>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={closeActionSheet}
+                className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-center text-sm text-[#50607a]"
+              >
+                بستن
+              </button>
             </div>
           </div>
         </div>
