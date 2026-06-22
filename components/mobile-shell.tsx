@@ -1032,9 +1032,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                         <Link
                           href={`/pages/${page.id}`}
                           onClick={closeAll}
-                          className="block w-full text-right"
+                          className="block w-full rounded-xl px-3 py-2 text-right transition"
                           style={{
-                            backgroundColor: isActive ? activeTheme.sidebarActive : "transparent",
+                            backgroundColor: isActive ? activeTheme.sidebarHover : "transparent",
                           }}
                           dir="rtl"
                         >
