@@ -333,13 +333,20 @@ export async function changePasswordAction(
 
 export async function createNotebookAction(formData: FormData) {
   const user = await requireUser();
+  const groupId = z.string().cuid().safeParse(formData.get("groupId"));
 
   const parsed = notebookSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
   });
 
-  if (!parsed.success) {
+  if (!parsed.success || !groupId.success) {
+    return;
+  }
+
+  const group = await getOwnedGroup(user.id, groupId.data);
+
+  if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
     return;
   }
 
@@ -347,6 +354,7 @@ export async function createNotebookAction(formData: FormData) {
     data: {
       ...parsed.data,
       userId: user.id,
+      groupId: groupId.data,
     },
   });
 
@@ -355,17 +363,18 @@ export async function createNotebookAction(formData: FormData) {
 
 export async function createNotebookInlineAction(
   name: string,
-  groupId?: string | null,
+  groupId: string,
 ) {
   const user = await requireUser();
   const parsedName = notebookNameSchema.safeParse(name);
+  const parsedGroupId = z.string().cuid().safeParse(groupId);
 
-  if (!parsedName.success) {
+  if (!parsedName.success || !parsedGroupId.success) {
     return { error: "نام زیر مجموعه معتبر نیست." };
   }
 
-  if (groupId) {
-    const group = await getOwnedGroup(user.id, groupId);
+  {
+    const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
     if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
       return { error: "مجموعه معتبر نیست." };
@@ -378,7 +387,7 @@ export async function createNotebookInlineAction(
         userId: user.id,
         name: parsedName.data,
         description: undefined,
-        groupId: groupId ?? null,
+        groupId: parsedGroupId.data,
       },
     });
 
@@ -535,15 +544,12 @@ export async function deleteNotebookGroupInlineAction(id: string) {
 
 export async function assignNotebookGroupInlineAction(
   notebookIds: string[],
-  groupId: string | null,
+  groupId: string,
 ) {
   const user = await requireUser();
 
   const parsedNotebookIds = z.array(z.string().cuid()).safeParse(notebookIds);
-  const parsedGroupId =
-    groupId === null
-      ? { success: true, data: null }
-      : z.string().cuid().safeParse(groupId);
+  const parsedGroupId = z.string().cuid().safeParse(groupId);
 
   if (!parsedNotebookIds.success || !parsedGroupId.success) {
     return { error: "انتخاب مجموعه معتبر نیست." };
@@ -561,7 +567,7 @@ export async function assignNotebookGroupInlineAction(
     return { error: "زیر مجموعه معتبر نیست." };
   }
 
-  if (parsedGroupId.data) {
+  {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
     if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {

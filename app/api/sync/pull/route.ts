@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
       userId: user.id,
-      groupId: notebook.groupId,
+      groupId: notebook.groupId!,
       name: notebook.name,
       description: notebook.description,
       archived: notebook.archived,

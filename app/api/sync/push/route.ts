@@ -20,7 +20,7 @@ import { moveNotebookToTrash, movePageToTrash } from "@/lib/trash";
 const notebookPayloadSchema = z.object({
   id: z.string(),
   userId: z.string().optional(),
-  groupId: z.string().nullable().optional(),
+  groupId: z.string(),
   name: z.string(),
   description: z.string().nullable().optional(),
   archived: z.boolean(),
@@ -66,7 +66,7 @@ function toNotebookResponse(notebook: {
   return {
     id: notebook.id,
     userId: notebook.userId,
-    groupId: notebook.groupId,
+    groupId: notebook.groupId!,
     name: notebook.name,
     description: notebook.description,
     archived: notebook.archived,
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
             where: { id: payload.id },
             data: {
               userId: user.id,
-              groupId: payload.groupId ?? null,
+              groupId: payload.groupId,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
             data: {
               id: payload.id,
               userId: user.id,
-              groupId: payload.groupId ?? null,
+              groupId: payload.groupId,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,

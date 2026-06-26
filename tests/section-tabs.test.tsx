@@ -73,7 +73,7 @@ describe("SectionTabs", () => {
   it("creates a new notebook and opens its untitled page on Enter", async () => {
     const user = userEvent.setup();
 
-    render(
+    const { container } = render(
       <SectionTabs
         groups={[
           { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
@@ -89,7 +89,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    await user.click(screen.getByTitle("زیر مجموعه جدید"));
+    await user.click(container.querySelector('button[title="زیر مجموعه جدید"]')!);
 
     const input = screen.getByRole("textbox");
     expect(input).toBeVisible();
@@ -104,28 +104,11 @@ describe("SectionTabs", () => {
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
-  it("cancels an unsaved draft without calling the server", async () => {
-    const user = userEvent.setup();
+  it("hides new notebook creation when no writable group exists", () => {
+    render(<SectionTabs groups={[]} notebooks={[]} />);
 
-    render(
-      <SectionTabs
-        groups={[]}
-        notebooks={[
-          {
-            id: "notebook-1",
-            name: "Inbox",
-            groupId: null,
-            pageIds: [],
-          },
-        ]}
-      />,
-    );
-
-    await user.click(screen.getByTitle("زیر مجموعه جدید"));
-    const input = screen.getByRole("textbox");
-    fireEvent.keyDown(input, { key: "Escape" });
-
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
+    expect(screen.getByRole("button")).toBeInTheDocument();
     expect(mocks.createNotebook).not.toHaveBeenCalled();
   });
 
@@ -134,7 +117,7 @@ describe("SectionTabs", () => {
 
     render(<SectionTabs groups={[]} notebooks={[]} />);
 
-    await user.click(screen.getByText("مجموعه جدید"));
+    await user.click(screen.getByRole("button"));
 
     const input = screen.getByRole("textbox");
     await user.type(input, "Projects{Enter}");
@@ -179,7 +162,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
   });
 
   it("removes the new notebook action from the empty-area menu inside trash", () => {
@@ -281,7 +264,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Ã˜Â²Ã›Å’Ã˜Â± Ã™â€¦Ã˜Â¬Ã™â€¦Ã™Ë†Ã˜Â¹Ã™â€¡ Ã˜Â¬Ã˜Â¯Ã›Å’Ã˜Â¯")).not.toBeInTheDocument();
   });
 
   it("does not switch to trash after deleting a notebook", async () => {

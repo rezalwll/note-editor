@@ -119,7 +119,7 @@ export async function moveNotebookToTrash(userId: string, notebookId: string) {
 export async function restoreNotebooksToGroup(
   userId: string,
   notebookIds: string[],
-  groupId: string | null,
+  groupId: string,
 ) {
   await prisma.$transaction([
     prisma.notebook.updateMany({

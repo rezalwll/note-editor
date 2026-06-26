@@ -344,7 +344,14 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     [displayNotebooks, groupNameOverrides, mergedGroups],
   );
 
-  const activeGroupId = selectedGroupId ?? (routeNotebook?.groupId ?? UNGROUPED_ID);
+  const activeGroupId =
+    selectedGroupId ??
+    routeNotebook?.groupId ??
+    groupedNotebooks.find(
+      (group) => group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items",
+    )?.id ??
+    groupedNotebooks.find((group) => group.id !== UNGROUPED_ID)?.id ??
+    null;
   const activeGroup =
     groupedNotebooks.find((group) => group.id === activeGroupId) ?? null;
   const activeGroupNotebooks = activeGroup?.notebooks ?? [];
@@ -352,9 +359,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     displayNotebooks.find((notebook) => notebook.id === selectedNotebookId) ?? null;
   const activeNotebook =
     explicitNotebook &&
-    (explicitNotebook.groupId ?? UNGROUPED_ID) === activeGroupId
+    explicitNotebook.groupId === activeGroupId
       ? explicitNotebook
-      : routeNotebook && (routeNotebook.groupId ?? UNGROUPED_ID) === activeGroupId
+      : routeNotebook && routeNotebook.groupId === activeGroupId
         ? routeNotebook
         : activeGroupNotebooks[0] ?? null;
 
@@ -461,7 +468,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     const targetGroup = groupedNotebooks.find((group) => group.id === groupId);
     const nextNotebook =
       activeNotebook &&
-      (activeNotebook.groupId ?? UNGROUPED_ID) === groupId
+      activeNotebook.groupId === groupId
         ? activeNotebook
         : targetGroup?.notebooks[0] ?? null;
     const shouldExpand = !expandedGroupIds.includes(groupId);
@@ -482,7 +489,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       return;
     }
 
-    setSelectedGroupId(notebook.groupId ?? UNGROUPED_ID);
+    setSelectedGroupId(notebook.groupId);
     setSelectedNotebookId(notebook.id);
     closeAll();
     router.push(`/notebooks/${notebook.id}`);
@@ -743,7 +750,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   </div>
                 ) : null}
 
-                {groupedNotebooks.map((group) => {
+                {groupedNotebooks
+                  .filter((group) => group.id !== UNGROUPED_ID)
+                  .map((group) => {
                   const canManageGroup =
                     group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items";
                   const isEditing = editingGroupId === group.id;

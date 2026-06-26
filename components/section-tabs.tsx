@@ -51,7 +51,6 @@ type SectionTabsProps = {
   notebooks: NotebookTab[];
 };
 
-const UNGROUPED_KEY = "__ungrouped__";
 const TRASH_GROUP_KEY = "deleted-items";
 const GROUP_PILL_PALETTE = [
   {
@@ -192,11 +191,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }, [displayItems, pathname]);
   const trashGroupId =
     groupItems.find((group) => group.systemKey === TRASH_GROUP_KEY)?.id ?? null;
+  const firstUsableGroupId =
+    groupItems.find((group) => group.systemKey !== TRASH_GROUP_KEY)?.id ?? null;
   const routeGroupKey =
     pathname === "/trash"
-      ? (trashGroupId ?? UNGROUPED_KEY)
-      : ((displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
-          UNGROUPED_KEY) as string);
+      ? trashGroupId
+      : (displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
+          firstUsableGroupId ??
+          trashGroupId);
   const activeGroupKey = manualGroupKey ?? routeGroupKey;
 
   useEffect(() => {
@@ -232,12 +234,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }, [editingGroupId]);
 
   const activeGroupNotebooks = useMemo(
-    () =>
-      displayItems.filter((notebook) =>
-        activeGroupKey === UNGROUPED_KEY
-          ? notebook.groupId === null
-          : notebook.groupId === activeGroupKey,
-      ),
+    () => displayItems.filter((notebook) => notebook.groupId === activeGroupKey),
     [activeGroupKey, displayItems],
   );
   const activeGroupNotebookSignature = useMemo(
@@ -300,25 +297,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     return activeGroupNotebooks.filter((notebook) => hiddenIds.has(notebook.id));
   }, [activeGroupNotebooks, overflowNotebookIds]);
 
-  const groupTabs = useMemo(() => {
-    const grouped = groupItems.map((group) => ({
-      id: group.id,
-      name: group.name,
-      notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
-      systemKey: group.systemKey ?? null,
-    }));
-    const ungroupedCount = displayItems.filter((item) => item.groupId === null).length;
+  const groupTabs = useMemo(
+    () =>
+      groupItems.map((group) => ({
+        id: group.id,
+        name: group.name,
+        notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
+        systemKey: group.systemKey ?? null,
+      })),
+    [displayItems, groupItems],
+  );
 
-    return [
-      ...grouped,
-      {
-        id: UNGROUPED_KEY,
-        name: "بدون مجموعه",
-        notebookCount: ungroupedCount,
-        systemKey: null,
-      },
-    ];
-  }, [displayItems, groupItems]);
+  const hasWritableGroup = useMemo(
+    () => groupItems.some((group) => group.systemKey !== TRASH_GROUP_KEY),
+    [groupItems],
+  );
 
   function getGroupPillTheme(index: number) {
     return GROUP_PILL_PALETTE[index % GROUP_PILL_PALETTE.length];
@@ -331,12 +324,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function beginCreateNotebook() {
-    if (isPending || draftNotebook || isTrashGroup(activeGroupKey)) {
+    if (isPending || draftNotebook || !activeGroupKey || isTrashGroup(activeGroupKey)) {
       return;
     }
 
     const tempNotebookId = `draft-notebook-${Date.now()}`;
-    const nextGroupId = activeGroupKey === UNGROUPED_KEY ? null : activeGroupKey;
+    const nextGroupId = activeGroupKey;
     const nextGroupName =
       groupItems.find((group) => group.id === activeGroupKey)?.name ?? null;
 
@@ -349,7 +342,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     });
     setEditingNotebookId(tempNotebookId);
     setDraftName("");
-    setManualGroupKey(nextGroupId ?? UNGROUPED_KEY);
+    setManualGroupKey(nextGroupId);
     setIsOverflowOpen(false);
     setSelectedNotebookIds([tempNotebookId]);
   }
@@ -417,6 +410,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
       startTransition(async () => {
         try {
+          if (!notebookGroupId) {
+            return;
+          }
+
           const result = await createNotebookInlineAction(nextName, notebookGroupId);
 
           if (!("id" in result) || !result.id || !("pageId" in result) || !result.pageId) {
@@ -559,11 +556,15 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function moveNotebooksToGroup(notebookIds: string[], groupId: string | null) {
+    if (!groupId) {
+      return;
+    }
+
     const nextGroupName =
       groupItems.find((group) => group.id === groupId)?.name ?? null;
 
     setSelectedNotebookIds([]);
-    setManualGroupKey(groupId ?? UNGROUPED_KEY);
+    setManualGroupKey(groupId);
 
     startTransition(async () => {
       updateNotebooks({
@@ -627,7 +628,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             </div>
           );
         })}
-        {!isTrashGroup(activeGroupKey) ? (
+        {!isTrashGroup(activeGroupKey) && hasWritableGroup ? (
           <div className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700">
             <Plus className="h-4 w-4" />
           </div>
@@ -645,7 +646,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             <div
               key={group.id}
               onContextMenu={(event) => {
-                if (group.id === UNGROUPED_KEY || isEditing) {
+                if (isEditing) {
                   return;
                 }
 
@@ -682,7 +683,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                             onSelect: () => deleteGroup(group.id),
                           },
                         ]),
-                  ],
+                  ].filter((item) => item.id !== "move-ungrouped"),
                 });
               }}
               className={cn(
@@ -803,7 +804,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           openMenu(event, {
             title: "زیر مجموعه‌ها",
             items: [
-              ...(!isTrashGroup(activeGroupKey)
+              ...(!isTrashGroup(activeGroupKey) && hasWritableGroup
                 ? [
                     {
                 id: "new-section",
@@ -968,7 +969,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                     }
 
                     selectSingleNotebook(notebook.id);
-                    setManualGroupKey(notebook.groupId ?? UNGROUPED_KEY);
+                    setManualGroupKey(notebook.groupId);
                     setIsOverflowOpen(false);
                   }}
                 >
@@ -1002,7 +1003,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                       href={`/notebooks/${notebook.id}`}
                       onClick={() => {
                         setSelectedNotebookIds([notebook.id]);
-                        setManualGroupKey(notebook.groupId ?? UNGROUPED_KEY);
+                        setManualGroupKey(notebook.groupId);
                         setIsOverflowOpen(false);
                       }}
                       className="rounded-xl px-3 py-2 text-xs text-[var(--text-strong)] transition hover:bg-[var(--bg-softer)]"
@@ -1016,7 +1017,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           </div>
         ) : null}
 
-        {!isTrashGroup(activeGroupKey) ? (
+        {!isTrashGroup(activeGroupKey) && hasWritableGroup ? (
         <button
           type="button"
           onClick={beginCreateNotebook}
