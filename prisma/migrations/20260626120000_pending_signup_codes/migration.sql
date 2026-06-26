@@ -19,4 +19,4 @@ CREATE UNIQUE INDEX "pending_signups_username_key" ON "pending_signups"("usernam
 CREATE INDEX "pending_signups_email_expires_at_idx" ON "pending_signups"("email", "expires_at");
 CREATE INDEX "pending_signups_username_expires_at_idx" ON "pending_signups"("username", "expires_at");
 
-DROP TABLE "email_verification_tokens";
+DROP TABLE IF EXISTS "email_verification_tokens";
