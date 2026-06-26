@@ -8,6 +8,7 @@ import { SectionTabs } from "@/components/section-tabs";
 const mocks = vi.hoisted(() => ({
   createNotebook: vi.fn(),
   createGroup: vi.fn(),
+  emptyTrash: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
   openMenu: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock("@/app/actions", () => ({
   createNotebookInlineAction: mocks.createNotebook,
   deleteNotebookPermanentlyInlineAction: vi.fn(),
   deleteNotebookGroupInlineAction: vi.fn(),
-  emptyTrashInlineAction: vi.fn(),
+  emptyTrashInlineAction: mocks.emptyTrash,
   renameNotebookGroupInlineAction: vi.fn(),
   renameNotebookInlineAction: vi.fn(),
 }));
@@ -51,6 +52,7 @@ describe("SectionTabs", () => {
       id: "notebook-2",
       pageId: "page-2",
     });
+    mocks.emptyTrash.mockResolvedValue({ success: true, deletedCount: 1 });
     mocks.createGroup.mockResolvedValue({
       id: "group-2",
       notebookId: "notebook-3",
@@ -202,5 +204,73 @@ describe("SectionTabs", () => {
 
     expect(itemIds).not.toContain("new-section");
     expect(itemIds).toContain("new-category");
+  });
+
+  it("navigates to the trash empty state after clearing trash", async () => {
+    render(
+      <SectionTabs
+        groups={[
+          {
+            id: "trash-group",
+            name: "Trash",
+            notebookCount: 1,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "trash-pages",
+            name: "Deleted Pages",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            systemKey: "deleted-pages",
+            pageIds: ["page-trash"],
+          },
+        ]}
+      />,
+    );
+
+    const trashTab = screen.getByText("Trash");
+    fireEvent.contextMenu(trashTab);
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const emptyTrashAction = menu.items.find(
+      (item: { id: string; onSelect?: () => void }) => item.id === "empty-trash",
+    );
+
+    emptyTrashAction.onSelect();
+
+    await waitFor(() => {
+      expect(mocks.emptyTrash).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.push).toHaveBeenCalledWith("/trash");
+    expect(mocks.refresh).toHaveBeenCalled();
+  });
+
+  it("keeps the trash tab active on the trash route after reload", () => {
+    mocks.pathname = "/trash";
+
+    render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
+          {
+            id: "trash-group",
+            name: "Trash",
+            notebookCount: 0,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: ["page-1"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
   });
 });

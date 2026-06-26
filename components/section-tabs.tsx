@@ -190,10 +190,14 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       null
     );
   }, [displayItems, pathname]);
-  const currentActiveNotebookGroupKey =
-    displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
-    UNGROUPED_KEY;
-  const activeGroupKey = manualGroupKey ?? currentActiveNotebookGroupKey;
+  const trashGroupId =
+    groupItems.find((group) => group.systemKey === TRASH_GROUP_KEY)?.id ?? null;
+  const routeGroupKey =
+    pathname === "/trash"
+      ? (trashGroupId ?? UNGROUPED_KEY)
+      : ((displayItems.find((notebook) => notebook.id === activeNotebookId)?.groupId ??
+          UNGROUPED_KEY) as string);
+  const activeGroupKey = manualGroupKey ?? routeGroupKey;
 
   useEffect(() => {
     if (editingNotebookId) {
@@ -610,7 +614,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     startTransition(async () => {
       updateNotebooks({ type: "remove-many", notebookIds: trashNotebookIds });
       await emptyTrashInlineAction();
-      router.push("/");
+      router.push("/trash");
       router.refresh();
     });
   }
