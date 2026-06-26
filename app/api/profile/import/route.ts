@@ -70,6 +70,12 @@ export async function POST(request: Request) {
       }
 
       for (const notebook of workspace.notebooks) {
+        const groupId = notebook.groupId;
+
+        if (!groupId) {
+          throw new Error("یکی از دفترهای آرشیو، دسته‌ی معتبر ندارد.");
+        }
+
         const existing = await tx.notebook.findUnique({
           where: { id: notebook.id },
           select: { id: true, userId: true },
@@ -83,7 +89,7 @@ export async function POST(request: Request) {
           await tx.notebook.update({
             where: { id: notebook.id },
             data: {
-              groupId: notebook.groupId,
+              groupId,
               name: notebook.name,
               description: notebook.description ?? undefined,
               archived: notebook.archived,
@@ -96,7 +102,7 @@ export async function POST(request: Request) {
             data: {
               id: notebook.id,
               userId: user.id,
-              groupId: notebook.groupId,
+              groupId,
               name: notebook.name,
               description: notebook.description ?? undefined,
               archived: notebook.archived,

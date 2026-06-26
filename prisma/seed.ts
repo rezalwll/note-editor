@@ -65,22 +65,24 @@ async function main() {
   }
 
   if (!notebook && ownerId && defaultGroupId) {
-    await prisma.notebook.create({
+    const createdNotebook = await prisma.notebook.create({
       data: {
         userId: ownerId,
         groupId: defaultGroupId,
         name: "Quick Notes",
         description: "Personal space for thoughts, plans, and study notes.",
-        pages: {
-          create: {
-            userId: ownerId,
-            title: "Welcome",
-            bodyHtml:
-              "<h1>Welcome</h1><p>Your notebook is ready. Change the default password from Security settings first.</p>",
-            bodyText:
-              "Welcome Your notebook is ready. Change the default password from Security settings first.",
-          },
-        },
+      },
+    });
+
+    await prisma.page.create({
+      data: {
+        userId: ownerId,
+        notebookId: createdNotebook.id,
+        title: "Welcome",
+        bodyHtml:
+          "<h1>Welcome</h1><p>Your notebook is ready. Change the default password from Security settings first.</p>",
+        bodyText:
+          "Welcome Your notebook is ready. Change the default password from Security settings first.",
       },
     });
   }
