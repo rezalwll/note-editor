@@ -15,10 +15,10 @@ export function LoginForm() {
   const next = searchParams.get("next") ?? "/";
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="next" value={next} />
-      <div className="space-y-2">
-        <label htmlFor="username" className="text-sm font-medium text-stone-700">
+      <div className="space-y-3">
+        <label htmlFor="username" className="mb-3 block text-sm font-medium text-stone-700">
           نام کاربری
         </label>
         <input
@@ -33,8 +33,8 @@ export function LoginForm() {
           placeholder="نام کاربری خود را وارد کنید"
         />
       </div>
-      <div className="space-y-2">
-        <label htmlFor="password" className="text-sm font-medium text-stone-700">
+      <div className="space-y-3">
+        <label htmlFor="password" className="mb-3 block text-sm font-medium text-stone-700">
           رمز عبور
         </label>
         <input

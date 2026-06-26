@@ -22,9 +22,6 @@ export default function SignupPage() {
             <h2 className="font-serif text-4xl tracking-tight text-stone-950">
               شروع فضای کاری شما
             </h2>
-            <p className="text-sm leading-7 text-stone-600">
-              یک نام کاربری و رمز عبور انتخاب کنید تا یادداشت‌هایتان فقط برای حساب خودتان باقی بماند.
-            </p>
           </div>
           <SignupForm />
         </section>
