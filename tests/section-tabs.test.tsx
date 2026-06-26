@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   createNotebook: vi.fn(),
   createGroup: vi.fn(),
   emptyTrash: vi.fn(),
+  archiveNotebook: vi.fn(),
+  deleteGroup: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
   openMenu: vi.fn(),
@@ -33,12 +35,12 @@ vi.mock("@/components/context-menu", () => ({
 }));
 
 vi.mock("@/app/actions", () => ({
-  archiveNotebookInlineAction: vi.fn(),
+  archiveNotebookInlineAction: mocks.archiveNotebook,
   assignNotebookGroupInlineAction: vi.fn(),
   createNotebookGroupInlineAction: mocks.createGroup,
   createNotebookInlineAction: mocks.createNotebook,
   deleteNotebookPermanentlyInlineAction: vi.fn(),
-  deleteNotebookGroupInlineAction: vi.fn(),
+  deleteNotebookGroupInlineAction: mocks.deleteGroup,
   emptyTrashInlineAction: mocks.emptyTrash,
   renameNotebookGroupInlineAction: vi.fn(),
   renameNotebookInlineAction: vi.fn(),
@@ -51,6 +53,14 @@ describe("SectionTabs", () => {
     mocks.createNotebook.mockResolvedValue({
       id: "notebook-2",
       pageId: "page-2",
+    });
+    mocks.archiveNotebook.mockResolvedValue({
+      success: true,
+      trashGroupId: "trash-group",
+    });
+    mocks.deleteGroup.mockResolvedValue({
+      success: true,
+      trashGroupId: "trash-group",
     });
     mocks.emptyTrash.mockResolvedValue({ success: true, deletedCount: 1 });
     mocks.createGroup.mockResolvedValue({
@@ -272,5 +282,57 @@ describe("SectionTabs", () => {
     );
 
     expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
+  });
+
+  it("does not switch to trash after deleting a notebook", async () => {
+    render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 2, systemKey: null },
+          {
+            id: "trash-group",
+            name: "Trash",
+            notebookCount: 1,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: ["page-1"],
+          },
+          {
+            id: "notebook-2",
+            name: "Docs",
+            groupId: "group-1",
+            pageIds: ["page-2"],
+          },
+          {
+            id: "trash-pages",
+            name: "Deleted Pages",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            systemKey: "deleted-pages",
+            pageIds: ["page-trash"],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: "Inbox" }));
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const deleteAction = menu.items.find(
+      (item: { id: string; onSelect?: () => void }) => item.id === "delete",
+    );
+
+    deleteAction.onSelect();
+
+    await waitFor(() => {
+      expect(mocks.archiveNotebook).toHaveBeenCalledWith("notebook-1");
+    });
+    expect(mocks.push).toHaveBeenCalledWith("/notebooks/notebook-2");
+    expect(mocks.push).not.toHaveBeenCalledWith("/trash");
   });
 });

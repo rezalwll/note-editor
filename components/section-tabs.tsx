@@ -537,8 +537,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       updateNotebooks({ type: "remove-many", notebookIds });
       setSelectedNotebookIds([]);
 
-      let trashGroupId: string | undefined;
-
       if (permanently) {
         await Promise.all(
           notebookIds.map((notebookId) =>
@@ -546,24 +544,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           ),
         );
       } else {
-        const results = await Promise.all(
+        await Promise.all(
           notebookIds.map((notebookId) =>
             archiveNotebookInlineAction(notebookId),
           ),
         );
-        trashGroupId = results.find(
-          (result) => "trashGroupId" in result && Boolean(result.trashGroupId),
-        )?.trashGroupId;
       }
 
       if (shouldRedirect) {
         router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/");
       }
-
-      if (trashGroupId) {
-        setManualGroupKey(trashGroupId);
-      }
-
       router.refresh();
     });
   }
@@ -588,12 +578,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
   function deleteGroup(groupId: string) {
     startTransition(async () => {
-      const result = await deleteNotebookGroupInlineAction(groupId);
-
-      if ("trashGroupId" in result && result.trashGroupId) {
-        setManualGroupKey(result.trashGroupId);
-      }
-
+      await deleteNotebookGroupInlineAction(groupId);
       router.refresh();
     });
   }

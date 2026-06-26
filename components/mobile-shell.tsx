@@ -530,10 +530,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     closeActionSheet();
 
     startTransition(async () => {
-      const result = await deleteNotebookGroupInlineAction(groupId);
-      if ("trashGroupId" in result && result.trashGroupId) {
-        setSelectedGroupId(result.trashGroupId);
-      }
+      await deleteNotebookGroupInlineAction(groupId);
       if (activeGroupId === groupId) {
         setSelectedNotebookId(null);
       }
@@ -548,10 +545,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       if (notebook.deletedAt) {
         await deleteNotebookPermanentlyInlineAction(notebook.id);
       } else {
-        const result = await archiveNotebookInlineAction(notebook.id);
-        if ("trashGroupId" in result && result.trashGroupId) {
-          setSelectedGroupId(result.trashGroupId);
-        }
+        await archiveNotebookInlineAction(notebook.id);
       }
 
       if (routeNotebook?.id === notebook.id || activePageId) {
