@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { normalizeUsername } from "@/lib/users";
+import { normalizeEmail, normalizeUsername } from "@/lib/users";
 
 const SESSION_COOKIE = "notebook_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 14;
@@ -33,6 +33,16 @@ export async function getUserByUsername(username: string) {
   try {
     return await prisma.user.findUnique({
       where: { username: normalizeUsername(username) },
+    });
+  } catch (error) {
+    mapDatabaseError(error);
+  }
+}
+
+export async function getUserByEmail(email: string) {
+  try {
+    return await prisma.user.findUnique({
+      where: { email: normalizeEmail(email) },
     });
   } catch (error) {
     mapDatabaseError(error);

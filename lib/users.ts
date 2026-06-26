@@ -2,6 +2,10 @@ export function normalizeUsername(value: string) {
   return value.trim();
 }
 
+export function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export function getUserInitials(displayName: string) {
   const parts = displayName
     .trim()

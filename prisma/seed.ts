@@ -40,10 +40,35 @@ async function main() {
         },
   });
 
-  if (!notebook && ownerId) {
+  let defaultGroupId =
+    ownerId
+      ? (
+          await prisma.notebookGroup.findFirst({
+            where: {
+              userId: ownerId,
+              systemKey: null,
+            },
+            select: { id: true },
+          })
+        )?.id
+      : null;
+
+  if (!defaultGroupId && ownerId) {
+    const group = await prisma.notebookGroup.create({
+      data: {
+        userId: ownerId,
+        name: "General",
+      },
+    });
+
+    defaultGroupId = group.id;
+  }
+
+  if (!notebook && ownerId && defaultGroupId) {
     await prisma.notebook.create({
       data: {
         userId: ownerId,
+        groupId: defaultGroupId,
         name: "Quick Notes",
         description: "Personal space for thoughts, plans, and study notes.",
         pages: {

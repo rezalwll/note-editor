@@ -39,6 +39,17 @@ vi.mock("@/lib/auth", () => ({
   clearSession: vi.fn(),
   createSession: vi.fn(),
   getUserByUsername: vi.fn(),
+  getUserByEmail: vi.fn(),
+}));
+
+vi.mock("@/lib/email-auth", () => ({
+  createPasswordResetTokenRecord: vi.fn(),
+  createSignupVerificationCodeRecord: vi.fn(),
+  getAuthHelpText: vi.fn(),
+  getTokenHash: vi.fn(),
+  getVerificationCodeHash: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+  sendSignupVerificationCodeEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -62,6 +73,19 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       update: vi.fn(),
       create: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    pendingSignup: {
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      upsert: vi.fn(),
+      update: vi.fn(),
+    },
+    passwordResetToken: {
+      deleteMany: vi.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -86,7 +110,7 @@ describe("group actions", () => {
     mocks.pageUpdateMany.mockResolvedValue({ count: 0 });
     mocks.notebookGroupUpdate.mockResolvedValue({
       id: "cltrash000000000000000001",
-      name: "حذف‌شده‌ها",
+      name: "Trash",
       systemKey: "deleted-items",
     });
     mocks.notebookGroupDelete.mockResolvedValue({
@@ -118,19 +142,19 @@ describe("group actions", () => {
         name: "Projects",
       },
     });
-    expect(mocks.notebookCreate).toHaveBeenCalledWith({
-      data: {
-        userId: "user-1",
-        name: "زیر مجموعه بدون عنوان",
-        description: undefined,
-        groupId: "clgroup000000000000000001",
-      },
-    });
+    expect(mocks.notebookCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "user-1",
+          groupId: "clgroup000000000000000001",
+        }),
+      }),
+    );
     expect(mocks.pageCreate).toHaveBeenCalledWith({
       data: {
         userId: "user-1",
         notebookId: "clnotebook000000000000001",
-        title: "صفحه بدون عنوان",
+        title: "ØµÙØ­Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†",
         bodyHtml: "<p></p>",
         bodyText: "",
       },

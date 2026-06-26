@@ -57,6 +57,11 @@ export function LoginForm() {
         ورود
       </SubmitButton>
       <p className="text-center text-sm text-stone-600">
+        <Link href="/forgot-password" className="font-medium text-amber-700 hover:text-amber-800">
+          رمز عبور را فراموش کرده‌اید؟
+        </Link>
+      </p>
+      <p className="text-center text-sm text-stone-600">
         حساب ندارید؟{" "}
         <Link href="/signup" className="font-medium text-amber-700 hover:text-amber-800">
           ثبت‌نام کنید

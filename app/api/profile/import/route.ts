@@ -85,7 +85,7 @@ export async function POST(request: Request) {
             data: {
               groupId: notebook.groupId,
               name: notebook.name,
-              description: notebook.description,
+              description: notebook.description ?? undefined,
               archived: notebook.archived,
               createdAt: new Date(notebook.createdAt),
               updatedAt: new Date(notebook.updatedAt),
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
               userId: user.id,
               groupId: notebook.groupId,
               name: notebook.name,
-              description: notebook.description,
+              description: notebook.description ?? undefined,
               archived: notebook.archived,
               createdAt: new Date(notebook.createdAt),
               updatedAt: new Date(notebook.updatedAt),

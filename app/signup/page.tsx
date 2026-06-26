@@ -9,7 +9,15 @@ export const metadata: Metadata = {
   title: getSectionDocumentTitle("ثبت نام"),
 };
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams: Promise<{
+    email?: string;
+  }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const { email } = await searchParams;
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_30%),linear-gradient(180deg,_#f4fbf8_0%,_#edf7ff_100%)] px-4 py-8">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-xl items-center">
@@ -23,7 +31,7 @@ export default function SignupPage() {
               شروع فضای کاری شما
             </h2>
           </div>
-          <SignupForm />
+          <SignupForm initialEmail={email} />
         </section>
       </div>
     </main>

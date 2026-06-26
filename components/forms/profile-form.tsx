@@ -13,9 +13,10 @@ const initialState: ProfileActionState = {};
 type ProfileFormProps = {
   username: string;
   displayName: string;
+  email: string;
 };
 
-export function ProfileForm({ username, displayName }: ProfileFormProps) {
+export function ProfileForm({ username, displayName, email }: ProfileFormProps) {
   const [state, formAction] = useActionState(updateProfileAction, initialState);
 
   return (
@@ -41,6 +42,18 @@ export function ProfileForm({ username, displayName }: ProfileFormProps) {
             defaultValue={username}
             autoComplete="username"
             autoCapitalize="none"
+            dir="ltr"
+            className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition focus:border-amber-500"
+          />
+        </label>
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-stone-700">ایمیل</span>
+          <input
+            name="email"
+            type="email"
+            required
+            defaultValue={email}
+            autoComplete="email"
             dir="ltr"
             className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition focus:border-amber-500"
           />

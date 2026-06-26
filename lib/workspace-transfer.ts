@@ -25,7 +25,7 @@ const groupSchema = z.object({
 
 const notebookSchema = z.object({
   id: z.string().cuid(),
-  groupId: z.string().cuid().nullable(),
+  groupId: z.string().cuid(),
   name: z.string(),
   description: z.string().nullable(),
   archived: z.boolean(),
@@ -115,7 +115,7 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
   const attachmentFiles = new Map<string, Uint8Array>();
 
   for (const notebook of workspace.data.notebooks) {
-    if (notebook.groupId && !groupIds.has(notebook.groupId)) {
+    if (!groupIds.has(notebook.groupId)) {
       throw new Error("در آرشیو دفتری وجود دارد که دسته‌ی آن پیدا نشد.");
     }
   }
