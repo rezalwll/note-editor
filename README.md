@@ -45,6 +45,12 @@ npm run dev
 - `SESSION_COOKIE_SECURE`: set to `true` only when the app is served behind HTTPS
 - `UPLOAD_DIR`: attachment storage folder
 - `MAX_UPLOAD_SIZE_MB`: upload limit for images and PDFs
+- `EMAIL_ENABLED`: set to `true` to send signup and password-reset emails
+- `MAIL_PROVIDER`: currently `gmail`
+- `GMAIL_USER` / `GMAIL_APP_PASSWORD`: Gmail sender account and app password
+- `MAIL_FROM`: sender address shown to users
+- `APP_BASE_URL`: public app URL used in email links, for example `https://notavanote.ir`
+- `SUPPORT_EMAIL`: optional contact shown in auth help text
 
 ## Verification
 

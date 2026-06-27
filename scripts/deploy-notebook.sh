@@ -158,9 +158,23 @@ deploy_files() {
 write_env() {
   local existing_session_secret
   local existing_bootstrap_password
+  local existing_email_enabled
+  local existing_mail_provider
+  local existing_gmail_user
+  local existing_gmail_app_password
+  local existing_app_base_url
+  local existing_mail_from
+  local existing_support_email
 
   existing_session_secret=$(read_env_value "${APP_DIR}/.env" SESSION_SECRET || true)
   existing_bootstrap_password=$(read_env_value "${APP_DIR}/.env" BOOTSTRAP_PASSWORD || true)
+  existing_email_enabled=$(read_env_value "${APP_DIR}/.env" EMAIL_ENABLED || true)
+  existing_mail_provider=$(read_env_value "${APP_DIR}/.env" MAIL_PROVIDER || true)
+  existing_gmail_user=$(read_env_value "${APP_DIR}/.env" GMAIL_USER || true)
+  existing_gmail_app_password=$(read_env_value "${APP_DIR}/.env" GMAIL_APP_PASSWORD || true)
+  existing_app_base_url=$(read_env_value "${APP_DIR}/.env" APP_BASE_URL || true)
+  existing_mail_from=$(read_env_value "${APP_DIR}/.env" MAIL_FROM || true)
+  existing_support_email=$(read_env_value "${APP_DIR}/.env" SUPPORT_EMAIL || true)
 
   if [[ -n "${existing_session_secret}" ]]; then
     SESSION_SECRET_VALUE=${existing_session_secret}
@@ -172,6 +186,18 @@ write_env() {
     BOOTSTRAP_PASSWORD=${existing_bootstrap_password}
   fi
 
+  EMAIL_ENABLED_VALUE=${EMAIL_ENABLED:-${existing_email_enabled:-false}}
+  MAIL_PROVIDER_VALUE=${MAIL_PROVIDER:-${existing_mail_provider:-}}
+  GMAIL_USER_VALUE=${GMAIL_USER:-${existing_gmail_user:-}}
+  GMAIL_APP_PASSWORD_VALUE=${GMAIL_APP_PASSWORD:-${existing_gmail_app_password:-}}
+  APP_BASE_URL_VALUE=${APP_BASE_URL:-${existing_app_base_url:-}}
+  MAIL_FROM_VALUE=${MAIL_FROM:-${existing_mail_from:-}}
+  SUPPORT_EMAIL_VALUE=${SUPPORT_EMAIL:-${existing_support_email:-}}
+
+  if [[ -z "${APP_BASE_URL_VALUE}" && -n "${DOMAIN}" ]]; then
+    APP_BASE_URL_VALUE="https://${DOMAIN}"
+  fi
+
   cat >"${STAGING_DIR}/.env" <<ENVEOF
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
 SESSION_SECRET="${SESSION_SECRET_VALUE}"
@@ -180,6 +206,13 @@ SESSION_COOKIE_SECURE="$([[ -n "${DOMAIN}" ]] && echo "true" || echo "false")"
 NEXT_PUBLIC_ENABLE_PWA="false"
 UPLOAD_DIR="./uploads"
 MAX_UPLOAD_SIZE_MB="10"
+EMAIL_ENABLED="${EMAIL_ENABLED_VALUE}"
+MAIL_PROVIDER="${MAIL_PROVIDER_VALUE}"
+GMAIL_USER="${GMAIL_USER_VALUE}"
+GMAIL_APP_PASSWORD="${GMAIL_APP_PASSWORD_VALUE}"
+APP_BASE_URL="${APP_BASE_URL_VALUE}"
+MAIL_FROM="${MAIL_FROM_VALUE}"
+SUPPORT_EMAIL="${SUPPORT_EMAIL_VALUE}"
 ENVEOF
 
   cat >/root/notebook-db.env <<ENVEOF

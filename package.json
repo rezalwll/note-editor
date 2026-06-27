@@ -20,6 +20,9 @@
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@emnapi/core": "^1.11.1",
+    "@emnapi/runtime": "^1.11.1",
+    "@floating-ui/dom": "^1.7.6",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@tiptap/extension-code-block-lowlight": "^3.25.0",

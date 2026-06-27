@@ -6,17 +6,25 @@ const isDevelopment = process.env.NODE_ENV !== "production";
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const isGuestOnlyRoute =
+    pathname === "/login" ||
+    pathname === "/signup";
+  const isPublicAuthRoute =
+    isGuestOnlyRoute ||
+    pathname === "/signup/verify" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
 
   if (isDevelopment) {
     return NextResponse.next();
   }
 
-  if (pathname === "/login" || pathname === "/signup") {
+  if (isPublicAuthRoute) {
     const session = await verifySession(
       request.cookies.get(getSessionCookieName())?.value,
     );
 
-    if (session?.userId) {
+    if (isGuestOnlyRoute && session?.userId) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
