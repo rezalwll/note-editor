@@ -154,7 +154,7 @@ describe("group actions", () => {
       data: {
         userId: "user-1",
         notebookId: "clnotebook000000000000001",
-        title: "ØµÙØ­Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†",
+        title: "صفحه بدون عنوان",
         bodyHtml: "<p></p>",
         bodyText: "",
       },

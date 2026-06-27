@@ -79,7 +79,7 @@ const notebookGroupSchema = z.object({
 });
 
 const notebookNameSchema = z.string().trim().min(1).max(80);
-const defaultInlinePageTitle = "ØµÙØ­Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†";
+const defaultInlinePageTitle = "صفحه بدون عنوان";
 
 const pageSchema = z.object({
   notebookId: z.string().cuid(),
@@ -805,14 +805,14 @@ export async function createNotebookInlineAction(
   const parsedGroupId = z.string().cuid().safeParse(groupId);
 
   if (!parsedName.success || !parsedGroupId.success) {
-    return { error: "Ù†Ø§Ù… Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "نام زیر مجموعه معتبر نیست." };
   }
 
   {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
     if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
-      return { error: "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+      return { error: "مجموعه معتبر نیست." };
     }
   }
 
@@ -851,7 +851,7 @@ export async function createNotebookGroupInlineAction(name: string) {
   const parsed = notebookGroupSchema.safeParse({ name });
 
   if (!parsed.success) {
-    return { error: "Ù†Ø§Ù… Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø§Ù„Ø²Ø§Ù…ÛŒ Ø§Ø³Øª." };
+    return { error: "نام مجموعه الزامی است." };
   }
 
   const { group, notebook, page } = await prisma.$transaction(async (tx) => {
@@ -865,7 +865,7 @@ export async function createNotebookGroupInlineAction(name: string) {
     const notebook = await tx.notebook.create({
       data: {
         userId: user.id,
-        name: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†",
+        name: "زیر مجموعه بدون عنوان",
         description: undefined,
         groupId: group.id,
       },
@@ -897,18 +897,18 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
   const groupName = z.string().trim().max(80).safeParse(name);
 
   if (!groupId.success || !groupName.success) {
-    return { error: "Ù†Ø§Ù… Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "نام مجموعه معتبر نیست." };
   }
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
   if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
-    return { error: "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "مجموعه پیدا نشد." };
   }
 
   await prisma.notebookGroup.update({
     where: { id: group.id },
-    data: { name: groupName.data || "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†" },
+    data: { name: groupName.data || "مجموعه بدون عنوان" },
   });
 
   revalidatePath("/");
@@ -921,13 +921,13 @@ export async function deleteNotebookGroupInlineAction(id: string) {
   const groupId = z.string().cuid().safeParse(id);
 
   if (!groupId.success) {
-    return { error: "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "مجموعه معتبر نیست." };
   }
 
   const group = await getOwnedGroup(user.id, groupId.data);
 
   if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
-    return { error: "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "مجموعه پیدا نشد." };
   }
 
   const trashGroup = await ensureTrashGroup(user.id);
@@ -965,7 +965,7 @@ export async function deleteNotebookGroupInlineAction(id: string) {
             data: {
               userId: user.id,
               groupId: trashGroup.id,
-              name: group.name || "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†",
+              name: group.name || "مجموعه بدون عنوان",
               deletedAt,
             },
           }),
@@ -987,7 +987,7 @@ export async function assignNotebookGroupInlineAction(
   const parsedGroupId = z.string().cuid().safeParse(groupId);
 
   if (!parsedNotebookIds.success || !parsedGroupId.success) {
-    return { error: "Ø§Ù†ØªØ®Ø§Ø¨ Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "انتخاب مجموعه معتبر نیست." };
   }
 
   const notebooks = await prisma.notebook.findMany({
@@ -999,14 +999,14 @@ export async function assignNotebookGroupInlineAction(
     notebooks.length !== parsedNotebookIds.data.length ||
     notebooks.some((notebook) => notebook.systemKey)
   ) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "زیر مجموعه معتبر نیست." };
   }
 
   {
     const group = await getOwnedGroup(user.id, parsedGroupId.data);
 
     if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
-      return { error: "Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+      return { error: "مجموعه پیدا نشد." };
     }
   }
 
@@ -1027,13 +1027,13 @@ export async function renameNotebookInlineAction(id: string, name: string) {
   const notebookName = notebookNameSchema.safeParse(name);
 
   if (!notebookId.success || !notebookName.success) {
-    return { error: "Ù†Ø§Ù… Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "نام زیر مجموعه معتبر نیست." };
   }
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
   if (!notebook || notebook.systemKey) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "زیر مجموعه پیدا نشد." };
   }
 
   await prisma.notebook.update({
@@ -1099,13 +1099,13 @@ export async function archiveNotebookInlineAction(id: string) {
   const notebookId = z.string().cuid().safeParse(id);
 
   if (!notebookId.success) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "زیر مجموعه معتبر نیست." };
   }
 
   const notebook = await getOwnedNotebook(user.id, notebookId.data);
 
   if (!notebook || notebook.systemKey || notebook.deletedAt) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "زیر مجموعه پیدا نشد." };
   }
 
   const trashGroupId = await moveNotebookToTrash(user.id, notebook.id);
@@ -1119,12 +1119,12 @@ export async function deleteNotebookPermanentlyInlineAction(id: string) {
   const notebookId = z.string().cuid().safeParse(id);
 
   if (!notebookId.success) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "زیر مجموعه معتبر نیست." };
   }
 
   const deletedCount = await deleteTrashNotebooks(user.id, [notebookId.data]);
   if (deletedCount === 0) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "زیر مجموعه حذف‌شده پیدا نشد." };
   }
 
   revalidatePath("/");
@@ -1172,13 +1172,13 @@ export async function createPageInlineAction(notebookId: string, title: string) 
   });
 
   if (!parsed.success) {
-    return { error: "Ø¹Ù†ÙˆØ§Ù† ØµÙØ­Ù‡ Ø§Ù„Ø²Ø§Ù…ÛŒ Ø§Ø³Øª." };
+    return { error: "عنوان صفحه الزامی است." };
   }
 
   const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
 
   if (!notebook || notebook.archived || notebook.deletedAt) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "زیر مجموعه پیدا نشد." };
   }
 
   const page = await prisma.page.create({
@@ -1219,12 +1219,12 @@ export async function archivePageInlineAction(pageId: string) {
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
-    return { error: "ØµÙØ­Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "صفحه معتبر نیست." };
   }
 
   const result = await movePageToTrash(user.id, parsedPageId.data);
   if (!result) {
-    return { error: "ØµÙØ­Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "صفحه پیدا نشد." };
   }
 
   revalidatePath(`/notebooks/${result.notebookId}`);
@@ -1242,12 +1242,12 @@ export async function restorePageInlineAction(pageId: string) {
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
-    return { error: "ØµÙØ­Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "صفحه معتبر نیست." };
   }
 
   const result = await restorePageFromTrash(user.id, parsedPageId.data);
   if (!result) {
-    return { error: "Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø§ØµÙ„ÛŒ ØµÙØ­Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "زیر مجموعه اصلی صفحه پیدا نشد." };
   }
 
   revalidatePath(`/notebooks/${result.notebookId}`);
@@ -1261,12 +1261,12 @@ export async function deletePagePermanentlyInlineAction(pageId: string) {
   const parsedPageId = z.string().cuid().safeParse(pageId);
 
   if (!parsedPageId.success) {
-    return { error: "ØµÙØ­Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª." };
+    return { error: "صفحه معتبر نیست." };
   }
 
   const deleted = await deleteTrashPage(user.id, parsedPageId.data);
   if (!deleted) {
-    return { error: "ØµÙØ­Ù‡ Ø­Ø°Ùâ€ŒØ´Ø¯Ù‡ Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯." };
+    return { error: "صفحه حذف‌شده پیدا نشد." };
   }
 
   revalidatePath("/");

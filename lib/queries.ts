@@ -1,9 +1,11 @@
 import { cache } from "react";
 
+import { repairKnownMojibake } from "@/lib/mojibake-repair";
 import { prisma } from "@/lib/prisma";
 import { purgeExpiredTrash, TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
 
 export const getSidebarData = cache(async (userId: string) => {
+  await repairKnownMojibake();
   await purgeExpiredTrash(userId);
 
   const [groups, notebooks] = await Promise.all([

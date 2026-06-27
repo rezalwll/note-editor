@@ -107,7 +107,7 @@ describe("SectionTabs", () => {
   it("hides new notebook creation when no writable group exists", () => {
     render(<SectionTabs groups={[]} notebooks={[]} />);
 
-    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
     expect(screen.getByRole("button")).toBeInTheDocument();
     expect(mocks.createNotebook).not.toHaveBeenCalled();
   });
@@ -162,7 +162,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.queryByTitle("Ø²ÛŒØ± Ù…Ø¬Ù…ÙˆØ¹Ù‡ Ø¬Ø¯ÛŒØ¯")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
   });
 
   it("removes the new notebook action from the empty-area menu inside trash", () => {
@@ -264,7 +264,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.queryByTitle("Ã˜Â²Ã›Å’Ã˜Â± Ã™â€¦Ã˜Â¬Ã™â€¦Ã™Ë†Ã˜Â¹Ã™â€¡ Ã˜Â¬Ã˜Â¯Ã›Å’Ã˜Â¯")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
   });
 
   it("does not switch to trash after deleting a notebook", async () => {
