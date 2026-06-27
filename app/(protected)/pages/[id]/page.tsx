@@ -54,6 +54,7 @@ export default async function PageView({ params }: PageViewProps) {
         <NoteEditor
           userId={user.id}
           notebookId={page.notebook.id}
+          notebookThemeKey={page.notebook.themeKey}
           pageId={page.id}
           initialTitle={page.title}
           initialHtml={page.bodyHtml}

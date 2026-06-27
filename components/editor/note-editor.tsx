@@ -43,6 +43,7 @@ type Attachment = {
 type NoteEditorProps = {
   userId: string;
   notebookId: string;
+  notebookThemeKey?: string | null;
   pageId: string;
   initialTitle: string;
   initialHtml: string;
@@ -50,7 +51,10 @@ type NoteEditorProps = {
   attachments: Attachment[];
 };
 
-type BlockSnapshot = Pick<FreeformBlock, "text" | "align" | "bold" | "italic">;
+type BlockSnapshot = Pick<
+  FreeformBlock,
+  "text" | "align" | "bold" | "italic" | "textColor" | "fontSize"
+>;
 type CanvasCoordinates = {
   x: number;
   y: number;
@@ -171,6 +175,8 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
             y: 72,
             text: "",
             align: "right",
+            textColor: "#222222",
+            fontSize: 15,
           },
         ];
   }
@@ -187,6 +193,8 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
       y: 72,
       text: plainText,
       align: "right",
+      textColor: "#222222",
+      fontSize: 15,
     },
   ];
 }
@@ -197,6 +205,8 @@ function toSnapshot(block: FreeformBlock): BlockSnapshot {
     align: block.align ?? "right",
     bold: block.bold ?? false,
     italic: block.italic ?? false,
+    textColor: block.textColor ?? "#222222",
+    fontSize: block.fontSize ?? 15,
   };
 }
 
@@ -207,6 +217,8 @@ function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
     align: snapshotValue.align ?? "right",
     bold: snapshotValue.bold ?? false,
     italic: snapshotValue.italic ?? false,
+    textColor: snapshotValue.textColor ?? "#222222",
+    fontSize: snapshotValue.fontSize ?? 15,
   };
 }
 
@@ -225,6 +237,7 @@ function getCurrentLineRange(text: string, position: number) {
 export function NoteEditor({
   userId,
   notebookId,
+  notebookThemeKey,
   pageId,
   initialTitle,
   initialHtml,
@@ -232,7 +245,7 @@ export function NoteEditor({
   attachments: _initialAttachments,
 }: NoteEditorProps) {
   const { openMenu } = useContextMenu();
-  const notebookTheme = getNotebookTheme(notebookId);
+  const notebookTheme = getNotebookTheme(notebookId, notebookThemeKey);
   const displayTimestamp = useMemo(
     () => new Date(initialUpdatedAt),
     [initialUpdatedAt],
@@ -695,6 +708,8 @@ export function NoteEditor({
       width,
       text: "",
       align: "right",
+      textColor: "#222222",
+      fontSize: 15,
     };
 
     const addBlock = () => {
@@ -1126,7 +1141,11 @@ export function NoteEditor({
     );
   }
 
-  const handleEditorCommand = useEffectEvent((command: EditorCommand) => {
+  const handleEditorCommand = useEffectEvent(
+    (
+      command: EditorCommand,
+      payload?: { textColor?: string; fontSize?: number },
+    ) => {
     const targetIds =
       selectedBlockIds.length > 0
         ? selectedBlockIds
@@ -1186,16 +1205,36 @@ export function NoteEditor({
       case "align-justify":
         updateBlocksByIds(targetIds, (block) => ({ ...block, align: "justify" }));
         return;
+      case "set-text-color":
+        updateBlocksByIds(targetIds, (block) => ({
+          ...block,
+          textColor: payload?.textColor ?? "#222222",
+        }));
+        return;
+      case "set-font-size":
+        updateBlocksByIds(targetIds, (block) => ({
+          ...block,
+          fontSize: Math.min(32, Math.max(13, payload?.fontSize ?? 15)),
+        }));
+        return;
       case "delete-block":
         deleteBlocks(targetIds);
         return;
     }
-  });
+    },
+  );
 
   useEffect(() => {
     const listener = (event: Event) => {
-      const customEvent = event as CustomEvent<{ command: EditorCommand }>;
-      handleEditorCommand(customEvent.detail.command);
+      const customEvent = event as CustomEvent<{
+        command: EditorCommand;
+        textColor?: string;
+        fontSize?: number;
+      }>;
+      handleEditorCommand(customEvent.detail.command, {
+        textColor: customEvent.detail.textColor,
+        fontSize: customEvent.detail.fontSize,
+      });
     };
 
     window.addEventListener("note-editor-command", listener);
@@ -1210,6 +1249,8 @@ export function NoteEditor({
           align: activeBlock?.align ?? "right",
           bold: activeBlock?.bold ?? false,
           italic: activeBlock?.italic ?? false,
+          textColor: activeBlock?.textColor ?? "#222222",
+          fontSize: activeBlock?.fontSize ?? 15,
           selectionCount: selectedBlockIds.length,
         },
       }),
@@ -1522,6 +1563,8 @@ export function NoteEditor({
                       textAlign: block.align ?? "right",
                       fontWeight: block.bold ? 700 : 400,
                       fontStyle: block.italic ? "italic" : "normal",
+                      color: block.textColor ?? "#222222",
+                      fontSize: `${block.fontSize ?? 15}px`,
                       boxShadow: isSelected
                         ? `0 0 0 2px ${notebookTheme.accent}`
                         : "none",

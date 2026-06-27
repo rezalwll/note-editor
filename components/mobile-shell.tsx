@@ -41,7 +41,7 @@ import {
   type NotebookRenamedDetail,
   type PageTitleUpdatedDetail,
 } from "@/lib/page-events";
-import { getNotebookTheme } from "@/lib/notebook-theme";
+import { getNotebookTheme, getRandomThemeKey } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
 
 type MobileNotebook = {
@@ -49,6 +49,7 @@ type MobileNotebook = {
   name: string;
   groupId: string | null;
   groupName: string | null;
+  themeKey?: string | null;
   systemKey?: string | null;
   pages: Array<{
     id: string;
@@ -64,6 +65,7 @@ type MobileGroup = {
   id: string;
   name: string;
   notebookCount: number;
+  themeKey?: string | null;
   systemKey: string | null;
 };
 
@@ -366,8 +368,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         : activeGroupNotebooks[0] ?? null;
 
   const activeTheme = activeNotebook
-    ? getNotebookTheme(activeNotebook.id)
-    : getNotebookTheme(activeGroupNotebooks[0]?.id ?? "default");
+    ? getNotebookTheme(activeNotebook.id, activeNotebook.themeKey)
+    : getNotebookTheme(
+        activeGroupNotebooks[0]?.id ?? "default",
+        activeGroupNotebooks[0]?.themeKey,
+      );
 
   const actionGroup =
     actionSheet?.type === "group"
@@ -500,7 +505,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     const nextName = draftGroupName.trim() || "مجموعه جدید";
 
     startTransition(async () => {
-      const result = await createNotebookGroupInlineAction(nextName);
+      const result = await createNotebookGroupInlineAction(
+        nextName,
+        getRandomThemeKey(`group-${nextName}`),
+        getRandomThemeKey(`notebook-${nextName}`),
+      );
 
       if (
         !("id" in result) ||
@@ -519,6 +528,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
           id: result.id,
           name: nextName,
           notebookCount: 1,
+          themeKey: "themeKey" in result ? result.themeKey : null,
           systemKey: null,
         },
       ]);
@@ -832,7 +842,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                         <div className="mt-2 grid gap-2 pr-3">
                           {group.notebooks.length > 0 ? (
                             group.notebooks.map((notebook) => {
-                              const theme = getNotebookTheme(notebook.id);
+                              const theme = getNotebookTheme(notebook.id, notebook.themeKey);
                               const isActiveNotebook = activeNotebook?.id === notebook.id;
                               const canManageNotebook = !notebook.systemKey;
                               const isEditingNotebook = editingNotebookId === notebook.id;
@@ -959,7 +969,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {activeGroupNotebooks.map((notebook) => {
                   const isActiveNotebook = notebook.id === activeNotebook?.id;
-                  const notebookTheme = getNotebookTheme(notebook.id);
+                  const notebookTheme = getNotebookTheme(notebook.id, notebook.themeKey);
 
                   return (
                     <Link

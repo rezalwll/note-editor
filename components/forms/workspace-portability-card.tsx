@@ -31,11 +31,13 @@ export function WorkspacePortabilityCard() {
       };
 
       if (!response.ok) {
-        throw new Error(payload.error || "ایمپورت انجام نشد.");
+        throw new Error(payload.error || "بازیابی انجام نشد.");
       }
 
       setSuccess(
-        `${payload.imported?.notebooks ?? 0} زیر مجموعه و ${payload.imported?.pages ?? 0} صفحه با موفقیت ایمپورت شد.`,
+        `${payload.imported?.notebooks ?? 0} زیرمجموعه و ${
+          payload.imported?.pages ?? 0
+        } صفحه با موفقیت بازیابی شد.`,
       );
       formRef.current?.reset();
       router.refresh();
@@ -43,7 +45,7 @@ export function WorkspacePortabilityCard() {
       setError(
         submissionError instanceof Error
           ? submissionError.message
-          : "ایمپورت انجام نشد.",
+          : "بازیابی انجام نشد.",
       );
     } finally {
       setPending(false);
@@ -53,15 +55,15 @@ export function WorkspacePortabilityCard() {
   return (
     <div className="space-y-4">
       <div className="rounded-[20px] border border-stone-200 bg-stone-50/70 p-4">
-        <p className="text-sm font-medium text-stone-800">اکسپورت فضای کاری</p>
+        <p className="text-sm font-medium text-stone-800">پشتیبان گیری</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          یک فایل ZIP شامل زیر مجموعه‌ها، صفحه‌ها، برچسب‌ها و فایل‌های پیوست خود دانلود کنید.
+          یک فایل zip از همه یادداشت ها
         </p>
         <a
           href="/api/profile/export"
-          className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)]"
+          className="mt-3 inline-flex items-center justify-center rounded-full bg-[#7682ff] px-4 py-2 text-sm font-semibold !text-white shadow-[0_12px_24px_rgba(118,130,255,0.28)] transition hover:bg-[#5d6bff]"
         >
-          اکسپورت همه یادداشت‌ها
+          پشتیبان گیری
         </a>
       </div>
 
@@ -74,11 +76,9 @@ export function WorkspacePortabilityCard() {
           await handleSubmit(formData);
         }}
       >
-        <p className="text-sm font-medium text-stone-800">ایمپورت به این فضا</p>
+        <p className="text-sm font-medium text-stone-800">بازیابی</p>
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
-          ایمپورت با حساب فعلی ادغام می‌شود. شناسه‌های یکسان به‌روزرسانی می‌شوند،
-          شناسه‌های جدید اضافه می‌شوند و ایمپورت دوباره‌ی همان فایل باعث تکرار
-          یادداشت‌ها نمی‌شود.
+          یادداشت های جدید شما با یادداشت های قدیمی ادغام می شوند
         </p>
         <label className="mt-3 block space-y-1.5">
           <span className="text-sm font-medium text-stone-700">فایل آرشیو</span>
@@ -104,9 +104,9 @@ export function WorkspacePortabilityCard() {
         <button
           type="submit"
           disabled={pending}
-          className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-lavender)] px-4 py-2 text-sm font-semibold !text-white transition hover:bg-[var(--color-periwinkle)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-3 inline-flex items-center justify-center rounded-full bg-[#7682ff] px-4 py-2 text-sm font-semibold !text-white shadow-[0_12px_24px_rgba(118,130,255,0.28)] transition hover:bg-[#5d6bff] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "در حال ایمپورت..." : "ایمپورت آرشیو"}
+          {pending ? "در حال بازیابی..." : "بازیابی"}
         </button>
       </form>
     </div>

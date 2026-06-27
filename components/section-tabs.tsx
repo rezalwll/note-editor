@@ -25,10 +25,18 @@ import {
   reorderNotebooksInlineAction,
   renameNotebookGroupInlineAction,
   renameNotebookInlineAction,
+  updateNotebookGroupThemeInlineAction,
+  updateNotebookThemeInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
 import { getOverflowNotebookIds } from "@/lib/notebook-tabs";
-import { getNotebookTheme } from "@/lib/notebook-theme";
+import {
+  NOTEBOOK_THEMES,
+  getGroupThemeByKey,
+  getNotebookTheme,
+  getRandomThemeKey,
+  type ThemeKey,
+} from "@/lib/notebook-theme";
 import { cn } from "@/lib/utils";
 
 type NotebookTab = {
@@ -36,6 +44,7 @@ type NotebookTab = {
   name: string;
   groupId: string | null;
   sortOrder?: number;
+  themeKey?: string | null;
   groupName?: string | null;
   systemKey?: string | null;
   deletedAt?: Date | null;
@@ -47,6 +56,7 @@ type NotebookGroupTab = {
   name: string;
   notebookCount: number;
   sortOrder?: number;
+  themeKey?: string | null;
   systemKey?: string | null;
 };
 
@@ -56,37 +66,6 @@ type SectionTabsProps = {
 };
 
 const TRASH_GROUP_KEY = "deleted-items";
-const GROUP_PILL_PALETTE = [
-  {
-    bg: "#9FA1FF",
-    border: "#858BFF",
-    text: "#2f3864",
-    badgeBg: "rgba(255,255,255,0.52)",
-    badgeText: "#2f3864",
-  },
-  {
-    bg: "#B5BAFF",
-    border: "#9DA6FF",
-    text: "#2f3864",
-    badgeBg: "rgba(255,255,255,0.52)",
-    badgeText: "#2f3864",
-  },
-  {
-    bg: "#AEE2FF",
-    border: "#8FD4FF",
-    text: "#24465B",
-    badgeBg: "rgba(255,255,255,0.56)",
-    badgeText: "#24465B",
-  },
-  {
-    bg: "#D9F9DF",
-    border: "#BAEEC4",
-    text: "#2E5440",
-    badgeBg: "rgba(255,255,255,0.6)",
-    badgeText: "#2E5440",
-  },
-] as const;
-
 function reorderIds(ids: string[], draggedId: string, targetId: string) {
   if (draggedId === targetId) {
     return ids;
@@ -130,6 +109,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       action:
         | { type: "append"; notebook: NotebookTab }
         | { type: "rename"; notebookId: string; name: string }
+        | { type: "theme"; notebookId: string; themeKey: ThemeKey }
         | { type: "remove-many"; notebookIds: string[] }
         | { type: "reorder"; groupId: string; notebookIds: string[] }
         | {
@@ -146,6 +126,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           return current.map((notebook) =>
             notebook.id === action.notebookId
               ? { ...notebook, name: action.name }
+              : notebook,
+          );
+        case "theme":
+          return current.map((notebook) =>
+            notebook.id === action.notebookId
+              ? { ...notebook, themeKey: action.themeKey }
               : notebook,
           );
         case "remove-many":
@@ -207,6 +193,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       action:
         | { type: "append"; group: NotebookGroupTab }
         | { type: "rename"; groupId: string; name: string }
+        | { type: "theme"; groupId: string; themeKey: ThemeKey }
         | { type: "reorder"; groupIds: string[] }
         | { type: "delete"; groupId: string },
     ) => {
@@ -216,6 +203,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         case "rename":
           return current.map((group) =>
             group.id === action.groupId ? { ...group, name: action.name } : group,
+          );
+        case "theme":
+          return current.map((group) =>
+            group.id === action.groupId
+              ? { ...group, themeKey: action.themeKey }
+              : group,
           );
         case "reorder": {
           const positions = new Map(
@@ -373,6 +366,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           name: group.name,
           notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
           sortOrder: group.sortOrder,
+          themeKey: group.themeKey,
           systemKey: group.systemKey ?? null,
         }))
         .sort(
@@ -386,14 +380,30 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     [groupItems],
   );
 
-  function getGroupPillTheme(index: number) {
-    return GROUP_PILL_PALETTE[index % GROUP_PILL_PALETTE.length];
+  function getGroupPillTheme(themeKey?: string | null) {
+    return getGroupThemeByKey(themeKey);
   }
 
   function isTrashGroup(groupId: string | null | undefined) {
     return groupItems.some(
       (group) => group.id === groupId && group.systemKey === TRASH_GROUP_KEY,
     );
+  }
+
+  function updateGroupTheme(groupId: string, themeKey: ThemeKey) {
+    startTransition(async () => {
+      updateGroups({ type: "theme", groupId, themeKey });
+      await updateNotebookGroupThemeInlineAction(groupId, themeKey);
+      router.refresh();
+    });
+  }
+
+  function updateNotebookTheme(notebookId: string, themeKey: ThemeKey) {
+    startTransition(async () => {
+      updateNotebooks({ type: "theme", notebookId, themeKey });
+      await updateNotebookThemeInlineAction(notebookId, themeKey);
+      router.refresh();
+    });
   }
 
   function beginCreateNotebook() {
@@ -411,6 +421,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       name: "",
       groupId: nextGroupId,
       sortOrder: activeGroupNotebooks.length,
+      themeKey: getRandomThemeKey(tempNotebookId),
       groupName: nextGroupName,
       pageIds: [],
     });
@@ -488,7 +499,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             return;
           }
 
-          const result = await createNotebookInlineAction(nextName, notebookGroupId);
+          const result = await createNotebookInlineAction(
+            nextName,
+            notebookGroupId,
+            draftNotebook.themeKey ?? undefined,
+          );
 
           if (!("id" in result) || !result.id || !("pageId" in result) || !result.pageId) {
             return;
@@ -501,6 +516,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               name: nextName,
               groupId: notebookGroupId,
               sortOrder: activeGroupNotebooks.length,
+              themeKey: "themeKey" in result ? result.themeKey : draftNotebook.themeKey,
               groupName: notebookGroupName,
               pageIds: [result.pageId],
             },
@@ -539,7 +555,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       setDraftGroupName("");
 
       startTransition(async () => {
-        const result = await createNotebookGroupInlineAction(nextName);
+        const result = await createNotebookGroupInlineAction(
+          nextName,
+          getRandomThemeKey(`group-${nextName}`),
+          getRandomThemeKey(`notebook-${nextName}`),
+        );
 
         if (
           "id" in result &&
@@ -556,6 +576,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               name: nextName,
               notebookCount: 1,
               sortOrder: groupItems.filter((group) => group.systemKey !== TRASH_GROUP_KEY).length,
+              themeKey: "themeKey" in result ? result.themeKey : null,
             },
           });
           updateNotebooks({
@@ -565,6 +586,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               name: "زیر مجموعه بدون عنوان",
               groupId: result.id,
               sortOrder: 0,
+              themeKey: "notebookThemeKey" in result ? result.notebookThemeKey : null,
               groupName: nextName,
               pageIds: [result.pageId],
             },
@@ -747,7 +769,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         className="invisible absolute left-0 right-0 top-0 -z-10 flex flex-wrap items-end gap-1 px-3 pt-2"
       >
         {activeGroupNotebooks.map((notebook) => {
-          const theme = getNotebookTheme(notebook.id);
+          const theme = getNotebookTheme(notebook.id, notebook.themeKey);
 
           return (
             <div
@@ -771,10 +793,10 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {groupTabs.map((group, index) => {
+        {groupTabs.map((group) => {
           const isActive = activeGroupKey === group.id;
           const isEditing = editingGroupId === group.id;
-          const pillTheme = getGroupPillTheme(index);
+          const pillTheme = getGroupPillTheme(group.themeKey);
           const isTrash = group.systemKey === TRASH_GROUP_KEY;
 
           return (
@@ -833,6 +855,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                             onSelect: () => beginRenameGroup(group.id, group.name),
                           },
                           { id: "separator-1", separator: true as const },
+                          ...NOTEBOOK_THEMES.map((theme) => ({
+                            id: `theme-group-${theme.key}`,
+                            label: `رنگ مجموعه: ${theme.label}`,
+                            onSelect: () => updateGroupTheme(group.id, theme.key),
+                          })),
+                          { id: "separator-2", separator: true as const },
                           {
                             id: "delete-group",
                             label: "حذف مجموعه",
@@ -852,7 +880,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
                 color: isTrash ? "#1f2937" : pillTheme.text,
                 boxShadow: isActive
-                  ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
+                  ? `0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px ${pillTheme.ring}, 0 8px 18px ${pillTheme.glow}`
                   : `0 6px 18px ${pillTheme.border}33`,
                 opacity: 0.92,
               }}
@@ -992,7 +1020,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       >
 
         {visibleNotebooks.map((notebook) => {
-          const theme = getNotebookTheme(notebook.id);
+          const theme = getNotebookTheme(notebook.id, notebook.themeKey);
           const isActive = activeNotebookId === notebook.id;
           const isEditing = editingNotebookId === notebook.id;
           const isSelected = selectedNotebookIds.includes(notebook.id);
@@ -1055,6 +1083,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                                   label: "تغییر نام زیر مجموعه",
                                   onSelect: () => beginRenameNotebook(notebook),
                                 },
+                                ...NOTEBOOK_THEMES.map((theme) => ({
+                                  id: `theme-notebook-${theme.key}`,
+                                  label: `رنگ زیرمجموعه: ${theme.label}`,
+                                  onSelect: () =>
+                                    updateNotebookTheme(notebook.id, theme.key),
+                                })),
                               ]
                             : []),
                           { id: "separator-open", separator: true as const },

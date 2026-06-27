@@ -27,6 +27,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
     name: notebook.name,
     groupId: notebook.group?.id ?? null,
     sortOrder: notebook.sortOrder,
+    themeKey: notebook.themeKey,
     groupName: notebook.group?.name ?? null,
     systemKey: notebook.systemKey,
     pages: notebook.pages.map((page) => ({
@@ -44,6 +45,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
     name: group.name,
     notebookCount: group._count.notebooks,
     sortOrder: group.sortOrder,
+    themeKey: group.themeKey,
     systemKey: group.systemKey,
   }));
 
@@ -84,6 +86,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                 name: notebook.name,
                 groupId: notebook.groupId,
                 sortOrder: notebook.sortOrder,
+                themeKey: notebook.themeKey,
                 groupName: notebook.groupName,
                 systemKey: notebook.systemKey,
                 deletedAt: notebook.deletedAt,

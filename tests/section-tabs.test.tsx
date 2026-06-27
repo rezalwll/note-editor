@@ -44,6 +44,8 @@ vi.mock("@/app/actions", () => ({
   emptyTrashInlineAction: mocks.emptyTrash,
   renameNotebookGroupInlineAction: vi.fn(),
   renameNotebookInlineAction: vi.fn(),
+  updateNotebookGroupThemeInlineAction: vi.fn(),
+  updateNotebookThemeInlineAction: vi.fn(),
 }));
 
 describe("SectionTabs", () => {
@@ -97,7 +99,11 @@ describe("SectionTabs", () => {
     await user.type(input, "Sprint Notes{Enter}");
 
     await waitFor(() => {
-      expect(mocks.createNotebook).toHaveBeenCalledWith("Sprint Notes", "group-1");
+      expect(mocks.createNotebook).toHaveBeenCalledWith(
+        "Sprint Notes",
+        "group-1",
+        expect.any(String),
+      );
     });
     expect(mocks.createNotebook).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith("/pages/page-2");
@@ -123,7 +129,11 @@ describe("SectionTabs", () => {
     await user.type(input, "Projects{Enter}");
 
     await waitFor(() => {
-      expect(mocks.createGroup).toHaveBeenCalledWith("Projects");
+      expect(mocks.createGroup).toHaveBeenCalledWith(
+        "Projects",
+        expect.any(String),
+        expect.any(String),
+      );
     });
     expect(mocks.push).toHaveBeenCalledWith("/pages/page-3");
     expect(mocks.refresh).toHaveBeenCalled();

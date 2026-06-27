@@ -41,6 +41,7 @@ import {
   restorePageFromTrash,
   TRASH_GROUP_SYSTEM_KEY,
 } from "@/lib/trash";
+import { getRandomThemeKey, isThemeKey, type ThemeKey } from "@/lib/theme-presets";
 import { normalizeEmail, normalizeUsername } from "@/lib/users";
 
 export type AuthActionState = {
@@ -72,10 +73,12 @@ export type ResetPasswordActionState = {
 const notebookSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(180).optional(),
+  themeKey: z.string().trim().optional(),
 });
 
 const notebookGroupSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  themeKey: z.string().trim().optional(),
 });
 
 const notebookNameSchema = z.string().trim().min(1).max(80);
@@ -85,6 +88,14 @@ const pageSchema = z.object({
   notebookId: z.string().cuid(),
   title: z.string().trim().min(1).max(160),
 });
+
+function parseThemeKey(value: string | null | undefined, fallbackSeed: string): ThemeKey {
+  if (isThemeKey(value)) {
+    return value;
+  }
+
+  return getRandomThemeKey(fallbackSeed);
+}
 
 const usernameSchema = z
   .string()
@@ -127,6 +138,7 @@ async function getOwnedNotebook(userId: string, id: string) {
       archived: true,
       groupId: true,
       systemKey: true,
+      themeKey: true,
       deletedAt: true,
     },
   });
@@ -142,7 +154,7 @@ async function getOwnedPage(userId: string, id: string) {
 async function getOwnedGroup(userId: string, id: string) {
   return prisma.notebookGroup.findFirst({
     where: { id, userId },
-    select: { id: true, name: true, systemKey: true, sortOrder: true },
+    select: { id: true, name: true, systemKey: true, sortOrder: true, themeKey: true },
   });
 }
 
@@ -803,6 +815,7 @@ export async function createNotebookAction(formData: FormData) {
   const parsed = notebookSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
+    themeKey: formData.get("themeKey") || undefined,
   });
 
   if (!parsed.success || !groupId.success) {
@@ -816,6 +829,7 @@ export async function createNotebookAction(formData: FormData) {
   }
 
   const sortOrder = await getNextNotebookSortOrder(user.id, groupId.data);
+  const themeKey = parseThemeKey(parsed.data.themeKey, `${user.id}:${parsed.data.name}:${sortOrder}`);
 
   await prisma.notebook.create({
     data: {
@@ -823,6 +837,7 @@ export async function createNotebookAction(formData: FormData) {
       userId: user.id,
       groupId: groupId.data,
       sortOrder,
+      themeKey,
     },
   });
 
@@ -832,6 +847,7 @@ export async function createNotebookAction(formData: FormData) {
 export async function createNotebookInlineAction(
   name: string,
   groupId: string,
+  themeKey?: string,
 ) {
   const user = await requireUser();
   const parsedName = notebookNameSchema.safeParse(name);
@@ -850,6 +866,10 @@ export async function createNotebookInlineAction(
   }
 
   const sortOrder = await getNextNotebookSortOrder(user.id, parsedGroupId.data);
+  const nextThemeKey = parseThemeKey(
+    themeKey,
+    `${user.id}:${parsedName.data}:${parsedGroupId.data}:${sortOrder}`,
+  );
 
   const { notebook, page } = await prisma.$transaction(async (tx) => {
     const notebook = await tx.notebook.create({
@@ -859,6 +879,7 @@ export async function createNotebookInlineAction(
         description: undefined,
         groupId: parsedGroupId.data,
         sortOrder,
+        themeKey: nextThemeKey,
       },
     });
 
@@ -879,10 +900,14 @@ export async function createNotebookInlineAction(
   revalidatePath("/");
   revalidatePath(`/notebooks/${notebook.id}`);
   revalidatePath(`/pages/${page.id}`);
-  return { id: notebook.id, pageId: page.id };
+  return { id: notebook.id, pageId: page.id, themeKey: nextThemeKey };
 }
 
-export async function createNotebookGroupInlineAction(name: string) {
+export async function createNotebookGroupInlineAction(
+  name: string,
+  themeKey?: string,
+  notebookThemeKey?: string,
+) {
   const user = await requireUser();
 
   const parsed = notebookGroupSchema.safeParse({ name });
@@ -892,6 +917,14 @@ export async function createNotebookGroupInlineAction(name: string) {
   }
 
   const groupSortOrder = await getNextNotebookGroupSortOrder(user.id);
+  const nextGroupThemeKey = parseThemeKey(
+    themeKey,
+    `${user.id}:${parsed.data.name}:group:${groupSortOrder}`,
+  );
+  const nextNotebookThemeKey = parseThemeKey(
+    notebookThemeKey,
+    `${user.id}:${parsed.data.name}:notebook:0`,
+  );
 
   const { group, notebook, page } = await prisma.$transaction(async (tx) => {
     const group = await tx.notebookGroup.create({
@@ -899,6 +932,7 @@ export async function createNotebookGroupInlineAction(name: string) {
         userId: user.id,
         name: parsed.data.name,
         sortOrder: groupSortOrder,
+        themeKey: nextGroupThemeKey,
       },
     });
 
@@ -909,6 +943,7 @@ export async function createNotebookGroupInlineAction(name: string) {
         description: undefined,
         groupId: group.id,
         sortOrder: 0,
+        themeKey: nextNotebookThemeKey,
       },
     });
 
@@ -929,7 +964,13 @@ export async function createNotebookGroupInlineAction(name: string) {
   revalidatePath("/");
   revalidatePath(`/notebooks/${notebook.id}`);
   revalidatePath(`/pages/${page.id}`);
-  return { id: group.id, notebookId: notebook.id, pageId: page.id };
+  return {
+    id: group.id,
+    notebookId: notebook.id,
+    pageId: page.id,
+    themeKey: nextGroupThemeKey,
+    notebookThemeKey: nextNotebookThemeKey,
+  };
 }
 
 export async function renameNotebookGroupInlineAction(id: string, name: string) {
@@ -951,6 +992,32 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
   await prisma.notebookGroup.update({
     where: { id: group.id },
     data: { name: groupName.data || "مجموعه بدون عنوان" },
+  });
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function updateNotebookGroupThemeInlineAction(
+  id: string,
+  themeKey: string,
+) {
+  const user = await requireUser();
+  const groupId = z.string().cuid().safeParse(id);
+
+  if (!groupId.success || !isThemeKey(themeKey)) {
+    return { error: "رنگ مجموعه معتبر نیست." };
+  }
+
+  const group = await getOwnedGroup(user.id, groupId.data);
+
+  if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
+    return { error: "مجموعه پیدا نشد." };
+  }
+
+  await prisma.notebookGroup.update({
+    where: { id: group.id },
+    data: { themeKey },
   });
 
   revalidatePath("/");
@@ -1085,6 +1152,33 @@ export async function renameNotebookInlineAction(id: string, name: string) {
 
   revalidatePath("/");
   revalidatePath(`/notebooks/${notebookId.data}`);
+  return { success: true };
+}
+
+export async function updateNotebookThemeInlineAction(
+  id: string,
+  themeKey: string,
+) {
+  const user = await requireUser();
+  const notebookId = z.string().cuid().safeParse(id);
+
+  if (!notebookId.success || !isThemeKey(themeKey)) {
+    return { error: "رنگ زیر مجموعه معتبر نیست." };
+  }
+
+  const notebook = await getOwnedNotebook(user.id, notebookId.data);
+
+  if (!notebook || notebook.systemKey) {
+    return { error: "زیر مجموعه پیدا نشد." };
+  }
+
+  await prisma.notebook.update({
+    where: { id: notebook.id },
+    data: { themeKey },
+  });
+
+  revalidatePath("/");
+  revalidatePath(`/notebooks/${notebook.id}`);
   return { success: true };
 }
 

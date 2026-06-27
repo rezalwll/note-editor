@@ -25,6 +25,7 @@ import { formatDate } from "@/lib/utils";
 type NotebookSummary = {
   id: string;
   name: string;
+  themeKey?: string | null;
   deletedAt?: Date | null;
   pages: Array<{
     id: string;
@@ -116,7 +117,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     return displayNotebooks[0];
   }, [displayNotebooks, pathname]);
   const activeTheme = activeNotebook
-    ? getNotebookTheme(activeNotebook.id)
+    ? getNotebookTheme(activeNotebook.id, activeNotebook.themeKey)
     : null;
   const activePages = useMemo(
     () =>

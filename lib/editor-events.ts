@@ -8,19 +8,26 @@ export type EditorCommand =
   | "align-right"
   | "align-center"
   | "align-justify"
-  | "delete-block";
+  | "delete-block"
+  | "set-text-color"
+  | "set-font-size";
 
 export type ToolbarState = {
   hasActiveBlock: boolean;
   align: "right" | "center" | "justify";
   bold: boolean;
   italic: boolean;
+  textColor: string;
+  fontSize: number;
 };
 
-export function dispatchEditorCommand(command: EditorCommand) {
+export function dispatchEditorCommand(
+  command: EditorCommand,
+  payload?: { textColor?: string; fontSize?: number },
+) {
   window.dispatchEvent(
     new CustomEvent("note-editor-command", {
-      detail: { command },
+      detail: { command, ...payload },
     }),
   );
 }

@@ -50,7 +50,7 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
     redirect(`/pages/${notebook.pages[0].id}`);
   }
 
-  const theme = getNotebookTheme(notebook.id);
+  const theme = getNotebookTheme(notebook.id, notebook.themeKey);
 
   return (
     <div className="h-full bg-white">

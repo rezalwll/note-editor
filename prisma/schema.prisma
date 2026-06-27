@@ -49,6 +49,7 @@ model Notebook {
   userId      String   @map("user_id")
   groupId     String   @map("group_id")
   systemKey   String?  @map("system_key")
+  themeKey    String?  @map("theme_key")
   name        String
   description String?
   sortOrder   Int      @default(0) @map("sort_order")
@@ -72,6 +73,7 @@ model NotebookGroup {
   userId    String     @map("user_id")
   name      String
   systemKey String?    @map("system_key")
+  themeKey  String?    @map("theme_key")
   sortOrder Int        @default(0) @map("sort_order")
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")

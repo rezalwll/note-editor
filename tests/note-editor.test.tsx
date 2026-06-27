@@ -307,4 +307,32 @@ describe("NoteEditor freeform placement", () => {
     });
     expect(container.querySelector('button[aria-label="جابجایی بلوک"]')).not.toBeNull();
   });
+  it("applies text color and font size commands to the active block", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "styled", x: 48, y: 72, width: 240, text: "style me" }],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.focus(textarea);
+    window.dispatchEvent(
+      new CustomEvent("note-editor-command", {
+        detail: { command: "set-text-color", textColor: "#ff3366" },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("note-editor-command", {
+        detail: { command: "set-font-size", fontSize: 24 },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(textarea).toHaveStyle({
+        color: "rgb(255, 51, 102)",
+        fontSize: "24px",
+      });
+    });
+  });
 });

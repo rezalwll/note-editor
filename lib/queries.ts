@@ -34,6 +34,7 @@ export const getSidebarData = cache(async (userId: string) => {
           select: {
             id: true,
             name: true,
+            themeKey: true,
           },
         },
         _count: {

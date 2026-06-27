@@ -19,6 +19,8 @@ const defaultState: ToolbarState = {
   align: "right",
   bold: false,
   italic: false,
+  textColor: "#222222",
+  fontSize: 15,
 };
 
 function ToolbarButton({
@@ -65,6 +67,8 @@ export function EditorToolbar() {
         align: customEvent.detail?.align ?? "right",
         bold: Boolean(customEvent.detail?.bold),
         italic: Boolean(customEvent.detail?.italic),
+        textColor: customEvent.detail?.textColor ?? "#222222",
+        fontSize: customEvent.detail?.fontSize ?? 15,
       });
     };
 
@@ -151,6 +155,40 @@ export function EditorToolbar() {
       >
         <ListTodo className="h-4 w-4" />
       </ToolbarButton>
+      <div className="mx-1 h-7 w-px bg-white/55" />
+      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+        <span>رنگ</span>
+        <input
+          type="color"
+          value={toolbarState.textColor}
+          disabled={!toolbarState.hasActiveBlock}
+          onChange={(event) =>
+            dispatchEditorCommand("set-text-color", {
+              textColor: event.target.value,
+            })
+          }
+          className="h-6 w-6 cursor-pointer rounded border-none bg-transparent p-0"
+        />
+      </label>
+      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+        <span>سایز</span>
+        <select
+          value={toolbarState.fontSize}
+          disabled={!toolbarState.hasActiveBlock}
+          onChange={(event) =>
+            dispatchEditorCommand("set-font-size", {
+              fontSize: Number(event.target.value),
+            })
+          }
+          className="rounded-md bg-transparent text-xs outline-none"
+        >
+          {[14, 15, 16, 18, 20, 24, 28, 32].map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

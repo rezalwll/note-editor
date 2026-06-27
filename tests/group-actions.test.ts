@@ -130,18 +130,18 @@ describe("group actions", () => {
   });
 
   it("creates a group with an untitled notebook and page", async () => {
-    await expect(createNotebookGroupInlineAction("Projects")).resolves.toEqual({
+    await expect(createNotebookGroupInlineAction("Projects")).resolves.toMatchObject({
       id: "clgroup000000000000000001",
       notebookId: "clnotebook000000000000001",
       pageId: "clpage0000000000000000001",
     });
 
     expect(mocks.notebookGroupCreate).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         userId: "user-1",
         name: "Projects",
         sortOrder: 0,
-      },
+      }),
     });
     expect(mocks.notebookCreate).toHaveBeenCalledWith(
       expect.objectContaining({
