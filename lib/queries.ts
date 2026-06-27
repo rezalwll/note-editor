@@ -44,7 +44,7 @@ export const getSidebarData = cache(async (userId: string) => {
         },
         pages: {
           where: { archived: false, userId },
-          orderBy: { updatedAt: "desc" },
+          orderBy: { updatedAt: "asc" },
           select: {
             id: true,
             title: true,
