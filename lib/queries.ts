@@ -11,7 +11,7 @@ export const getSidebarData = cache(async (userId: string) => {
   const [groups, notebooks] = await Promise.all([
     prisma.notebookGroup.findMany({
       where: { userId },
-      orderBy: [{ createdAt: "asc" }],
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: {
         _count: {
           select: {
@@ -24,7 +24,11 @@ export const getSidebarData = cache(async (userId: string) => {
     }),
     prisma.notebook.findMany({
       where: { archived: false, userId },
-      orderBy: { createdAt: "asc" },
+      orderBy: [
+        { group: { sortOrder: "asc" } },
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+      ],
       include: {
         group: {
           select: {
@@ -44,13 +48,14 @@ export const getSidebarData = cache(async (userId: string) => {
         },
         pages: {
           where: { archived: false, userId },
-          orderBy: { updatedAt: "asc" },
+          orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }],
           select: {
             id: true,
             title: true,
             updatedAt: true,
             deletedAt: true,
             originalNotebookId: true,
+            sortOrder: true,
           },
         },
       },
@@ -66,7 +71,7 @@ export const getSidebarData = cache(async (userId: string) => {
       return -1;
     }
 
-    return a.createdAt.getTime() - b.createdAt.getTime();
+    return a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime();
   });
 
   return { groups: sortedGroups, notebooks };

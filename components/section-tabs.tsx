@@ -21,6 +21,8 @@ import {
   createNotebookInlineAction,
   deleteNotebookPermanentlyInlineAction,
   deleteNotebookGroupInlineAction,
+  reorderNotebookGroupsInlineAction,
+  reorderNotebooksInlineAction,
   renameNotebookGroupInlineAction,
   renameNotebookInlineAction,
 } from "@/app/actions";
@@ -33,6 +35,7 @@ type NotebookTab = {
   id: string;
   name: string;
   groupId: string | null;
+  sortOrder?: number;
   groupName?: string | null;
   systemKey?: string | null;
   deletedAt?: Date | null;
@@ -43,6 +46,7 @@ type NotebookGroupTab = {
   id: string;
   name: string;
   notebookCount: number;
+  sortOrder?: number;
   systemKey?: string | null;
 };
 
@@ -83,6 +87,22 @@ const GROUP_PILL_PALETTE = [
   },
 ] as const;
 
+function reorderIds(ids: string[], draggedId: string, targetId: string) {
+  if (draggedId === targetId) {
+    return ids;
+  }
+
+  const nextIds = ids.filter((id) => id !== draggedId);
+  const targetIndex = nextIds.indexOf(targetId);
+
+  if (targetIndex === -1) {
+    return ids;
+  }
+
+  nextIds.splice(targetIndex, 0, draggedId);
+  return nextIds;
+}
+
 export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -96,6 +116,8 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const [manualGroupKey, setManualGroupKey] = useState<string | null>(null);
   const [overflowNotebookIds, setOverflowNotebookIds] = useState<string[]>([]);
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
+  const [draggedNotebookId, setDraggedNotebookId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const notebookInputRef = useRef<HTMLInputElement | null>(null);
   const groupInputRef = useRef<HTMLInputElement | null>(null);
@@ -109,6 +131,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         | { type: "append"; notebook: NotebookTab }
         | { type: "rename"; notebookId: string; name: string }
         | { type: "remove-many"; notebookIds: string[] }
+        | { type: "reorder"; groupId: string; notebookIds: string[] }
         | {
             type: "move-many";
             notebookIds: string[];
@@ -129,16 +152,44 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           return current.filter(
             (notebook) => !action.notebookIds.includes(notebook.id),
           );
-        case "move-many":
+        case "reorder": {
+          const positions = new Map(
+            action.notebookIds.map((id, index) => [id, index]),
+          );
+
           return current.map((notebook) =>
-            action.notebookIds.includes(notebook.id)
+            notebook.groupId === action.groupId && positions.has(notebook.id)
               ? {
                   ...notebook,
-                  groupId: action.groupId,
-                  groupName: action.groupName,
+                  sortOrder: positions.get(notebook.id) ?? notebook.sortOrder,
                 }
               : notebook,
           );
+        }
+        case "move-many":
+          {
+            const selectedOrder = new Map(
+              action.notebookIds.map((id, index) => [id, index]),
+            );
+            const targetBaseOrder = current.filter(
+              (item) =>
+                item.groupId === action.groupId &&
+                !action.notebookIds.includes(item.id),
+            ).length;
+
+            return current.map((notebook) =>
+              action.notebookIds.includes(notebook.id)
+                ? {
+                    ...notebook,
+                    groupId: action.groupId,
+                    groupName: action.groupName,
+                    sortOrder:
+                      targetBaseOrder +
+                      (selectedOrder.get(notebook.id) ?? 0),
+                  }
+                : notebook,
+            );
+          }
       }
     },
   );
@@ -156,6 +207,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       action:
         | { type: "append"; group: NotebookGroupTab }
         | { type: "rename"; groupId: string; name: string }
+        | { type: "reorder"; groupIds: string[] }
         | { type: "delete"; groupId: string },
     ) => {
       switch (action.type) {
@@ -165,6 +217,17 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           return current.map((group) =>
             group.id === action.groupId ? { ...group, name: action.name } : group,
           );
+        case "reorder": {
+          const positions = new Map(
+            action.groupIds.map((id, index) => [id, index]),
+          );
+
+          return current.map((group) =>
+            positions.has(group.id)
+              ? { ...group, sortOrder: positions.get(group.id) ?? group.sortOrder }
+              : group,
+          );
+        }
         case "delete":
           return current.filter((group) => group.id !== action.groupId);
       }
@@ -234,7 +297,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }, [editingGroupId]);
 
   const activeGroupNotebooks = useMemo(
-    () => displayItems.filter((notebook) => notebook.groupId === activeGroupKey),
+    () =>
+      displayItems
+        .filter((notebook) => notebook.groupId === activeGroupKey)
+        .sort(
+          (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
+        ),
     [activeGroupKey, displayItems],
   );
   const activeGroupNotebookSignature = useMemo(
@@ -299,12 +367,17 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
   const groupTabs = useMemo(
     () =>
-      groupItems.map((group) => ({
-        id: group.id,
-        name: group.name,
-        notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
-        systemKey: group.systemKey ?? null,
-      })),
+      groupItems
+        .map((group) => ({
+          id: group.id,
+          name: group.name,
+          notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
+          sortOrder: group.sortOrder,
+          systemKey: group.systemKey ?? null,
+        }))
+        .sort(
+          (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
+        ),
     [displayItems, groupItems],
   );
 
@@ -337,6 +410,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       id: tempNotebookId,
       name: "",
       groupId: nextGroupId,
+      sortOrder: activeGroupNotebooks.length,
       groupName: nextGroupName,
       pageIds: [],
     });
@@ -426,6 +500,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               id: result.id,
               name: nextName,
               groupId: notebookGroupId,
+              sortOrder: activeGroupNotebooks.length,
               groupName: notebookGroupName,
               pageIds: [result.pageId],
             },
@@ -480,6 +555,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               id: result.id,
               name: nextName,
               notebookCount: 1,
+              sortOrder: groupItems.filter((group) => group.systemKey !== TRASH_GROUP_KEY).length,
             },
           });
           updateNotebooks({
@@ -488,6 +564,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               id: result.notebookId,
               name: "زیر مجموعه بدون عنوان",
               groupId: result.id,
+              sortOrder: 0,
               groupName: nextName,
               pageIds: [result.pageId],
             },
@@ -605,6 +682,64 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     });
   }
 
+  function handleGroupDrop(targetGroupId: string) {
+    if (!draggedGroupId || draggedGroupId === targetGroupId) {
+      setDraggedGroupId(null);
+      return;
+    }
+
+    const movableGroupIds = groupTabs
+      .filter((group) => group.systemKey !== TRASH_GROUP_KEY)
+      .map((group) => group.id);
+    const nextGroupIds = reorderIds(movableGroupIds, draggedGroupId, targetGroupId);
+
+    if (nextGroupIds.join(",") === movableGroupIds.join(",")) {
+      setDraggedGroupId(null);
+      return;
+    }
+
+    setDraggedGroupId(null);
+
+    startTransition(async () => {
+      updateGroups({ type: "reorder", groupIds: nextGroupIds });
+      await reorderNotebookGroupsInlineAction(nextGroupIds);
+      router.refresh();
+    });
+  }
+
+  function handleNotebookDrop(targetNotebookId: string) {
+    if (!activeGroupKey || !draggedNotebookId || draggedNotebookId === targetNotebookId) {
+      setDraggedNotebookId(null);
+      return;
+    }
+
+    const nextNotebookIds = reorderIds(
+      activeGroupNotebooks.map((notebook) => notebook.id),
+      draggedNotebookId,
+      targetNotebookId,
+    );
+
+    if (
+      nextNotebookIds.join(",") ===
+      activeGroupNotebooks.map((notebook) => notebook.id).join(",")
+    ) {
+      setDraggedNotebookId(null);
+      return;
+    }
+
+    setDraggedNotebookId(null);
+
+    startTransition(async () => {
+      updateNotebooks({
+        type: "reorder",
+        groupId: activeGroupKey,
+        notebookIds: nextNotebookIds,
+      });
+      await reorderNotebooksInlineAction(activeGroupKey, nextNotebookIds);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="relative border-b border-[var(--border-soft)] bg-white/95 px-3 pb-2 pt-2 backdrop-blur">
       <div
@@ -645,6 +780,28 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           return (
             <div
               key={group.id}
+              draggable={!isEditing && !isTrash}
+              onDragStart={() => {
+                if (isTrash) {
+                  return;
+                }
+
+                setDraggedGroupId(group.id);
+              }}
+              onDragEnd={() => setDraggedGroupId(null)}
+              onDragOver={(event) => {
+                if (!isTrash && draggedGroupId) {
+                  event.preventDefault();
+                }
+              }}
+              onDrop={(event) => {
+                if (isTrash) {
+                  return;
+                }
+
+                event.preventDefault();
+                handleGroupDrop(group.id);
+              }}
               onContextMenu={(event) => {
                 if (isEditing) {
                   return;
@@ -688,6 +845,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               }}
               className={cn(
                 "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
+                draggedGroupId === group.id ? "cursor-grabbing opacity-70" : !isTrash ? "cursor-grab" : null,
               )}
               style={{
                 borderColor: pillTheme.border,
@@ -849,6 +1007,24 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             <div
               key={notebook.id}
               data-section-tab="true"
+              draggable={!isEditing && !isDeleted && !isSystemNotebook && !isTrashGroup(activeGroupKey)}
+              onDragStart={() => {
+                if (isDeleted || isSystemNotebook || isTrashGroup(activeGroupKey)) {
+                  return;
+                }
+
+                setDraggedNotebookId(notebook.id);
+              }}
+              onDragEnd={() => setDraggedNotebookId(null)}
+              onDragOver={(event) => {
+                if (draggedNotebookId) {
+                  event.preventDefault();
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleNotebookDrop(notebook.id);
+              }}
               onContextMenu={(event) => {
                 if (isEditing) {
                   return;
@@ -922,6 +1098,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               className={cn(
                 "inline-flex h-6 items-center rounded-t-md px-4 text-xs transition",
                 isActive ? "translate-y-[1px]" : "hover:-translate-y-px",
+                draggedNotebookId === notebook.id
+                  ? "cursor-grabbing opacity-70"
+                  : !isDeleted && !isSystemNotebook && !isTrashGroup(activeGroupKey)
+                    ? "cursor-grab"
+                    : null,
               )}
               style={{
                 backgroundColor: theme.tab,

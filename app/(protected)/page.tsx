@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const groups = await prisma.notebookGroup.findMany({
     where: { userId: user.id, systemKey: null },
     select: { id: true, name: true },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     take: 1,
   });
   const notebooks = await prisma.notebook.findMany({
@@ -16,11 +16,15 @@ export default async function DashboardPage() {
     include: {
       pages: {
         where: { archived: false, deletedAt: null, userId: user.id },
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }],
         take: 1,
       },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [
+      { group: { sortOrder: "asc" } },
+      { sortOrder: "asc" },
+      { createdAt: "asc" },
+    ],
     take: 1,
   });
 

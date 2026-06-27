@@ -140,6 +140,7 @@ describe("group actions", () => {
       data: {
         userId: "user-1",
         name: "Projects",
+        sortOrder: 0,
       },
     });
     expect(mocks.notebookCreate).toHaveBeenCalledWith(
@@ -147,6 +148,7 @@ describe("group actions", () => {
         data: expect.objectContaining({
           userId: "user-1",
           groupId: "clgroup000000000000000001",
+          sortOrder: 0,
         }),
       }),
     );
@@ -157,6 +159,7 @@ describe("group actions", () => {
         title: "صفحه بدون عنوان",
         bodyHtml: "<p></p>",
         bodyText: "",
+        sortOrder: 0,
       },
     });
   });

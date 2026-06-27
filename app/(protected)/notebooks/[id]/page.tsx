@@ -17,7 +17,7 @@ const getNotebook = cache(async (id: string, userId: string) =>
     include: {
       pages: {
         where: { archived: false, userId },
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }],
         take: 1,
       },
     },

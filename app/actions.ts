@@ -142,8 +142,38 @@ async function getOwnedPage(userId: string, id: string) {
 async function getOwnedGroup(userId: string, id: string) {
   return prisma.notebookGroup.findFirst({
     where: { id, userId },
-    select: { id: true, name: true, systemKey: true },
+    select: { id: true, name: true, systemKey: true, sortOrder: true },
   });
+}
+
+async function getNextNotebookGroupSortOrder(userId: string) {
+  const lastGroup = await prisma.notebookGroup.findFirst({
+    where: { userId, systemKey: null },
+    orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }],
+    select: { sortOrder: true },
+  });
+
+  return (lastGroup?.sortOrder ?? -1) + 1;
+}
+
+async function getNextNotebookSortOrder(userId: string, groupId: string) {
+  const lastNotebook = await prisma.notebook.findFirst({
+    where: { userId, groupId },
+    orderBy: [{ sortOrder: "desc" }, { createdAt: "desc" }],
+    select: { sortOrder: true },
+  });
+
+  return (lastNotebook?.sortOrder ?? -1) + 1;
+}
+
+async function getNextPageSortOrder(userId: string, notebookId: string) {
+  const lastPage = await prisma.page.findFirst({
+    where: { userId, notebookId },
+    orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
+    select: { sortOrder: true },
+  });
+
+  return (lastPage?.sortOrder ?? -1) + 1;
 }
 
 function isDuplicateUsernameError(error: unknown) {
@@ -785,11 +815,14 @@ export async function createNotebookAction(formData: FormData) {
     return;
   }
 
+  const sortOrder = await getNextNotebookSortOrder(user.id, groupId.data);
+
   await prisma.notebook.create({
     data: {
       ...parsed.data,
       userId: user.id,
       groupId: groupId.data,
+      sortOrder,
     },
   });
 
@@ -816,6 +849,8 @@ export async function createNotebookInlineAction(
     }
   }
 
+  const sortOrder = await getNextNotebookSortOrder(user.id, parsedGroupId.data);
+
   const { notebook, page } = await prisma.$transaction(async (tx) => {
     const notebook = await tx.notebook.create({
       data: {
@@ -823,6 +858,7 @@ export async function createNotebookInlineAction(
         name: parsedName.data,
         description: undefined,
         groupId: parsedGroupId.data,
+        sortOrder,
       },
     });
 
@@ -833,6 +869,7 @@ export async function createNotebookInlineAction(
         title: defaultInlinePageTitle,
         bodyHtml: "<p></p>",
         bodyText: "",
+        sortOrder: 0,
       },
     });
 
@@ -854,11 +891,14 @@ export async function createNotebookGroupInlineAction(name: string) {
     return { error: "نام مجموعه الزامی است." };
   }
 
+  const groupSortOrder = await getNextNotebookGroupSortOrder(user.id);
+
   const { group, notebook, page } = await prisma.$transaction(async (tx) => {
     const group = await tx.notebookGroup.create({
       data: {
         userId: user.id,
         name: parsed.data.name,
+        sortOrder: groupSortOrder,
       },
     });
 
@@ -868,6 +908,7 @@ export async function createNotebookGroupInlineAction(name: string) {
         name: "زیر مجموعه بدون عنوان",
         description: undefined,
         groupId: group.id,
+        sortOrder: 0,
       },
     });
 
@@ -878,6 +919,7 @@ export async function createNotebookGroupInlineAction(name: string) {
         title: defaultInlinePageTitle,
         bodyHtml: "<p></p>",
         bodyText: "",
+        sortOrder: 0,
       },
     });
 
@@ -1046,6 +1088,132 @@ export async function renameNotebookInlineAction(id: string, name: string) {
   return { success: true };
 }
 
+export async function reorderNotebookGroupsInlineAction(groupIds: string[]) {
+  const user = await requireUser();
+  const parsedGroupIds = z.array(z.string().cuid()).min(1).safeParse(groupIds);
+
+  if (!parsedGroupIds.success) {
+    return { error: "ترتیب مجموعه‌ها معتبر نیست." };
+  }
+
+  const groups = await prisma.notebookGroup.findMany({
+    where: {
+      userId: user.id,
+      id: { in: parsedGroupIds.data },
+      systemKey: null,
+    },
+    select: { id: true },
+  });
+
+  if (groups.length !== parsedGroupIds.data.length) {
+    return { error: "مجموعه پیدا نشد." };
+  }
+
+  await prisma.$transaction(
+    parsedGroupIds.data.map((id, index) =>
+      prisma.notebookGroup.update({
+        where: { id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function reorderNotebooksInlineAction(
+  groupId: string,
+  notebookIds: string[],
+) {
+  const user = await requireUser();
+  const parsedGroupId = z.string().cuid().safeParse(groupId);
+  const parsedNotebookIds = z.array(z.string().cuid()).min(1).safeParse(notebookIds);
+
+  if (!parsedGroupId.success || !parsedNotebookIds.success) {
+    return { error: "ترتیب زیر مجموعه‌ها معتبر نیست." };
+  }
+
+  const group = await getOwnedGroup(user.id, parsedGroupId.data);
+
+  if (!group || group.systemKey === TRASH_GROUP_SYSTEM_KEY) {
+    return { error: "مجموعه پیدا نشد." };
+  }
+
+  const notebooks = await prisma.notebook.findMany({
+    where: {
+      userId: user.id,
+      id: { in: parsedNotebookIds.data },
+      groupId: parsedGroupId.data,
+      systemKey: null,
+    },
+    select: { id: true },
+  });
+
+  if (notebooks.length !== parsedNotebookIds.data.length) {
+    return { error: "زیر مجموعه پیدا نشد." };
+  }
+
+  await prisma.$transaction(
+    parsedNotebookIds.data.map((id, index) =>
+      prisma.notebook.update({
+        where: { id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+  revalidatePath(`/notebooks/${parsedNotebookIds.data[0]}`);
+  return { success: true };
+}
+
+export async function reorderPagesInlineAction(
+  notebookId: string,
+  pageIds: string[],
+) {
+  const user = await requireUser();
+  const parsedNotebookId = z.string().cuid().safeParse(notebookId);
+  const parsedPageIds = z.array(z.string().cuid()).min(1).safeParse(pageIds);
+
+  if (!parsedNotebookId.success || !parsedPageIds.success) {
+    return { error: "ترتیب صفحه‌ها معتبر نیست." };
+  }
+
+  const notebook = await getOwnedNotebook(user.id, parsedNotebookId.data);
+
+  if (!notebook || notebook.archived || notebook.deletedAt) {
+    return { error: "زیر مجموعه پیدا نشد." };
+  }
+
+  const pages = await prisma.page.findMany({
+    where: {
+      userId: user.id,
+      id: { in: parsedPageIds.data },
+      notebookId: parsedNotebookId.data,
+      archived: false,
+    },
+    select: { id: true },
+  });
+
+  if (pages.length !== parsedPageIds.data.length) {
+    return { error: "صفحه پیدا نشد." };
+  }
+
+  await prisma.$transaction(
+    parsedPageIds.data.map((id, index) =>
+      prisma.page.update({
+        where: { id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+  revalidatePath(`/notebooks/${parsedNotebookId.data}`);
+  return { success: true };
+}
+
 export async function updateNotebookAction(formData: FormData) {
   const user = await requireUser();
 
@@ -1149,6 +1317,8 @@ export async function createPageAction(formData: FormData) {
     return;
   }
 
+  const sortOrder = await getNextPageSortOrder(user.id, parsed.data.notebookId);
+
   const page = await prisma.page.create({
     data: {
       userId: user.id,
@@ -1156,6 +1326,7 @@ export async function createPageAction(formData: FormData) {
       title: parsed.data.title,
       bodyHtml: "<p></p>",
       bodyText: "",
+      sortOrder,
     },
   });
 
@@ -1181,6 +1352,8 @@ export async function createPageInlineAction(notebookId: string, title: string) 
     return { error: "زیر مجموعه پیدا نشد." };
   }
 
+  const sortOrder = await getNextPageSortOrder(user.id, parsed.data.notebookId);
+
   const page = await prisma.page.create({
     data: {
       userId: user.id,
@@ -1188,6 +1361,7 @@ export async function createPageInlineAction(notebookId: string, title: string) 
       title: parsed.data.title,
       bodyHtml: "<p></p>",
       bodyText: "",
+      sortOrder,
     },
   });
 

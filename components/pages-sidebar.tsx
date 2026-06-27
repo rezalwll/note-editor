@@ -9,6 +9,7 @@ import {
   archivePageInlineAction,
   createPageInlineAction,
   deletePagePermanentlyInlineAction,
+  reorderPagesInlineAction,
   restorePageInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
@@ -29,10 +30,27 @@ type NotebookSummary = {
     id: string;
     title: string;
     updatedAt: Date;
+    sortOrder?: number;
     deletedAt?: Date | null;
     originalNotebookId?: string | null;
   }>;
 };
+
+function reorderIds(ids: string[], draggedId: string, targetId: string) {
+  if (draggedId === targetId) {
+    return ids;
+  }
+
+  const nextIds = ids.filter((id) => id !== draggedId);
+  const targetIndex = nextIds.indexOf(targetId);
+
+  if (targetIndex === -1) {
+    return ids;
+  }
+
+  nextIds.splice(targetIndex, 0, draggedId);
+  return nextIds;
+}
 
 type PagesSidebarProps = {
   notebooks: NotebookSummary[];
@@ -47,11 +65,13 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const { openMenu } = useContextMenu();
   const [isCreating, setIsCreating] = useState(false);
   const [notebookNameOverrides, setNotebookNameOverrides] = useState<Record<string, string>>({});
+  const [pageOrderOverrides, setPageOrderOverrides] = useState<Record<string, number>>({});
   const [pageTitleOverrides, setPageTitleOverrides] = useState<
     Record<string, { title: string; updatedAt: string }>
   >({});
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [draftTitle, setDraftTitle] = useState("");
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -67,11 +87,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 ...page,
                 title: override.title,
                 updatedAt: new Date(override.updatedAt),
+                sortOrder: pageOrderOverrides[page.id] ?? page.sortOrder,
               }
-            : page;
+            : {
+                ...page,
+                sortOrder: pageOrderOverrides[page.id] ?? page.sortOrder,
+              };
         }),
       })),
-    [notebookNameOverrides, notebooks, pageTitleOverrides],
+    [notebookNameOverrides, notebooks, pageOrderOverrides, pageTitleOverrides],
   );
 
   const activeNotebook = useMemo(() => {
@@ -94,6 +118,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const activeTheme = activeNotebook
     ? getNotebookTheme(activeNotebook.id)
     : null;
+  const activePages = useMemo(
+    () =>
+      activeNotebook
+        ? [...activeNotebook.pages].sort(
+            (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
+          )
+        : [],
+    [activeNotebook],
+  );
 
   useEffect(() => {
     if (isCreating) {
@@ -182,7 +215,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       return;
     }
 
-    const fallbackPage = activeNotebook.pages.find((page) => page.id !== pageId);
+    const fallbackPage = activePages.find((page) => page.id !== pageId);
     const isActivePage = pathname === `/pages/${pageId}`;
 
     startTransition(async () => {
@@ -205,7 +238,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       return;
     }
 
-    const fallbackPage = activeNotebook.pages.find(
+    const fallbackPage = activePages.find(
       (page) => !pageIds.includes(page.id),
     );
     const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1];
@@ -252,7 +285,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       return;
     }
 
-    const fallbackPage = activeNotebook.pages.find(
+    const fallbackPage = activePages.find(
       (page) => !pageIds.includes(page.id),
     );
     const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1];
@@ -286,6 +319,32 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
   function selectSinglePage(pageId: string) {
     setSelectedPageIds([pageId]);
+  }
+
+  function handlePageDrop(targetPageId: string) {
+    if (!activeNotebook || activeNotebook.deletedAt || !draggedPageId) {
+      setDraggedPageId(null);
+      return;
+    }
+
+    const currentPageIds = activePages.map((page) => page.id);
+    const nextPageIds = reorderIds(currentPageIds, draggedPageId, targetPageId);
+
+    if (nextPageIds.join(",") === currentPageIds.join(",")) {
+      setDraggedPageId(null);
+      return;
+    }
+
+    setDraggedPageId(null);
+    setPageOrderOverrides((current) => ({
+      ...current,
+      ...Object.fromEntries(nextPageIds.map((id, index) => [id, index])),
+    }));
+
+    startTransition(async () => {
+      await reorderPagesInlineAction(activeNotebook.id, nextPageIds);
+      router.refresh();
+    });
   }
 
   if (!activeNotebook) {
@@ -410,7 +469,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         ) : null}
 
         <div className="overflow-y-auto text-right" style={{ height: sidebarListHeight }}>
-          {activeNotebook.pages.map((page) => {
+          {activePages.map((page) => {
             const isActive = pathname === `/pages/${page.id}`;
             const isSelected = selectedPageIds.includes(page.id);
 
@@ -419,6 +478,24 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 key={page.id}
                 href={`/pages/${page.id}`}
                 data-page-item="true"
+                draggable={!activeNotebook.deletedAt}
+                onDragStart={() => {
+                  if (activeNotebook.deletedAt) {
+                    return;
+                  }
+
+                  setDraggedPageId(page.id);
+                }}
+                onDragEnd={() => setDraggedPageId(null)}
+                onDragOver={(event) => {
+                  if (draggedPageId && !activeNotebook.deletedAt) {
+                    event.preventDefault();
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  handlePageDrop(page.id);
+                }}
                 onClick={(event) => {
                   if (event.ctrlKey || event.metaKey) {
                     event.preventDefault();
@@ -439,7 +516,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                     setSelectedPageIds([page.id]);
                   }
 
-                  const selectedPages = activeNotebook.pages.filter((item) =>
+                  const selectedPages = activePages.filter((item) =>
                     selectedIds.includes(item.id),
                   );
                   const canRestore = selectedPages.every(
@@ -515,6 +592,12 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                     : isSelected
                       ? activeTheme?.sidebarHover
                       : "transparent",
+                  cursor: activeNotebook.deletedAt
+                    ? "default"
+                    : draggedPageId === page.id
+                      ? "grabbing"
+                      : "grab",
+                  opacity: draggedPageId === page.id ? 0.72 : 1,
                 }}
                 dir="rtl"
               >
@@ -527,7 +610,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               </Link>
             );
           })}
-          {activeNotebook.pages.length === 0 ? (
+          {activePages.length === 0 ? (
             <div className="px-3 py-5 text-right">
               <div className="text-xs" style={{ color: activeTheme?.sidebarMuted }}>
                 هنوز صفحه‌ای وجود ندارد.
