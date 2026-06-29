@@ -20,7 +20,7 @@ import { moveNotebookToTrash, movePageToTrash } from "@/lib/trash";
 const notebookPayloadSchema = z.object({
   id: z.string(),
   userId: z.string().optional(),
-  groupId: z.string(),
+  groupId: z.string().nullable().optional(),
   name: z.string(),
   description: z.string().nullable().optional(),
   archived: z.boolean(),
@@ -38,15 +38,42 @@ const pagePayloadSchema = z.object({
   updatedAt: z.string(),
 });
 
+const queueIdSchema = z
+  .union([z.number(), z.string()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    const numericValue = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(numericValue) ? numericValue : undefined;
+  });
+
+const optionalDateStringSchema = z
+  .union([z.string(), z.date(), z.null()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === null) {
+      return value;
+    }
+
+    return value instanceof Date ? value.toISOString() : value;
+  });
+
 const queueSchema = z.object({
-  id: z.number().optional(),
+  id: queueIdSchema,
   entityType: z.enum(["notebook", "page"]),
   entityId: z.string(),
   operation: z.enum(["upsert", "archive"]),
-  baseUpdatedAt: z.string().nullable().optional(),
-  payload: z.record(z.string(), z.unknown()),
-  createdAt: z.string(),
-  status: z.enum(["pending", "failed"]),
+  baseUpdatedAt: optionalDateStringSchema,
+  payload: z.unknown(),
+  createdAt: optionalDateStringSchema.transform((value) => value ?? new Date().toISOString()),
+  status: z
+    .enum(["pending", "failed", "synced", "conflict"])
+    .optional()
+    .catch("pending")
+    .transform((status) => (status === "failed" ? "failed" : "pending")),
 });
 
 const pushSchema = z.object({
@@ -127,6 +154,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Forbidden notebook scope." }, { status: 403 });
       }
 
+      const targetGroupId = payload.groupId ?? existing?.groupId;
+
+      if (!targetGroupId) {
+        return NextResponse.json({ error: "Invalid notebook group." }, { status: 400 });
+      }
+
       if (payload.groupId) {
         const group = await prisma.notebookGroup.findFirst({
           where: { id: payload.groupId, userId: user.id },
@@ -166,7 +199,7 @@ export async function POST(request: Request) {
             where: { id: payload.id },
             data: {
               userId: user.id,
-              groupId: payload.groupId,
+              groupId: targetGroupId,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,
@@ -176,7 +209,7 @@ export async function POST(request: Request) {
             data: {
               id: payload.id,
               userId: user.id,
-              groupId: payload.groupId,
+              groupId: targetGroupId,
               name: payload.name,
               description: payload.description ?? null,
               archived: payload.archived,
