@@ -85,6 +85,12 @@ const AUTOSAVE_DEBOUNCE_MS = 150;
 const IMAGE_DEFAULT_WIDTH = 420;
 const IMAGE_MIN_WIDTH = 160;
 const IMAGE_DEFAULT_ASPECT_RATIO = 4 / 3;
+const CLIPBOARD_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
@@ -314,6 +320,7 @@ export function NoteEditor({
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const dragStateRef = useRef<{
@@ -868,13 +875,14 @@ export function NoteEditor({
     y: number,
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
+    initialText = "",
   ) {
     const block: FreeformBlock = {
       id: createId(),
       x,
       y,
       width,
-      text: "",
+      text: initialText,
       align: "right",
       direction: "rtl",
       textColor: "#222222",
@@ -890,7 +898,7 @@ export function NoteEditor({
 
     if (shouldFocus) {
       flushSync(addBlock);
-      focusBlockWhenReady(block.id);
+      focusBlockWhenReady(block.id, initialText.length);
       return;
     }
 
@@ -970,12 +978,15 @@ export function NoteEditor({
     return payload;
   }
 
-  async function insertImageFiles(imageFiles: File[]) {
+  async function insertImageFiles(
+    imageFiles: File[],
+    placementOverride?: CanvasCoordinates,
+  ) {
     if (imageFiles.length === 0) {
       return;
     }
 
-    const placement = getPastedImageCoordinates();
+    const placement = placementOverride ?? getPastedImageCoordinates();
     let nextY = placement.y;
     setImageUploadError(null);
 
@@ -1053,6 +1064,214 @@ export function NoteEditor({
     );
     input.value = "";
     void insertImageFiles(imageFiles);
+  }
+
+  async function readClipboardContent() {
+    const clipboard = navigator.clipboard;
+
+    if (!clipboard) {
+      throw new Error("دسترسی به کلیپ‌بورد در این مرورگر فعال نیست.");
+    }
+
+    if (typeof clipboard.read === "function") {
+      try {
+        const clipboardItems = await clipboard.read();
+        const imageFiles: File[] = [];
+
+        for (const item of clipboardItems) {
+          for (const type of item.types.filter((itemType) =>
+            CLIPBOARD_IMAGE_TYPES.has(itemType),
+          )) {
+            const blob = await item.getType(type);
+            const extension =
+              type === "image/jpeg"
+                ? "jpg"
+                : type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+            imageFiles.push(
+              new File(
+                [blob],
+                `clipboard-image-${imageFiles.length + 1}.${extension}`,
+                { type },
+              ),
+            );
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          return { imageFiles, text: "" };
+        }
+
+        for (const item of clipboardItems) {
+          if (item.types.includes("text/plain")) {
+            const textBlob = await item.getType("text/plain");
+            return { imageFiles: [], text: await textBlob.text() };
+          }
+        }
+      } catch (error) {
+        if (typeof clipboard.readText !== "function") {
+          throw error;
+        }
+      }
+    }
+
+    if (typeof clipboard.readText === "function") {
+      return { imageFiles: [], text: await clipboard.readText() };
+    }
+
+    throw new Error("خواندن از کلیپ‌بورد در این مرورگر پشتیبانی نمی‌شود.");
+  }
+
+  async function copyTextToClipboard(text: string) {
+    if (!text) {
+      return;
+    }
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("نوشتن در کلیپ‌بورد پشتیبانی نمی‌شود.");
+      }
+
+      await navigator.clipboard.writeText(text);
+      setImageUploadError(null);
+    } catch (error) {
+      console.error("Failed to copy editor text.", error);
+      setImageUploadError(
+        error instanceof Error
+          ? error.message
+          : "کپی‌کردن متن انجام نشد.",
+      );
+    }
+  }
+
+  async function copyImageToClipboard(block: FreeformBlock) {
+    if (!block.attachmentId) {
+      return;
+    }
+
+    try {
+      if (
+        !navigator.clipboard?.write ||
+        typeof ClipboardItem === "undefined"
+      ) {
+        throw new Error("کپی تصویر در این مرورگر پشتیبانی نمی‌شود.");
+      }
+
+      const response = await fetch(`/api/attachments/${block.attachmentId}`);
+      if (!response.ok) {
+        throw new Error("دریافت تصویر برای کپی انجام نشد.");
+      }
+
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      setImageUploadError(null);
+    } catch (error) {
+      console.error("Failed to copy an editor image.", error);
+      setImageUploadError(
+        error instanceof Error
+          ? error.message
+          : "کپی‌کردن تصویر انجام نشد.",
+      );
+    }
+  }
+
+  function getSelectedBlocksText(ids: string[]) {
+    return blocks
+      .filter((block) => ids.includes(block.id) && !isImageBlock(block))
+      .map((block) => block.text)
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  async function pasteFromClipboard({
+    placement,
+    targetTitle = false,
+    targetBlockId,
+    selectionStart = 0,
+    selectionEnd = selectionStart,
+  }: {
+    placement?: CanvasCoordinates;
+    targetTitle?: boolean;
+    targetBlockId?: string;
+    selectionStart?: number;
+    selectionEnd?: number;
+  }) {
+    try {
+      setImageUploadError(null);
+      const clipboardContent = await readClipboardContent();
+
+      if (clipboardContent.imageFiles.length > 0) {
+        await insertImageFiles(clipboardContent.imageFiles, placement);
+        return;
+      }
+
+      if (!clipboardContent.text) {
+        return;
+      }
+
+      if (targetTitle) {
+        const nextTitle =
+          title.slice(0, selectionStart) +
+          clipboardContent.text +
+          title.slice(selectionEnd);
+        const nextCaretPosition =
+          selectionStart + clipboardContent.text.length;
+
+        markEditorInteraction();
+        setTitle(nextTitle);
+        requestAnimationFrame(() => {
+          titleInputRef.current?.focus();
+          titleInputRef.current?.setSelectionRange(
+            nextCaretPosition,
+            nextCaretPosition,
+          );
+        });
+        return;
+      }
+
+      if (targetBlockId) {
+        const targetBlock = blocks.find(
+          (block) => block.id === targetBlockId && !isImageBlock(block),
+        );
+
+        if (!targetBlock) {
+          return;
+        }
+
+        const nextText =
+          targetBlock.text.slice(0, selectionStart) +
+          clipboardContent.text +
+          targetBlock.text.slice(selectionEnd);
+        const nextCaretPosition =
+          selectionStart + clipboardContent.text.length;
+
+        selectionRestoreRef.current = {
+          id: targetBlockId,
+          start: nextCaretPosition,
+          end: nextCaretPosition,
+        };
+        updateBlockText(targetBlockId, nextText);
+        return;
+      }
+
+      if (placement) {
+        addBlockAt(
+          placement.x,
+          placement.y,
+          true,
+          placement.width,
+          clipboardContent.text,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to paste clipboard content into the editor.", error);
+      setImageUploadError(
+        error instanceof Error
+          ? error.message
+          : "پیست‌کردن محتوا انجام نشد.",
+      );
+    }
   }
 
   function getCanvasCoordinates(
@@ -1748,12 +1967,48 @@ export function NoteEditor({
               style={{ borderColor: notebookTheme.accent }}
             >
               <input
+                ref={titleInputRef}
                 value={title}
                 onChange={(event) => {
                   markEditorInteraction();
                   setTitle(event.target.value);
                 }}
                 onBlur={() => flushPendingSave("title-blur")}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const selectionStart =
+                    event.currentTarget.selectionStart ?? 0;
+                  const selectionEnd =
+                    event.currentTarget.selectionEnd ?? selectionStart;
+                  const selectedText =
+                    selectionStart !== selectionEnd
+                      ? title.slice(selectionStart, selectionEnd)
+                      : title;
+
+                  openMenu(event, {
+                    title: "عنوان صفحه",
+                    items: [
+                      {
+                        id: "copy-title",
+                        label: "کپی",
+                        disabled: !selectedText,
+                        onSelect: () =>
+                          copyTextToClipboard(selectedText),
+                      },
+                      {
+                        id: "paste-title",
+                        label: "پیست",
+                        onSelect: () =>
+                          pasteFromClipboard({
+                            targetTitle: true,
+                            selectionStart,
+                            selectionEnd,
+                          }),
+                      },
+                    ],
+                  });
+                }}
                 placeholder="صفحه بدون عنوان"
                 className="mb-2 w-full border-none bg-transparent text-[22px] font-normal text-[#111] outline-none placeholder:text-[#7d7d7d]"
                 dir="rtl"
@@ -1793,6 +2048,7 @@ export function NoteEditor({
               }
 
               event.preventDefault();
+              const selectedText = getSelectedBlocksText(selectedBlockIds);
               openMenu(event, {
                 title:
                   selectedBlockIds.length > 1
@@ -1801,6 +2057,20 @@ export function NoteEditor({
                 items:
                   selectedBlockIds.length > 1
                     ? [
+                        {
+                          id: "copy-selected-blocks",
+                          label: "کپی",
+                          disabled: !selectedText,
+                          onSelect: () =>
+                            copyTextToClipboard(selectedText),
+                        },
+                        {
+                          id: "paste-at-position",
+                          label: "پیست",
+                          onSelect: () =>
+                            pasteFromClipboard({ placement: coordinates }),
+                        },
+                        { id: "separator-clipboard", separator: true },
                         {
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
@@ -1821,6 +2091,20 @@ export function NoteEditor({
                         },
                       ]
                     : [
+                        {
+                          id: "copy-selected-block",
+                          label: "کپی",
+                          disabled: !selectedText,
+                          onSelect: () =>
+                            copyTextToClipboard(selectedText),
+                        },
+                        {
+                          id: "paste-at-position",
+                          label: "پیست",
+                          onSelect: () =>
+                            pasteFromClipboard({ placement: coordinates }),
+                        },
+                        { id: "separator-clipboard", separator: true },
                         {
                           id: "new-block",
                           label: "افزودن بلوک متن در اینجا",
@@ -1854,6 +2138,15 @@ export function NoteEditor({
 
               if (isImageBlock(block) && block.attachmentId) {
                 const imageHeight = getImageBlockHeight(block, blockWidth);
+                const pasteWidth = Math.min(
+                  IMAGE_DEFAULT_WIDTH,
+                  getBlockMaxWidth(canvasWidth),
+                );
+                const pasteCoordinates = {
+                  x: getCanvasBoundedX(canvasWidth, block.x, pasteWidth),
+                  y: block.y + imageHeight + 24,
+                  width: pasteWidth,
+                };
 
                 return (
                   <div
@@ -1875,6 +2168,20 @@ export function NoteEditor({
                       openMenu(event, {
                         title: "تصویر",
                         items: [
+                          {
+                            id: "copy-image",
+                            label: "کپی",
+                            onSelect: () => copyImageToClipboard(block),
+                          },
+                          {
+                            id: "paste-after-image",
+                            label: "پیست",
+                            onSelect: () =>
+                              pasteFromClipboard({
+                                placement: pasteCoordinates,
+                              }),
+                          },
+                          { id: "separator-clipboard", separator: true },
                           {
                             id: "delete-image",
                             label: "حذف تصویر از یادداشت",
@@ -2030,6 +2337,37 @@ export function NoteEditor({
                         selectedBlockIds.length > 1
                           ? selectedBlockIds
                           : [block.id];
+                      const selectionStart =
+                        event.currentTarget.selectionStart ?? 0;
+                      const selectionEnd =
+                        event.currentTarget.selectionEnd ?? selectionStart;
+                      const selectedText =
+                        selectionStart !== selectionEnd
+                          ? block.text.slice(selectionStart, selectionEnd)
+                          : getSelectedBlocksText(selectedIds);
+                      const clipboardItems = [
+                        {
+                          id: "copy-text",
+                          label: "کپی",
+                          disabled: !selectedText,
+                          onSelect: () =>
+                            copyTextToClipboard(selectedText),
+                        },
+                        {
+                          id: "paste-text",
+                          label: "پیست",
+                          onSelect: () =>
+                            pasteFromClipboard({
+                              targetBlockId: block.id,
+                              selectionStart,
+                              selectionEnd,
+                            }),
+                        },
+                        {
+                          id: "separator-clipboard",
+                          separator: true as const,
+                        },
+                      ];
 
                       openMenu(event, {
                         title:
@@ -2039,6 +2377,7 @@ export function NoteEditor({
                         items:
                           selectedIds.length > 1
                             ? [
+                                ...clipboardItems,
                                 {
                                   id: "align-right",
                                   label: "تراز راست",
@@ -2082,6 +2421,7 @@ export function NoteEditor({
                                 },
                               ]
                             : [
+                                ...clipboardItems,
                                 {
                                   id: "undo",
                                   label: "واگرد",

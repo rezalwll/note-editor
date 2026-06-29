@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   upsertLocalPage: vi.fn(),
   enqueuePageUpsert: vi.fn(),
   processSyncQueue: vi.fn(),
+  clipboardReadText: vi.fn(),
+  clipboardWriteText: vi.fn(),
 }));
 
 let localPageStore: Record<string, unknown> | null = null;
@@ -130,6 +132,15 @@ describe("NoteEditor freeform placement", () => {
       configurable: true,
       value: "visible",
     });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        readText: mocks.clipboardReadText,
+        writeText: mocks.clipboardWriteText,
+      },
+    });
+    mocks.clipboardReadText.mockResolvedValue("");
+    mocks.clipboardWriteText.mockResolvedValue(undefined);
 
     class ResizeObserverMock {
       observe() {}
@@ -402,6 +413,150 @@ describe("NoteEditor freeform placement", () => {
     await waitFor(() => {
       expect(textarea).toHaveAttribute("dir", "rtl");
       expect(textarea).toHaveStyle({ textAlign: "right" });
+    });
+  });
+
+  it("copies the selected text from the editor context menu", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "copy-target",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "hello world",
+          },
+        ],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(0, 5);
+    fireEvent.contextMenu(textarea);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const copyAction = menu.items.find(
+      (item: { id: string }) => item.id === "copy-text",
+    );
+    await copyAction.onSelect();
+
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith("hello");
+  });
+
+  it("pastes clipboard text over the current editor selection", async () => {
+    mocks.clipboardReadText.mockResolvedValue("Codex");
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "paste-text-target",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "hello world",
+          },
+        ],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(6, 11);
+    fireEvent.contextMenu(textarea);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const pasteAction = menu.items.find(
+      (item: { id: string }) => item.id === "paste-text",
+    );
+    await pasteAction.onSelect();
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("hello Codex");
+      expect(textarea.selectionStart).toBe(11);
+      expect(textarea.selectionEnd).toBe(11);
+    });
+  });
+
+  it("pastes clipboard text into a new block at the canvas context position", async () => {
+    mocks.clipboardReadText.mockResolvedValue("new clipboard block");
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "existing-block",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "existing",
+          },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    fireEvent.contextMenu(canvas, {
+      clientX: 600,
+      clientY: 320,
+    });
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const pasteAction = menu.items.find(
+      (item: { id: string }) => item.id === "paste-at-position",
+    );
+    await pasteAction.onSelect();
+
+    await waitFor(() => {
+      const textareas = container.querySelectorAll("textarea");
+      expect(textareas).toHaveLength(2);
+      expect(textareas[1]).toHaveValue("new clipboard block");
+      expect(textareas[1].parentElement).toHaveStyle({
+        left: "372px",
+        top: "200px",
+      });
+    });
+  });
+
+  it("provides copy and paste actions for the page title", async () => {
+    mocks.clipboardReadText.mockResolvedValue("عنوان تازه");
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "title-menu",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "body",
+          },
+        ],
+      }),
+    );
+    const titleInput = container.querySelector(
+      'input[aria-label]',
+    ) as HTMLInputElement;
+    titleInput.setSelectionRange(0, titleInput.value.length);
+    fireEvent.contextMenu(titleInput);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const copyAction = menu.items.find(
+      (item: { id: string }) => item.id === "copy-title",
+    );
+    const pasteAction = menu.items.find(
+      (item: { id: string }) => item.id === "paste-title",
+    );
+
+    await copyAction.onSelect();
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith("یادداشت");
+
+    await pasteAction.onSelect();
+    await waitFor(() => {
+      expect(titleInput).toHaveValue("عنوان تازه");
     });
   });
 
