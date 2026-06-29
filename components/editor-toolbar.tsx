@@ -6,6 +6,7 @@ import {
   AlignRight,
   Bold,
   Italic,
+  ImagePlus,
   List,
   ListTodo,
   Redo2,
@@ -16,6 +17,7 @@ import { dispatchEditorCommand, type ToolbarState } from "@/lib/editor-events";
 
 const defaultState: ToolbarState = {
   hasActiveBlock: false,
+  canInsertImage: false,
   align: "right",
   bold: false,
   italic: false,
@@ -40,6 +42,7 @@ function ToolbarButton({
     <button
       type="button"
       aria-label={label}
+      title={label}
       onClick={onClick}
       disabled={disabled}
       className={[
@@ -64,6 +67,7 @@ export function EditorToolbar() {
       const customEvent = event as CustomEvent<ToolbarState>;
       setToolbarState({
         hasActiveBlock: Boolean(customEvent.detail?.hasActiveBlock),
+        canInsertImage: Boolean(customEvent.detail?.canInsertImage),
         align: customEvent.detail?.align ?? "right",
         bold: Boolean(customEvent.detail?.bold),
         italic: Boolean(customEvent.detail?.italic),
@@ -155,6 +159,17 @@ export function EditorToolbar() {
       >
         <ListTodo className="h-4 w-4" />
       </ToolbarButton>
+
+      <div className="mx-1 h-7 w-px bg-white/55" />
+
+      <ToolbarButton
+        label="افزودن تصویر"
+        disabled={!toolbarState.canInsertImage}
+        onClick={() => dispatchEditorCommand("insert-image")}
+      >
+        <ImagePlus className="h-4 w-4" />
+      </ToolbarButton>
+
       <div className="mx-1 h-7 w-px bg-white/55" />
       <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
         <span>رنگ</span>

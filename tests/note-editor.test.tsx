@@ -2,6 +2,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteEditor } from "@/components/editor/note-editor";
+import { EditorToolbar } from "@/components/editor-toolbar";
 import {
   parseFreeformDocument,
   serializeFreeformDocument,
@@ -44,17 +45,20 @@ function setViewport(width: number, height = 900) {
   });
 }
 
-function renderEditor(initialHtml: string) {
+function renderEditor(initialHtml: string, withToolbar = false) {
   return render(
-    <NoteEditor
-      userId="user-1"
-      notebookId="notebook-1"
-      pageId="page-1"
-      initialTitle="یادداشت"
-      initialHtml={initialHtml}
-      initialUpdatedAt="2026-06-21T10:00:00.000Z"
-      attachments={[]}
-    />,
+    <>
+      {withToolbar ? <EditorToolbar /> : null}
+      <NoteEditor
+        userId="user-1"
+        notebookId="notebook-1"
+        pageId="page-1"
+        initialTitle="یادداشت"
+        initialHtml={initialHtml}
+        initialUpdatedAt="2026-06-21T10:00:00.000Z"
+        attachments={[]}
+      />
+    </>,
   );
 }
 
@@ -445,6 +449,71 @@ describe("NoteEditor freeform placement", () => {
         ]),
       );
     });
+  });
+
+  it("opens the image picker from the toolbar and uploads a selected file", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        attachment: {
+          id: "attachment-picker",
+          fileName: "selected.webp",
+          mimeType: "image/webp",
+          sizeBytes: 8,
+        },
+        url: "/api/attachments/attachment-picker",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "picker-target", x: 48, y: 72, width: 240, text: "target" },
+        ],
+      }),
+      true,
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+
+    const picker = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const pickerClick = vi.spyOn(picker, "click");
+    const addImageButton = container.querySelector(
+      'button[aria-label="افزودن تصویر"]',
+    ) as HTMLButtonElement;
+
+    await waitFor(() => {
+      expect(addImageButton).toBeEnabled();
+    });
+    fireEvent.click(addImageButton);
+    expect(pickerClick).toHaveBeenCalledTimes(1);
+
+    const selectedFile = new File(["selected"], "selected.webp", {
+      type: "image/webp",
+    });
+    fireEvent.change(picker, {
+      target: { files: [selectedFile] },
+    });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('img[alt="selected.webp"]'),
+      ).not.toBeNull();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/pages/page-1/attachments",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData),
+      }),
+    );
   });
 
   it("resizes and removes an existing image block", async () => {

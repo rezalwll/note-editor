@@ -304,6 +304,7 @@ export function NoteEditor({
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const dragStateRef = useRef<{
     id: string;
@@ -929,7 +930,7 @@ export function NoteEditor({
     };
   }
 
-  async function uploadPastedImage(file: File) {
+  async function uploadImage(file: File) {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -958,27 +959,11 @@ export function NoteEditor({
     return payload;
   }
 
-  async function handleImagePaste(
-    event: React.ClipboardEvent<HTMLDivElement>,
-  ) {
-    const itemFiles = Array.from(event.clipboardData.items)
-      .filter(
-        (item) => item.kind === "file" && item.type.startsWith("image/"),
-      )
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => Boolean(file));
-    const imageFiles =
-      itemFiles.length > 0
-        ? itemFiles
-        : Array.from(event.clipboardData.files).filter((file) =>
-            file.type.startsWith("image/"),
-          );
-
+  async function insertImageFiles(imageFiles: File[]) {
     if (imageFiles.length === 0) {
       return;
     }
 
-    event.preventDefault();
     const placement = getPastedImageCoordinates();
     let nextY = placement.y;
     setImageUploadError(null);
@@ -987,7 +972,7 @@ export function NoteEditor({
       setPendingImageUploads((current) => current + 1);
 
       try {
-        const uploaded = await uploadPastedImage(file);
+        const uploaded = await uploadImage(file);
 
         if (!isMountedRef.current) {
           continue;
@@ -1024,6 +1009,39 @@ export function NoteEditor({
         }
       }
     }
+  }
+
+  function handleImagePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    const itemFiles = Array.from(event.clipboardData.items)
+      .filter(
+        (item) => item.kind === "file" && item.type.startsWith("image/"),
+      )
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    const imageFiles =
+      itemFiles.length > 0
+        ? itemFiles
+        : Array.from(event.clipboardData.files).filter((file) =>
+            file.type.startsWith("image/"),
+          );
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    void insertImageFiles(imageFiles);
+  }
+
+  function handleImageFileSelection(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const input = event.currentTarget;
+    const imageFiles = Array.from(input.files ?? []).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+    input.value = "";
+    void insertImageFiles(imageFiles);
   }
 
   function getCanvasCoordinates(
@@ -1497,6 +1515,11 @@ export function NoteEditor({
       command: EditorCommand,
       payload?: { textColor?: string; fontSize?: number },
     ) => {
+    if (command === "insert-image") {
+      imageFileInputRef.current?.click();
+      return;
+    }
+
     const targetIds =
       selectedBlockIds.length > 0
         ? selectedBlockIds
@@ -1593,20 +1616,41 @@ export function NoteEditor({
   }, []);
 
   useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("note-editor-state", {
-        detail: {
-          hasActiveBlock: Boolean(activeBlock),
-          align: activeBlock?.align ?? "right",
-          bold: activeBlock?.bold ?? false,
-          italic: activeBlock?.italic ?? false,
-          textColor: activeBlock?.textColor ?? "#222222",
-          fontSize: activeBlock?.fontSize ?? 15,
-          selectionCount: selectedBlockIds.length,
-        },
-      }),
-    );
+    const dispatchToolbarState = () => {
+      window.dispatchEvent(
+        new CustomEvent("note-editor-state", {
+          detail: {
+            hasActiveBlock: Boolean(activeBlock),
+            canInsertImage: true,
+            align: activeBlock?.align ?? "right",
+            bold: activeBlock?.bold ?? false,
+            italic: activeBlock?.italic ?? false,
+            textColor: activeBlock?.textColor ?? "#222222",
+            fontSize: activeBlock?.fontSize ?? 15,
+            selectionCount: selectedBlockIds.length,
+          },
+        }),
+      );
+    };
+
+    dispatchToolbarState();
+    const animationFrameId = requestAnimationFrame(dispatchToolbarState);
+    return () => cancelAnimationFrame(animationFrameId);
   }, [activeBlock, selectedBlockIds.length]);
+
+  useEffect(
+    () => () => {
+      window.dispatchEvent(
+        new CustomEvent("note-editor-state", {
+          detail: {
+            hasActiveBlock: false,
+            canInsertImage: false,
+          },
+        }),
+      );
+    },
+    [],
+  );
 
   function startDraggingBlock(
     event: React.PointerEvent<HTMLButtonElement>,
@@ -1654,8 +1698,16 @@ export function NoteEditor({
   return (
     <div
       className="h-full bg-white"
-      onPaste={(event) => void handleImagePaste(event)}
+      onPaste={handleImagePaste}
     >
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
+        className="hidden"
+        onChange={handleImageFileSelection}
+      />
       <div className="min-h-full w-full">
         <div
           ref={pageRef}
