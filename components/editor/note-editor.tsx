@@ -59,7 +59,13 @@ type NoteEditorProps = {
 
 type BlockSnapshot = Pick<
   FreeformBlock,
-  "text" | "align" | "bold" | "italic" | "textColor" | "fontSize"
+  | "text"
+  | "align"
+  | "direction"
+  | "bold"
+  | "italic"
+  | "textColor"
+  | "fontSize"
 >;
 type CanvasCoordinates = {
   x: number;
@@ -193,6 +199,7 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
             y: 72,
             text: "",
             align: "right",
+            direction: "rtl",
             textColor: "#222222",
             fontSize: 15,
           },
@@ -211,6 +218,7 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
       y: 72,
       text: plainText,
       align: "right",
+      direction: "rtl",
       textColor: "#222222",
       fontSize: 15,
     },
@@ -221,6 +229,7 @@ function toSnapshot(block: FreeformBlock): BlockSnapshot {
   return {
     text: block.text,
     align: block.align ?? "right",
+    direction: block.direction ?? "rtl",
     bold: block.bold ?? false,
     italic: block.italic ?? false,
     textColor: block.textColor ?? "#222222",
@@ -233,6 +242,7 @@ function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
     ...block,
     text: snapshotValue.text,
     align: snapshotValue.align ?? "right",
+    direction: snapshotValue.direction ?? "rtl",
     bold: snapshotValue.bold ?? false,
     italic: snapshotValue.italic ?? false,
     textColor: snapshotValue.textColor ?? "#222222",
@@ -866,6 +876,7 @@ export function NoteEditor({
       width,
       text: "",
       align: "right",
+      direction: "rtl",
       textColor: "#222222",
       fontSize: 15,
     };
@@ -1579,6 +1590,16 @@ export function NoteEditor({
       case "align-justify":
         updateBlocksByIds(targetIds, (block) => ({ ...block, align: "justify" }));
         return;
+      case "set-direction-rtl":
+        updateBlocksByIds(targetIds, (block) =>
+          isImageBlock(block) ? block : { ...block, direction: "rtl" },
+        );
+        return;
+      case "set-direction-ltr":
+        updateBlocksByIds(targetIds, (block) =>
+          isImageBlock(block) ? block : { ...block, direction: "ltr" },
+        );
+        return;
       case "set-text-color":
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
@@ -1623,6 +1644,7 @@ export function NoteEditor({
             hasActiveBlock: Boolean(activeBlock),
             canInsertImage: true,
             align: activeBlock?.align ?? "right",
+            direction: activeBlock?.direction ?? "rtl",
             bold: activeBlock?.bold ?? false,
             italic: activeBlock?.italic ?? false,
             textColor: activeBlock?.textColor ?? "#222222",
@@ -2137,7 +2159,7 @@ export function NoteEditor({
                       borderRadius: "6px",
                     }}
                     className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
-                    dir="rtl"
+                    dir={block.direction ?? "rtl"}
                   />
                 </div>
                 );

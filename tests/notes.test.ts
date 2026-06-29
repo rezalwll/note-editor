@@ -48,6 +48,29 @@ describe("note content", () => {
     });
   });
 
+  it("round-trips text direction independently from alignment", () => {
+    const serialized = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        {
+          id: "mixed-language",
+          x: 48,
+          y: 72,
+          text: "English متن فارسی",
+          align: "right",
+          direction: "ltr",
+        },
+      ],
+    });
+
+    expect(parseFreeformDocument(serialized)?.blocks[0]).toEqual(
+      expect.objectContaining({
+        align: "right",
+        direction: "ltr",
+      }),
+    );
+  });
+
   it("round-trips image blocks with their attachment and layout metadata", () => {
     const serialized = serializeFreeformDocument({
       type: "freeform-v1",

@@ -359,6 +359,52 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("changes text direction without changing its alignment", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "mixed-direction",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "English متن فارسی",
+            align: "right",
+            direction: "rtl",
+          },
+        ],
+      }),
+      true,
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+
+    const ltrButton = container.querySelector(
+      'button[aria-label="جهت متن چپ به راست"]',
+    ) as HTMLButtonElement;
+    const rtlButton = container.querySelector(
+      'button[aria-label="جهت متن راست به چپ"]',
+    ) as HTMLButtonElement;
+
+    await waitFor(() => {
+      expect(ltrButton).toBeEnabled();
+    });
+    fireEvent.click(ltrButton);
+
+    await waitFor(() => {
+      expect(textarea).toHaveAttribute("dir", "ltr");
+      expect(textarea).toHaveStyle({ textAlign: "right" });
+    });
+
+    fireEvent.click(rtlButton);
+
+    await waitFor(() => {
+      expect(textarea).toHaveAttribute("dir", "rtl");
+      expect(textarea).toHaveStyle({ textAlign: "right" });
+    });
+  });
+
   it("uploads a pasted clipboard image and persists it as an image block", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

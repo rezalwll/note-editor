@@ -9,6 +9,8 @@ import {
   ImagePlus,
   List,
   ListTodo,
+  PilcrowLeft,
+  PilcrowRight,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -19,6 +21,7 @@ const defaultState: ToolbarState = {
   hasActiveBlock: false,
   canInsertImage: false,
   align: "right",
+  direction: "rtl",
   bold: false,
   italic: false,
   textColor: "#222222",
@@ -69,6 +72,7 @@ export function EditorToolbar() {
         hasActiveBlock: Boolean(customEvent.detail?.hasActiveBlock),
         canInsertImage: Boolean(customEvent.detail?.canInsertImage),
         align: customEvent.detail?.align ?? "right",
+        direction: customEvent.detail?.direction ?? "rtl",
         bold: Boolean(customEvent.detail?.bold),
         italic: Boolean(customEvent.detail?.italic),
         textColor: customEvent.detail?.textColor ?? "#222222",
@@ -122,6 +126,25 @@ export function EditorToolbar() {
         onClick={() => dispatchEditorCommand("align-justify")}
       >
         <AlignJustify className="h-4 w-4" />
+      </ToolbarButton>
+
+      <div className="mx-1 h-7 w-px bg-white/55" />
+
+      <ToolbarButton
+        label="جهت متن راست به چپ"
+        active={toolbarState.direction === "rtl"}
+        disabled={!toolbarState.hasActiveBlock}
+        onClick={() => dispatchEditorCommand("set-direction-rtl")}
+      >
+        <PilcrowLeft className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        label="جهت متن چپ به راست"
+        active={toolbarState.direction === "ltr"}
+        disabled={!toolbarState.hasActiveBlock}
+        onClick={() => dispatchEditorCommand("set-direction-ltr")}
+      >
+        <PilcrowRight className="h-4 w-4" />
       </ToolbarButton>
 
       <div className="mx-1 h-7 w-px bg-white/55" />

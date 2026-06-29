@@ -8,6 +8,8 @@ export type EditorCommand =
   | "align-right"
   | "align-center"
   | "align-justify"
+  | "set-direction-rtl"
+  | "set-direction-ltr"
   | "insert-image"
   | "delete-block"
   | "set-text-color"
@@ -17,6 +19,7 @@ export type ToolbarState = {
   hasActiveBlock: boolean;
   canInsertImage: boolean;
   align: "right" | "center" | "justify";
+  direction: "rtl" | "ltr";
   bold: boolean;
   italic: boolean;
   textColor: string;

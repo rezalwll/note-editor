@@ -67,6 +67,7 @@ const freeformBlockSchema = z.object({
   fileName: z.string().trim().max(255).optional(),
   aspectRatio: z.number().positive().max(20).optional(),
   align: z.enum(["right", "center", "justify"]).optional(),
+  direction: z.enum(["rtl", "ltr"]).optional(),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   textColor: z.string().trim().max(24).optional(),
