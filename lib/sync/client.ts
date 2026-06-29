@@ -14,8 +14,20 @@ import {
   updateLocalSyncStatus,
   pushQueue,
 } from "@/lib/offline-db/client";
+import type { SyncStatus } from "@/lib/offline-db/types";
 
 let syncInFlight: Promise<void> | null = null;
+
+function dispatchSyncIndicatorEvent(detail: {
+  phase: "start" | "complete" | "error";
+  syncStatus?: SyncStatus;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent("notava-sync", { detail: { type: "global", ...detail } }));
+}
 
 export async function bootstrapOfflineState(userId: string) {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -47,28 +59,47 @@ export async function processSyncQueue(userId: string) {
   }
 
   syncInFlight = (async () => {
+    dispatchSyncIndicatorEvent({ phase: "start", syncStatus: "pending" });
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
+      dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "failed" });
       return;
     }
 
-    const queue = await listPendingQueue(userId);
+    try {
+      const queue = await listPendingQueue(userId);
 
-    if (queue.length === 0) {
-      await pullRemoteChanges(userId);
-      return;
-    }
+      if (queue.length === 0) {
+        await pullRemoteChanges(userId);
+        dispatchSyncIndicatorEvent({ phase: "complete", syncStatus: "synced" });
+        return;
+      }
 
-    const result = await pushQueue(queue);
-    await applySyncPushResult(userId, result);
-    await upsertConflictRecords(userId, result.conflicts);
+      const result = await pushQueue(queue);
+      await applySyncPushResult(userId, result);
+      await upsertConflictRecords(userId, result.conflicts);
 
-    for (const page of result.pages) {
-      await updateLocalSyncStatus(
-        userId,
-        page.id,
-        page.syncStatus,
-        page.lastSyncedAt ?? null,
-      );
+      for (const page of result.pages) {
+        await updateLocalSyncStatus(
+          userId,
+          page.id,
+          page.syncStatus,
+          page.lastSyncedAt ?? null,
+        );
+      }
+
+      if (result.conflicts.length > 0) {
+        dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "conflict" });
+        return;
+      }
+
+      const remainingQueue = await listPendingQueue(userId);
+      const syncStatus = remainingQueue.length > 0 ? "pending" : "synced";
+
+      dispatchSyncIndicatorEvent({ phase: "complete", syncStatus });
+    } catch (error) {
+      dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "failed" });
+      throw error;
     }
   })().finally(() => {
     syncInFlight = null;

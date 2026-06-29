@@ -31,6 +31,7 @@ import {
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
+import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import {
   dispatchGroupRenamed,
   dispatchNotebookRenamed,
@@ -641,19 +642,22 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
           <BrandLogo frameClassName="h-7 w-[100px]" showWordmark={false} />
 
-          <button
-            ref={profileTriggerRef}
-            type="button"
-            onClick={() => {
-              setProfileOpen((current) => !current);
-              setSectionsOpen(false);
-              setPagesOpen(false);
-            }}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            aria-label="باز کردن پروفایل"
-          >
-            <UserRound className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <SyncStatusIndicator />
+            <button
+              ref={profileTriggerRef}
+              type="button"
+              onClick={() => {
+                setProfileOpen((current) => !current);
+                setSectionsOpen(false);
+                setPagesOpen(false);
+              }}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
+              aria-label="باز کردن پروفایل"
+            >
+              <UserRound className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto px-3 pb-2">

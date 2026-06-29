@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { logoutAction } from "@/app/actions";
+import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 
 type DesktopProfileMenuProps = {
   currentUser: {
@@ -80,7 +81,9 @@ export function DesktopProfileMenu({
   }, [open]);
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-2">
+      <SyncStatusIndicator />
+
       <button
         ref={triggerRef}
         type="button"

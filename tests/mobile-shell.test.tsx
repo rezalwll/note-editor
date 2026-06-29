@@ -109,4 +109,18 @@ describe("MobileShell", () => {
       expect(screen.getByRole("button", { name: "زیر مجموعه تغییر کرده" })).toBeInTheDocument();
     });
   });
+  it("renders the sync status indicator in the mobile header", () => {
+    render(
+      <MobileShell
+        groups={[]}
+        notebooks={[]}
+        currentUser={{
+          username: "user1",
+          displayName: "User One",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+  });
 });
