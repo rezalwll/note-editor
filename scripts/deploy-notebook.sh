@@ -242,8 +242,6 @@ build_app() {
 }
 
 activate_release() {
-  pm2 delete notebook >/dev/null 2>&1 || true
-
   rm -rf "${PREVIOUS_DIR}"
   if [[ -d "${APP_DIR}" ]]; then
     mv "${APP_DIR}" "${PREVIOUS_DIR}"
@@ -299,7 +297,11 @@ NGINXEOF
   rm -f /etc/nginx/sites-enabled/default
   nginx -t
   systemctl enable nginx
-  systemctl restart nginx
+  if systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+  else
+    systemctl start nginx
+  fi
 }
 
 configure_ssl() {
@@ -337,8 +339,11 @@ configure_ssl() {
 
 start_app() {
   cd "${APP_DIR}"
-  pm2 delete notebook >/dev/null 2>&1 || true
-  pm2 start npm --name notebook -- start -- --hostname 127.0.0.1 --port "${PORT}"
+  if pm2 describe notebook >/dev/null 2>&1; then
+    pm2 restart notebook --update-env
+  else
+    pm2 start npm --name notebook -- start -- --hostname 127.0.0.1 --port "${PORT}"
+  fi
   pm2 save
   env PATH="$PATH:/usr/bin" pm2 startup systemd -u root --hp /root >/dev/null
 }
@@ -383,8 +388,8 @@ prepare_postgres
 deploy_files
 write_env
 build_app
-activate_release
 configure_nginx
+activate_release
 start_app
 configure_ssl
 print_summary
