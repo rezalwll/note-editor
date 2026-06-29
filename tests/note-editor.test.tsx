@@ -2,7 +2,10 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteEditor } from "@/components/editor/note-editor";
-import { serializeFreeformDocument } from "@/lib/notes";
+import {
+  parseFreeformDocument,
+  serializeFreeformDocument,
+} from "@/lib/notes";
 
 const mocks = vi.hoisted(() => ({
   openMenu: vi.fn(),
@@ -349,6 +352,163 @@ describe("NoteEditor freeform placement", () => {
         color: "rgb(255, 51, 102)",
         fontSize: "24px",
       });
+    });
+  });
+
+  it("uploads a pasted clipboard image and persists it as an image block", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        attachment: {
+          id: "attachment-1",
+          fileName: "clipboard.png",
+          mimeType: "image/png",
+          sizeBytes: 4,
+        },
+        url: "/api/attachments/attachment-1",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "paste-target", x: 48, y: 72, width: 240, text: "target" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        attachment: {
+          id: "attachment-1",
+          fileName: "clipboard.png",
+          mimeType: "image/png",
+          sizeBytes: 4,
+        },
+        url: "/api/attachments/attachment-1",
+      }),
+    });
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const imageFile = new File(["test"], "clipboard.png", {
+      type: "image/png",
+    });
+    fireEvent.focus(textarea);
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [
+          {
+            kind: "file",
+            type: "image/png",
+            getAsFile: () => imageFile,
+          },
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('img[alt="clipboard.png"]'),
+      ).not.toBeNull();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/pages/page-1/attachments",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData),
+      }),
+    );
+
+    await waitFor(() => {
+      const savedPage = mocks.upsertLocalPage.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("attachment-1"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "image",
+            attachmentId: "attachment-1",
+            fileName: "clipboard.png",
+          }),
+        ]),
+      );
+    });
+  });
+
+  it("resizes and removes an existing image block", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "image-existing",
+            type: "image",
+            attachmentId: "attachment-existing",
+            fileName: "existing.png",
+            aspectRatio: 2,
+            x: 48,
+            y: 120,
+            width: 420,
+            text: "",
+          },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+
+    const imageBlock = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-testid="image-block-image-existing"]',
+      ) as HTMLDivElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLDivElement;
+    });
+    const resizeButton = container.querySelector(
+      'button[aria-label="تغییر اندازه تصویر"]',
+    ) as HTMLButtonElement;
+
+    fireEvent.pointerDown(resizeButton, {
+      button: 0,
+      clientX: 468,
+      pointerId: 20,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 548,
+      pointerId: 20,
+    });
+    fireEvent.pointerUp(window, { pointerId: 20 });
+
+    await waitFor(() => {
+      expect(imageBlock).toHaveStyle({ width: "500px" });
+    });
+
+    fireEvent.click(
+      container.querySelector(
+        'button[aria-label="حذف تصویر"]',
+      ) as HTMLButtonElement,
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelector(
+          '[data-testid="image-block-image-existing"]',
+        ),
+      ).toBeNull();
     });
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { GripVertical } from "lucide-react";
+import Image from "next/image";
+import { GripVertical, LoaderCircle, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -40,6 +41,11 @@ type Attachment = {
   sizeBytes: number;
 };
 
+type AttachmentUploadResponse = {
+  attachment: Attachment;
+  url: string;
+};
+
 type NoteEditorProps = {
   userId: string;
   notebookId: string;
@@ -70,6 +76,9 @@ const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
 const BLOCK_RTL_CLICK_ANCHOR = 12;
 const AUTOSAVE_DEBOUNCE_MS = 150;
+const IMAGE_DEFAULT_WIDTH = 420;
+const IMAGE_MIN_WIDTH = 160;
+const IMAGE_DEFAULT_ASPECT_RATIO = 4 / 3;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
@@ -161,6 +170,14 @@ function getRenderedBlockWidth(block: FreeformBlock, canvasWidth: number) {
   return typeof block.width === "number"
     ? Math.min(block.width, getBlockMaxWidth(canvasWidth))
     : getLegacyBlockWidth(block.x, canvasWidth);
+}
+
+function isImageBlock(block: FreeformBlock) {
+  return block.type === "image" && Boolean(block.attachmentId);
+}
+
+function getImageBlockHeight(block: FreeformBlock, width: number) {
+  return width / (block.aspectRatio ?? IMAGE_DEFAULT_ASPECT_RATIO);
 }
 
 function getInitialBlocks(initialHtml: string): FreeformBlock[] {
@@ -282,6 +299,8 @@ export function NoteEditor({
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [lowestBlockBottom, setLowestBlockBottom] = useState(0);
+  const [pendingImageUploads, setPendingImageUploads] = useState(0);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -290,6 +309,11 @@ export function NoteEditor({
     id: string;
     pointerOffsetX: number;
     pointerOffsetY: number;
+  } | null>(null);
+  const resizeStateRef = useRef<{
+    id: string;
+    startClientX: number;
+    startWidth: number;
   } | null>(null);
   const historyRef = useRef<
     Record<string, { past: BlockSnapshot[]; future: BlockSnapshot[] }>
@@ -330,7 +354,10 @@ export function NoteEditor({
   const desktopCanvasMinHeight = Math.max(viewportHeight - 240, lowestBlockBottom + 360);
 
   const snapshot = `${title}::${serializedDocument}`;
-  const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
+  const activeBlock =
+    blocks.find(
+      (block) => block.id === activeBlockId && !isImageBlock(block),
+    ) ?? null;
 
   function markEditorInteraction() {
     if (!isHydrated) {
@@ -495,11 +522,14 @@ export function NoteEditor({
     if (!selectionRestoreRef.current) {
       const nextLowestBlockBottom = blocks.reduce((max, block) => {
         const element = blockRefs.current[block.id];
-        const blockHeight = Math.max(
-          element?.scrollHeight ?? 28,
-          element?.offsetHeight ?? 28,
-          28,
-        );
+        const blockWidth = getRenderedBlockWidth(block, canvasWidth);
+        const blockHeight = isImageBlock(block)
+          ? getImageBlockHeight(block, blockWidth)
+          : Math.max(
+              element?.scrollHeight ?? 28,
+              element?.offsetHeight ?? 28,
+              28,
+            );
         return Math.max(max, block.y + blockHeight);
       }, 0);
 
@@ -520,11 +550,14 @@ export function NoteEditor({
 
     const nextLowestBlockBottom = blocks.reduce((max, block) => {
       const blockElement = blockRefs.current[block.id];
-      const blockHeight = Math.max(
-        blockElement?.scrollHeight ?? 28,
-        blockElement?.offsetHeight ?? 28,
-        28,
-      );
+      const blockWidth = getRenderedBlockWidth(block, canvasWidth);
+      const blockHeight = isImageBlock(block)
+        ? getImageBlockHeight(block, blockWidth)
+        : Math.max(
+            blockElement?.scrollHeight ?? 28,
+            blockElement?.offsetHeight ?? 28,
+            28,
+          );
       return Math.max(max, block.y + blockHeight);
     }, 0);
 
@@ -852,6 +885,147 @@ export function NoteEditor({
     addBlock();
   }
 
+  function getPastedImageCoordinates() {
+    const targetCanvasWidth =
+      canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
+    const width = Math.min(
+      IMAGE_DEFAULT_WIDTH,
+      getBlockMaxWidth(targetCanvasWidth),
+    );
+    const selectedBlock = blocks.find((block) => block.id === activeBlockId);
+
+    if (selectedBlock) {
+      const selectedWidth = getRenderedBlockWidth(
+        selectedBlock,
+        targetCanvasWidth,
+      );
+      const selectedElement = blockRefs.current[selectedBlock.id];
+      const selectedHeight = isImageBlock(selectedBlock)
+        ? getImageBlockHeight(selectedBlock, selectedWidth)
+        : Math.max(
+            selectedElement?.scrollHeight ?? 28,
+            selectedElement?.offsetHeight ?? 28,
+            28,
+          );
+
+      return {
+        x: getCanvasBoundedX(targetCanvasWidth, selectedBlock.x, width),
+        y: selectedBlock.y + selectedHeight + 24,
+        width,
+      };
+    }
+
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    const visibleCanvasTop = canvasRect ? Math.max(24, 72 - canvasRect.top) : 72;
+
+    return {
+      x: getCanvasBoundedX(
+        targetCanvasWidth,
+        targetCanvasWidth - width - getBlockRightGutter(targetCanvasWidth),
+        width,
+      ),
+      y: visibleCanvasTop,
+      width,
+    };
+  }
+
+  async function uploadPastedImage(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`/api/pages/${pageId}/attachments`, {
+      method: "POST",
+      body: formData,
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | AttachmentUploadResponse
+      | { error?: string }
+      | null;
+
+    if (
+      !response.ok ||
+      !payload ||
+      !("attachment" in payload) ||
+      !payload.attachment?.id
+    ) {
+      const message =
+        payload && "error" in payload && payload.error
+          ? payload.error
+          : "بارگذاری تصویر انجام نشد.";
+      throw new Error(message);
+    }
+
+    return payload;
+  }
+
+  async function handleImagePaste(
+    event: React.ClipboardEvent<HTMLDivElement>,
+  ) {
+    const itemFiles = Array.from(event.clipboardData.items)
+      .filter(
+        (item) => item.kind === "file" && item.type.startsWith("image/"),
+      )
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    const imageFiles =
+      itemFiles.length > 0
+        ? itemFiles
+        : Array.from(event.clipboardData.files).filter((file) =>
+            file.type.startsWith("image/"),
+          );
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const placement = getPastedImageCoordinates();
+    let nextY = placement.y;
+    setImageUploadError(null);
+
+    for (const file of imageFiles) {
+      setPendingImageUploads((current) => current + 1);
+
+      try {
+        const uploaded = await uploadPastedImage(file);
+
+        if (!isMountedRef.current) {
+          continue;
+        }
+
+        const block: FreeformBlock = {
+          id: createId(),
+          type: "image",
+          attachmentId: uploaded.attachment.id,
+          fileName: uploaded.attachment.fileName,
+          x: placement.x,
+          y: nextY,
+          width: placement.width,
+          text: "",
+          aspectRatio: IMAGE_DEFAULT_ASPECT_RATIO,
+        };
+
+        markEditorInteraction();
+        setBlocks((current) => [...current, block]);
+        setActiveBlockId(block.id);
+        setSelectedBlockIds([block.id]);
+        nextY += getImageBlockHeight(block, placement.width) + 24;
+      } catch (error) {
+        console.error("Failed to upload a pasted image.", error);
+
+        if (isMountedRef.current) {
+          setImageUploadError(
+            error instanceof Error ? error.message : "بارگذاری تصویر انجام نشد.",
+          );
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setPendingImageUploads((current) => Math.max(0, current - 1));
+        }
+      }
+    }
+  }
+
   function getCanvasCoordinates(
     clientX: number,
     clientY: number,
@@ -877,6 +1051,7 @@ export function NoteEditor({
 
   function isEditorControlTarget(target: HTMLElement) {
     return Boolean(
+      target.closest("[data-editor-block]") ||
       target.closest("textarea") ||
       target.closest("button") ||
       target.closest("input"),
@@ -1220,16 +1395,59 @@ export function NoteEditor({
     );
   });
 
+  const handleImageResize = useEffectEvent((event: PointerEvent) => {
+    if (!canvasRef.current || !resizeStateRef.current) {
+      return;
+    }
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const currentBlock = blocks.find(
+      (block) => block.id === resizeStateRef.current?.id,
+    );
+
+    if (!currentBlock) {
+      return;
+    }
+
+    const maxWidth = Math.max(
+      IMAGE_MIN_WIDTH,
+      rect.width - currentBlock.x - getBlockRightGutter(rect.width),
+    );
+    const nextWidth = Math.min(
+      maxWidth,
+      Math.max(
+        IMAGE_MIN_WIDTH,
+        resizeStateRef.current.startWidth +
+          event.clientX -
+          resizeStateRef.current.startClientX,
+      ),
+    );
+
+    markEditorInteraction();
+    setBlocks((current) =>
+      current.map((block) =>
+        block.id === resizeStateRef.current?.id
+          ? { ...block, width: nextWidth }
+          : block,
+      ),
+    );
+  });
+
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => handleBlockDrag(event);
+    const handleResizePointerMove = (event: PointerEvent) =>
+      handleImageResize(event);
     const handlePointerUp = () => {
       dragStateRef.current = null;
+      resizeStateRef.current = null;
     };
 
     window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointermove", handleResizePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointermove", handleResizePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
   }, []);
@@ -1412,8 +1630,32 @@ export function NoteEditor({
     };
   }
 
+  function startResizingImage(
+    event: React.PointerEvent<HTMLButtonElement>,
+    block: FreeformBlock,
+  ) {
+    if (!canvasRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    selectSingleBlock(block.id);
+    resizeStateRef.current = {
+      id: block.id,
+      startClientX: event.clientX,
+      startWidth: getRenderedBlockWidth(
+        block,
+        canvasRef.current.getBoundingClientRect().width,
+      ),
+    };
+  }
+
   return (
-    <div className="h-full bg-white">
+    <div
+      className="h-full bg-white"
+      onPaste={(event) => void handleImagePaste(event)}
+    >
       <div className="min-h-full w-full">
         <div
           ref={pageRef}
@@ -1515,15 +1757,148 @@ export function NoteEditor({
               });
             }}
           >
+            <div
+              className="pointer-events-none sticky top-3 z-30 flex justify-end px-4 md:px-8"
+              aria-live="polite"
+            >
+              {pendingImageUploads > 0 ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#b9d9c6] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#35674a] shadow-sm">
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  در حال بارگذاری تصویر
+                </span>
+              ) : imageUploadError ? (
+                <span className="rounded-full border border-[#f0b8b8] bg-white/95 px-3 py-1.5 text-xs font-medium text-[#a43f3f] shadow-sm">
+                  {imageUploadError}
+                </span>
+              ) : null}
+            </div>
+
             {blocks.map((block) => {
               const blockWidth = getRenderedBlockWidth(block, canvasWidth);
               const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
               const isSelected = selectedBlockIds.includes(block.id);
 
+              if (isImageBlock(block) && block.attachmentId) {
+                const imageHeight = getImageBlockHeight(block, blockWidth);
+
+                return (
+                  <div
+                    key={block.id}
+                    data-testid={`image-block-${block.id}`}
+                    data-editor-block
+                    data-layout="freeform"
+                    style={{
+                      left: `${blockX}px`,
+                      top: `${block.y}px`,
+                      width: `${blockWidth}px`,
+                    }}
+                    className="group absolute"
+                    onPointerDown={() => selectSingleBlock(block.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      selectSingleBlock(block.id);
+                      openMenu(event, {
+                        title: "تصویر",
+                        items: [
+                          {
+                            id: "delete-image",
+                            label: "حذف تصویر از یادداشت",
+                            danger: true,
+                            onSelect: () => deleteBlock(block.id),
+                          },
+                        ],
+                      });
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onPointerDown={(event) =>
+                        startDraggingBlock(event, block)
+                      }
+                      className="absolute -right-8 top-1 z-10 inline-flex h-7 w-7 touch-none items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] opacity-100 shadow-sm transition hover:bg-[#f0f8f4] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      aria-label="جابه‌جایی تصویر"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteBlock(block.id);
+                      }}
+                      className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#a94444] opacity-100 shadow-sm transition hover:bg-[#fff0f0] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      aria-label="حذف تصویر"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+
+                    <div
+                      className="overflow-hidden rounded-xl border bg-[#f5f7f6]"
+                      style={{
+                        borderColor: isSelected
+                          ? notebookTheme.accent
+                          : "#dce5df",
+                        boxShadow: isSelected
+                          ? `0 0 0 2px ${notebookTheme.accent}`
+                          : "0 8px 24px rgba(49, 72, 59, 0.12)",
+                      }}
+                    >
+                      <Image
+                        src={`/api/attachments/${block.attachmentId}`}
+                        alt={block.fileName ?? "تصویر یادداشت"}
+                        width={Math.max(1, Math.round(blockWidth))}
+                        height={Math.max(1, Math.round(imageHeight))}
+                        unoptimized
+                        draggable={false}
+                        className="block h-auto w-full select-none object-contain"
+                        onLoad={(event) => {
+                          const { naturalWidth, naturalHeight } =
+                            event.currentTarget;
+
+                          if (naturalWidth > 0 && naturalHeight > 0) {
+                            const nextAspectRatio =
+                              naturalWidth / naturalHeight;
+
+                            if (
+                              Math.abs(
+                                nextAspectRatio -
+                                  (block.aspectRatio ??
+                                    IMAGE_DEFAULT_ASPECT_RATIO),
+                              ) > 0.01
+                            ) {
+                              updateBlock(
+                                block.id,
+                                (current) => ({
+                                  ...current,
+                                  aspectRatio: nextAspectRatio,
+                                }),
+                                false,
+                              );
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onPointerDown={(event) =>
+                        startResizingImage(event, block)
+                      }
+                      className="absolute -bottom-2 -right-2 z-10 h-5 w-5 touch-none cursor-se-resize rounded-full border-2 border-white bg-[#4f9b6c] opacity-100 shadow transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      aria-label="تغییر اندازه تصویر"
+                    />
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={block.id}
                   data-testid={`note-block-${block.id}`}
+                  data-editor-block
                   data-layout="freeform"
                   style={{
                     left: `${blockX}px`,

@@ -48,6 +48,37 @@ describe("note content", () => {
     });
   });
 
+  it("round-trips image blocks with their attachment and layout metadata", () => {
+    const serialized = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        {
+          id: "image-block",
+          type: "image",
+          attachmentId: "attachment-1",
+          fileName: "clipboard.png",
+          aspectRatio: 1.5,
+          x: 48,
+          y: 120,
+          width: 420,
+          text: "",
+        },
+      ],
+    });
+
+    expect(parseFreeformDocument(serialized)?.blocks[0]).toEqual({
+      id: "image-block",
+      type: "image",
+      attachmentId: "attachment-1",
+      fileName: "clipboard.png",
+      aspectRatio: 1.5,
+      x: 48,
+      y: 120,
+      width: 420,
+      text: "",
+    });
+  });
+
   it("sanitizes executable markup while preserving note text", () => {
     const html = sanitizeNoteHtml(
       '<p>متن امن</p><script>alert(1)</script><img src="x" onerror="alert(2)">',
