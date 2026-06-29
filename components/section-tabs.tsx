@@ -855,11 +855,18 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                             onSelect: () => beginRenameGroup(group.id, group.name),
                           },
                           { id: "separator-1", separator: true as const },
-                          ...NOTEBOOK_THEMES.map((theme) => ({
-                            id: `theme-group-${theme.key}`,
-                            label: `رنگ مجموعه: ${theme.label}`,
-                            onSelect: () => updateGroupTheme(group.id, theme.key),
-                          })),
+                          {
+                            id: "group-color",
+                            label: "رنگ",
+                            submenu: NOTEBOOK_THEMES.map((theme) => ({
+                              id: `theme-group-${theme.key}`,
+                              label: theme.label,
+                              swatch: theme.tab,
+                              selected: pillTheme.key === theme.key,
+                              onSelect: () =>
+                                updateGroupTheme(group.id, theme.key),
+                            })),
+                          },
                           { id: "separator-2", separator: true as const },
                           {
                             id: "delete-group",
@@ -1083,12 +1090,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                                   label: "تغییر نام زیر مجموعه",
                                   onSelect: () => beginRenameNotebook(notebook),
                                 },
-                                ...NOTEBOOK_THEMES.map((theme) => ({
-                                  id: `theme-notebook-${theme.key}`,
-                                  label: `رنگ زیرمجموعه: ${theme.label}`,
-                                  onSelect: () =>
-                                    updateNotebookTheme(notebook.id, theme.key),
-                                })),
+                                {
+                                  id: "notebook-color",
+                                  label: "رنگ",
+                                  submenu: NOTEBOOK_THEMES.map((colorTheme) => ({
+                                    id: `theme-notebook-${colorTheme.key}`,
+                                    label: colorTheme.label,
+                                    swatch: colorTheme.tab,
+                                    selected: theme.key === colorTheme.key,
+                                    onSelect: () =>
+                                      updateNotebookTheme(
+                                        notebook.id,
+                                        colorTheme.key,
+                                      ),
+                                  })),
+                                },
                               ]
                             : []),
                           { id: "separator-open", separator: true as const },

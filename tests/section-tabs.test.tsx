@@ -307,6 +307,76 @@ describe("SectionTabs", () => {
     );
   });
 
+  it("nests group and notebook colors under a single color item", () => {
+    render(
+      <SectionTabs
+        groups={[
+          {
+            id: "group-1",
+            name: "Work",
+            notebookCount: 1,
+            themeKey: "rose",
+            systemKey: null,
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            themeKey: "mint",
+            pageIds: [],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Work"));
+    const groupMenu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const groupColor = groupMenu.items.find(
+      (item: { id: string }) => item.id === "group-color",
+    );
+
+    expect(groupColor.label).toBe("رنگ");
+    expect(groupColor.submenu).toHaveLength(10);
+    expect(groupColor.submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "theme-group-rose",
+          selected: true,
+          swatch: expect.stringMatching(/^#/),
+        }),
+      ]),
+    );
+    expect(
+      groupMenu.items.some((item: { id: string }) =>
+        item.id.startsWith("theme-group-"),
+      ),
+    ).toBe(false);
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: "Inbox" }));
+    const notebookMenu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const notebookColor = notebookMenu.items.find(
+      (item: { id: string }) => item.id === "notebook-color",
+    );
+
+    expect(notebookColor.label).toBe("رنگ");
+    expect(notebookColor.submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "theme-notebook-mint",
+          selected: true,
+          swatch: expect.stringMatching(/^#/),
+        }),
+      ]),
+    );
+    expect(
+      notebookMenu.items.some((item: { id: string }) =>
+        item.id.startsWith("theme-notebook-"),
+      ),
+    ).toBe(false);
+  });
+
   it("does not switch to trash after deleting a notebook", async () => {
     render(
       <SectionTabs

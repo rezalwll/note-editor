@@ -1,23 +1,28 @@
 "use client";
 
+import { Check, ChevronLeft } from "lucide-react";
 import {
   createContext,
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
-type ContextMenuItem = {
+export type ContextMenuItem = {
   id: string;
   label: string;
   onSelect?: () => void | Promise<void>;
   disabled?: boolean;
   danger?: boolean;
+  submenu?: ContextMenuEntry[];
+  swatch?: string;
+  selected?: boolean;
 };
 
-type ContextMenuEntry = ContextMenuItem | { id: string; separator: true };
+export type ContextMenuEntry =
+  | ContextMenuItem
+  | { id: string; separator: true };
 
 type ContextMenuState = {
   x: number;
@@ -50,7 +55,6 @@ export function ContextMenuProvider({
   children: React.ReactNode;
 }) {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const closeMenu = () => setMenu(null);
   const value = useMemo<ContextMenuContextValue>(
     () => ({
@@ -92,7 +96,12 @@ export function ContextMenuProvider({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
+      const target = event.target;
+      const isInsideMenu =
+        target instanceof Element &&
+        Boolean(target.closest("[data-context-menu-surface]"));
+
+      if (!isInsideMenu) {
         setMenu(null);
       }
     };
@@ -108,8 +117,8 @@ export function ContextMenuProvider({
     if (menu.dismissOnScroll) {
       const handleViewportChange = (event: Event) => {
         if (
-          event.target instanceof Node &&
-          menuRef.current?.contains(event.target)
+          event.target instanceof Element &&
+          event.target.closest("[data-context-menu-surface]")
         ) {
           return;
         }
@@ -152,11 +161,7 @@ export function ContextMenuProvider({
     <ContextMenuContext.Provider value={value}>
       {children}
       {menu ? (
-        <ContextMenuOverlay
-          closeMenu={closeMenu}
-          menu={menu}
-          menuRef={menuRef}
-        />
+        <ContextMenuOverlay closeMenu={closeMenu} menu={menu} />
       ) : null}
     </ContextMenuContext.Provider>
   );
@@ -165,12 +170,12 @@ export function ContextMenuProvider({
 function ContextMenuOverlay({
   closeMenu,
   menu,
-  menuRef,
 }: {
   closeMenu: () => void;
   menu: ContextMenuState;
-  menuRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const [activeSubmenuId, setActiveSubmenuId] = useState<string | null>(null);
+  const [submenuAnchor, setSubmenuAnchor] = useState<DOMRect | null>(null);
   const maxWidth = 240;
   const estimatedHeight =
     20 +
@@ -181,6 +186,128 @@ function ContextMenuOverlay({
     12,
     Math.min(menu.y, window.innerHeight - estimatedHeight - 12),
   );
+  const activeSubmenuItem = menu.items.find(
+    (item): item is ContextMenuItem =>
+      !isSeparator(item) &&
+      item.id === activeSubmenuId &&
+      Boolean(item.submenu?.length),
+  );
+  const submenuWidth = 208;
+  const submenuHeight = activeSubmenuItem
+    ? 12 +
+      activeSubmenuItem.submenu!.reduce(
+        (total, item) => total + (isSeparator(item) ? 9 : 40),
+        0,
+      )
+    : 0;
+  const isNarrowViewport = window.innerWidth < 520;
+  const submenuLeft = submenuAnchor
+    ? isNarrowViewport
+      ? Math.max(12, Math.min(left, window.innerWidth - submenuWidth - 12))
+      : submenuAnchor.left - submenuWidth - 8 >= 12
+        ? submenuAnchor.left - submenuWidth - 8
+        : Math.min(
+            window.innerWidth - submenuWidth - 12,
+            submenuAnchor.right + 8,
+          )
+    : left;
+  const submenuTop = submenuAnchor
+    ? Math.max(
+        12,
+        Math.min(
+          isNarrowViewport ? top : submenuAnchor.top - 6,
+          window.innerHeight - submenuHeight - 12,
+        ),
+      )
+    : top;
+
+  async function selectItem(item: ContextMenuItem) {
+    if (item.disabled) {
+      return;
+    }
+
+    closeMenu();
+    await item.onSelect?.();
+  }
+
+  function closeSubmenu() {
+    setActiveSubmenuId(null);
+    setSubmenuAnchor(null);
+  }
+
+  function openSubmenu(item: ContextMenuItem, anchor: DOMRect) {
+    setActiveSubmenuId(item.id);
+    setSubmenuAnchor(anchor);
+  }
+
+  function renderMenuItem(item: ContextMenuItem, isSubmenu = false) {
+    const hasSubmenu = Boolean(item.submenu?.length);
+
+    return (
+      <button
+        key={item.id}
+        type="button"
+        role="menuitem"
+        disabled={item.disabled}
+        aria-haspopup={hasSubmenu ? "menu" : undefined}
+        aria-expanded={
+          hasSubmenu ? activeSubmenuId === item.id : undefined
+        }
+        onPointerEnter={(event) => {
+          if (!isSubmenu) {
+            if (hasSubmenu) {
+              openSubmenu(item, event.currentTarget.getBoundingClientRect());
+            } else {
+              closeSubmenu();
+            }
+          }
+        }}
+        onKeyDown={(event) => {
+          if (
+            hasSubmenu &&
+            (event.key === "ArrowLeft" || event.key === "ArrowRight")
+          ) {
+            event.preventDefault();
+            openSubmenu(item, event.currentTarget.getBoundingClientRect());
+          }
+        }}
+        onClick={(event) => {
+          if (hasSubmenu) {
+            openSubmenu(item, event.currentTarget.getBoundingClientRect());
+            return;
+          }
+
+          void selectItem(item);
+        }}
+        className={[
+          "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm transition",
+          item.disabled
+            ? "cursor-not-allowed text-[#a3afbb]"
+            : item.danger
+              ? "text-[#b42318] hover:bg-[#fff1f1]"
+              : activeSubmenuId === item.id
+                ? "bg-[var(--bg-softer)] text-[var(--text-strong)]"
+                : "text-[var(--text-strong)] hover:bg-[var(--bg-softer)]",
+        ].join(" ")}
+      >
+        <span className="flex min-w-0 items-center gap-2.5">
+          {item.swatch ? (
+            <span
+              className="h-4 w-4 shrink-0 rounded-full border border-black/10 shadow-sm"
+              style={{ backgroundColor: item.swatch }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <span className="truncate">{item.label}</span>
+        </span>
+        {item.selected ? (
+          <Check className="h-4 w-4 shrink-0 text-[#268a50]" />
+        ) : hasSubmenu ? (
+          <ChevronLeft className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+        ) : null}
+      </button>
+    );
+  }
 
   return (
     <div
@@ -191,53 +318,63 @@ function ContextMenuOverlay({
         }
       }}
     >
-      <div
-        ref={menuRef}
-        className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
-        style={{
-          left,
-          top,
-          WebkitOverflowScrolling: "touch",
-          touchAction: "pan-y",
-        }}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {menu.title ? (
-          <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-            {menu.title}
+      <div className="contents">
+        <div
+          data-context-menu-surface
+          role="menu"
+          className="fixed max-h-[min(70vh,420px)] min-w-[220px] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur"
+          style={{
+            left,
+            top,
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onScroll={closeSubmenu}
+        >
+          {menu.title ? (
+            <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              {menu.title}
+            </div>
+          ) : null}
+
+          {menu.items.map((item) =>
+            isSeparator(item) ? (
+              <div key={item.id} className="my-1 h-px bg-[var(--bg-soft)]" />
+            ) : (
+              renderMenuItem(item)
+            ),
+          )}
+        </div>
+
+        {activeSubmenuItem && submenuAnchor ? (
+          <div
+            data-context-menu-surface
+            role="menu"
+            aria-label={activeSubmenuItem.label}
+            className="fixed z-[210] max-h-[min(70vh,420px)] w-[208px] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--border-soft)] bg-white/98 p-1.5 shadow-[0_18px_48px_rgba(15,23,42,0.2)] backdrop-blur"
+            style={{
+              left: submenuLeft,
+              top: submenuTop,
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-3 pb-2 pt-1 text-[11px] font-semibold text-[var(--text-muted)]">
+              {activeSubmenuItem.label}
+            </div>
+            {activeSubmenuItem.submenu!.map((item) =>
+              isSeparator(item) ? (
+                <div key={item.id} className="my-1 h-px bg-[var(--bg-soft)]" />
+              ) : (
+                renderMenuItem(item, true)
+              ),
+            )}
           </div>
         ) : null}
-
-        {menu.items.map((item) =>
-          isSeparator(item) ? (
-            <div key={item.id} className="my-1 h-px bg-[var(--bg-soft)]" />
-          ) : (
-            <button
-              key={item.id}
-              type="button"
-              disabled={item.disabled}
-              onClick={async () => {
-                if (item.disabled) {
-                  return;
-                }
-
-                closeMenu();
-                await item.onSelect?.();
-              }}
-              className={[
-                "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition",
-                item.disabled
-                  ? "cursor-not-allowed text-[#a3afbb]"
-                  : item.danger
-                    ? "text-[#b42318] hover:bg-[#fff1f1]"
-                    : "text-[var(--text-strong)] hover:bg-[var(--bg-softer)]",
-              ].join(" ")}
-            >
-              <span>{item.label}</span>
-            </button>
-          ),
-        )}
       </div>
     </div>
   );
