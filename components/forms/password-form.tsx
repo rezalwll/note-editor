@@ -15,8 +15,8 @@ export function PasswordForm() {
 
   return (
     <form action={formAction} className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1.5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <label className="space-y-3">
           <span className="text-sm font-medium text-stone-700">رمز عبور فعلی</span>
           <input
             name="currentPassword"
@@ -26,7 +26,7 @@ export function PasswordForm() {
             className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition focus:border-amber-500"
           />
         </label>
-        <label className="space-y-1.5">
+        <label className="space-y-3">
           <span className="text-sm font-medium text-stone-700">رمز عبور جدید</span>
           <input
             name="newPassword"

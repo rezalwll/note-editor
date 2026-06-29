@@ -19,7 +19,7 @@ export function SignupForm({ initialEmail = "" }: SignupFormProps) {
     <form action={formAction} className="space-y-5">
       <div className="space-y-3">
         <label htmlFor="displayName" className="mb-3 block text-sm font-medium text-stone-700">
-          نام نمایشی
+          نام
         </label>
         <input
           id="displayName"

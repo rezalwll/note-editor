@@ -80,7 +80,7 @@ export function WorkspacePortabilityCard() {
         <p className="mt-1.5 text-sm leading-6 text-stone-600">
           یادداشت های جدید شما با یادداشت های قدیمی ادغام می شوند
         </p>
-        <label className="mt-3 block space-y-1.5">
+        <label className="mt-4 block space-y-3">
           <span className="text-sm font-medium text-stone-700">فایل آرشیو</span>
           <input
             name="archive"

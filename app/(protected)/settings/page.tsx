@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { LogoutForm } from "@/components/forms/logout-form";
 import { PasswordForm } from "@/components/forms/password-form";
 import { ProfileForm } from "@/components/forms/profile-form";
 import { WorkspacePortabilityCard } from "@/components/forms/workspace-portability-card";
@@ -28,23 +29,28 @@ export default async function SettingsPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-700">
             پروفایل
           </p>
-          <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
-            <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] text-xl font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.14)]"
-              style={{ backgroundColor: getUserAccent(user.username) }}
-            >
-              {getUserInitials(user.displayName)}
+          <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] text-xl font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.14)]"
+                style={{ backgroundColor: getUserAccent(user.username) }}
+              >
+                {getUserInitials(user.displayName)}
+              </div>
+              <div className="space-y-1.5">
+                <h1 className="font-serif text-4xl tracking-tight text-stone-950">
+                  {user.displayName}
+                </h1>
+                <p className="text-sm text-stone-600" dir="ltr">
+                  @{user.username}
+                </p>
+                <p className="text-xs text-stone-500">
+                  تاریخ ساخت حساب: {formatDate(user.createdAt)}
+                </p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <h1 className="font-serif text-4xl tracking-tight text-stone-950">
-                {user.displayName}
-              </h1>
-              <p className="text-sm text-stone-600" dir="ltr">
-                @{user.username}
-              </p>
-              <p className="text-xs text-stone-500">
-                تاریخ ساخت حساب: {formatDate(user.createdAt)}
-              </p>
+            <div className="w-full md:w-auto">
+              <LogoutForm />
             </div>
           </div>
           {user.mustChangePassword ? (

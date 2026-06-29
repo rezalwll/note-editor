@@ -602,7 +602,7 @@ export async function updateProfileAction(
     });
 
   if (!parsed.success) {
-    return { error: "نام نمایشی، نام کاربری و ایمیل معتبر وارد کنید." };
+    return { error: "نام، نام کاربری و ایمیل معتبر وارد کنید." };
   }
 
   try {
