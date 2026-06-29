@@ -277,6 +277,36 @@ describe("SectionTabs", () => {
     expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
   });
 
+  it("keeps the active group outlined in green regardless of its theme", () => {
+    render(
+      <SectionTabs
+        groups={[
+          {
+            id: "group-1",
+            name: "Work",
+            notebookCount: 1,
+            themeKey: "rose",
+            systemKey: null,
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: [],
+          },
+        ]}
+      />,
+    );
+
+    const activeGroup = screen.getByText("Work").closest("div");
+
+    expect(activeGroup?.style.boxShadow).toBe(
+      "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)",
+    );
+  });
+
   it("does not switch to trash after deleting a notebook", async () => {
     render(
       <SectionTabs

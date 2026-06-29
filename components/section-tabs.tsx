@@ -880,7 +880,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
                 color: isTrash ? "#1f2937" : pillTheme.text,
                 boxShadow: isActive
-                  ? `0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px ${pillTheme.ring}, 0 8px 18px ${pillTheme.glow}`
+                  ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
                   : `0 6px 18px ${pillTheme.border}33`,
                 opacity: 0.92,
               }}
