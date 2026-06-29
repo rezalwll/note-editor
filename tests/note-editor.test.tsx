@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   processSyncQueue: vi.fn(),
 }));
 
+let localPageStore: Record<string, unknown> | null = null;
+
 vi.mock("@/components/context-menu", () => ({
   useContextMenu: () => ({ openMenu: mocks.openMenu }),
 }));
@@ -93,11 +95,15 @@ function syncLayout() {
 describe("NoteEditor freeform placement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getLocalPage.mockResolvedValue(null);
-    mocks.upsertLocalPage.mockResolvedValue(undefined);
+    localPageStore = null;
+    mocks.getLocalPage.mockImplementation(async () => localPageStore);
+    mocks.upsertLocalPage.mockImplementation(async (page) => {
+      localPageStore = page as Record<string, unknown>;
+    });
     mocks.enqueuePageUpsert.mockResolvedValue(undefined);
     mocks.processSyncQueue.mockResolvedValue(undefined);
     setViewport(1200);
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -113,6 +119,10 @@ describe("NoteEditor freeform placement", () => {
       configurable: true,
       value: undefined,
     });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
 
     class ResizeObserverMock {
       observe() {}
@@ -122,6 +132,12 @@ describe("NoteEditor freeform placement", () => {
 
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
   });
+
+  async function waitForHydration() {
+    await waitFor(() => {
+      expect(mocks.getLocalPage).toHaveBeenCalled();
+    });
+  }
 
   it.each([
     { clientX: 40, expectedLeft: "16px" },
@@ -333,6 +349,197 @@ describe("NoteEditor freeform placement", () => {
         color: "rgb(255, 51, 102)",
         fontSize: "24px",
       });
+    });
+  });
+
+  it("flushes a title change to local storage on pagehide before debounce completes", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "pagehide", x: 48, y: 72, width: 240, text: "body" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const titleInput = container.querySelector('input[aria-label]') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "عنوان پایدار" } });
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "عنوان پایدار" }),
+      );
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalled();
+    });
+  });
+
+  it("flushes textarea edits when the page becomes hidden", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "hidden-save", x: 48, y: 72, width: 240, text: "old" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "متن تازه" } });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+        expect.objectContaining({ bodyText: "متن تازه" }),
+      );
+    });
+  });
+
+  it("persists a dirty draft when the editor unmounts", async () => {
+    const view = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "unmount-save", x: 48, y: 72, width: 240, text: "draft" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const titleInput = view.container.querySelector('input[aria-label]') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "قبل از بستن" } });
+    view.unmount();
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "قبل از بستن" }),
+      );
+    });
+  });
+
+  it("re-hydrates the last local draft after remote sync fails", async () => {
+    mocks.processSyncQueue.mockRejectedValue(new Error("sync failed"));
+
+    const firstView = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "persisted", x: 48, y: 72, width: 240, text: "اولیه" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const titleInput = firstView.container.querySelector('input[aria-label]') as HTMLInputElement;
+    const textarea = firstView.container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.change(titleInput, { target: { value: "نسخه محلی" } });
+    fireEvent.change(textarea, { target: { value: "متن ذخیره محلی" } });
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "نسخه محلی",
+          bodyText: "متن ذخیره محلی",
+        }),
+      );
+    });
+
+    firstView.unmount();
+    vi.clearAllMocks();
+
+    const secondView = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "persisted", x: 48, y: 72, width: 240, text: "اولیه" }],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        (secondView.container.querySelector('input[aria-label]') as HTMLInputElement).value,
+      ).toBe("نسخه محلی");
+      expect(
+        (secondView.container.querySelector("textarea") as HTMLTextAreaElement).value,
+      ).toBe("متن ذخیره محلی");
+    });
+  });
+
+  it("keeps retrying local persistence after a failed local save", async () => {
+    const failure = new Error("indexeddb write failed");
+    mocks.upsertLocalPage.mockRejectedValue(failure);
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "retry", x: 48, y: 72, width: 240, text: "old" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+    mocks.upsertLocalPage.mockRejectedValue(failure);
+
+    const titleInput = container.querySelector('input[aria-label]') as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "ذخیره ناموفق" } });
+    fireEvent.blur(titleInput);
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalled();
+    });
+    const firstAttemptCount = mocks.upsertLocalPage.mock.calls.length;
+
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage.mock.calls.length).toBeGreaterThan(firstAttemptCount);
+      expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
+    });
+  });
+
+  it("restores autosaved title and body after remounting the editor", async () => {
+    const firstView = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "autosave", x: 48, y: 72, width: 240, text: "body" }],
+      }),
+    );
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const titleInput = firstView.container.querySelector('input[aria-label]') as HTMLInputElement;
+    const textarea = firstView.container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.change(titleInput, { target: { value: "عنوان تازه" } });
+    fireEvent.change(textarea, { target: { value: "متن تازه ذخیره شده" } });
+
+    await waitFor(() => {
+      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "عنوان تازه",
+          bodyText: "متن تازه ذخیره شده",
+        }),
+      );
+    });
+
+    firstView.unmount();
+    vi.clearAllMocks();
+
+    const secondView = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "autosave", x: 48, y: 72, width: 240, text: "body" }],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        (secondView.container.querySelector('input[aria-label]') as HTMLInputElement).value,
+      ).toBe("عنوان تازه");
+      expect(
+        (secondView.container.querySelector("textarea") as HTMLTextAreaElement).value,
+      ).toBe("متن تازه ذخیره شده");
     });
   });
 });

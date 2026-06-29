@@ -69,6 +69,7 @@ const BLOCK_MIN_WIDTH = 180;
 const BLOCK_DEFAULT_WIDTH = 240;
 const BLOCK_MAX_WIDTH = 900;
 const BLOCK_RTL_CLICK_ANCHOR = 12;
+const AUTOSAVE_DEBOUNCE_MS = 150;
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
@@ -296,6 +297,9 @@ export function NoteEditor({
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef("");
   const lastSyncedAtRef = useRef(initialUpdatedAt);
+  const latestSnapshotRef = useRef("");
+  const isMountedRef = useRef(true);
+  const userEditedBeforeHydrationRef = useRef(false);
   const selectionRestoreRef = useRef<{
     id: string;
     start: number;
@@ -328,6 +332,16 @@ export function NoteEditor({
   const snapshot = `${title}::${serializedDocument}`;
   const activeBlock = blocks.find((block) => block.id === activeBlockId) ?? null;
 
+  function markEditorInteraction() {
+    if (!isHydrated) {
+      userEditedBeforeHydrationRef.current = true;
+    }
+  }
+
+  useEffect(() => {
+    latestSnapshotRef.current = snapshot;
+  }, [snapshot]);
+
   function getCanvasBoundedX(
     targetCanvasWidth: number,
     desiredX: number,
@@ -356,6 +370,14 @@ export function NoteEditor({
   }
 
   useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const handleConnectionChange = () => {
       setIsOnline(navigator.onLine);
     };
@@ -380,6 +402,7 @@ export function NoteEditor({
       const localPage = await getLocalPage(userId, pageId);
       const serverUpdatedAt = new Date(initialUpdatedAt).getTime();
       const localUpdatedAt = localPage ? new Date(localPage.updatedAt).getTime() : 0;
+      const userEditedBeforeHydration = userEditedBeforeHydrationRef.current;
       const shouldPreferLocal =
         Boolean(localPage) &&
         ((localPage?.syncStatus ?? "synced") !== "synced" ||
@@ -403,20 +426,34 @@ export function NoteEditor({
         syncStatus: "synced",
       };
 
-      if (shouldPreferLocal && localPage && !isCancelled) {
+      if (shouldPreferLocal && localPage && !isCancelled && !userEditedBeforeHydration) {
         setTitle(localPage.title);
         setBlocks(getInitialBlocks(localPage.bodyHtml));
         setSyncStatus(localPage.syncStatus);
         lastSyncedAtRef.current =
           localPage.lastSyncedAt ?? localPage.updatedAt ?? initialUpdatedAt;
         lastSavedSnapshotRef.current = `${localPage.title}::${localPage.bodyHtml}`;
-      } else {
-        await upsertLocalPage(serverPage);
-
+      } else if (userEditedBeforeHydration) {
         if (!isCancelled) {
-          setSyncStatus("synced");
-          lastSyncedAtRef.current = initialUpdatedAt;
-          lastSavedSnapshotRef.current = `${initialTitle}::${initialHtml}`;
+          lastSyncedAtRef.current =
+            localPage?.lastSyncedAt ?? localPage?.updatedAt ?? initialUpdatedAt;
+          setSyncStatus(localPage?.syncStatus === "failed" ? "failed" : "pending");
+        }
+      } else {
+        try {
+          await upsertLocalPage(serverPage);
+
+          if (!isCancelled) {
+            setSyncStatus("synced");
+            lastSyncedAtRef.current = initialUpdatedAt;
+            lastSavedSnapshotRef.current = `${initialTitle}::${initialHtml}`;
+          }
+        } catch (error) {
+          console.error("Failed to seed local page state during hydration.", error);
+
+          if (!isCancelled && isMountedRef.current) {
+            setSyncStatus("failed");
+          }
         }
       }
 
@@ -542,7 +579,21 @@ export function NoteEditor({
     };
   }, []);
 
-  const saveNoteLocally = useCallback(async () => {
+  const persistLocalDraft = useCallback(async (reason: string) => {
+    if (!isHydrated) {
+      return false;
+    }
+
+    const pendingSnapshot = snapshot;
+
+    if (pendingSnapshot === lastSavedSnapshotRef.current) {
+      if (isMountedRef.current) {
+        setIsSavingLocally(false);
+      }
+
+      return true;
+    }
+
     try {
       const updatedAt = new Date().toISOString();
       const localPage: LocalPage = {
@@ -562,9 +613,17 @@ export function NoteEditor({
       await upsertLocalPage(localPage);
       await enqueuePageUpsert(localPage, lastSyncedAtRef.current ?? initialUpdatedAt);
 
-      lastSavedSnapshotRef.current = snapshot;
-      setSyncStatus("pending");
-      setIsSavingLocally(false);
+      const isCurrentSnapshot = latestSnapshotRef.current === pendingSnapshot;
+
+      if (isCurrentSnapshot) {
+        lastSavedSnapshotRef.current = pendingSnapshot;
+      }
+
+      if (isMountedRef.current) {
+        setSyncStatus("pending");
+        setIsSavingLocally(!isCurrentSnapshot);
+      }
+
       dispatchPageTitleUpdated({
         notebookId,
         pageId,
@@ -572,25 +631,21 @@ export function NoteEditor({
         updatedAt,
       });
 
-      if (navigator.onLine) {
-        await processSyncQueue(userId);
-        const refreshed = await getLocalPage(userId, pageId);
+      return true;
+    } catch (error) {
+      console.error(`Failed to persist page draft locally during ${reason}.`, error);
 
-        if (refreshed?.lastSyncedAt) {
-          lastSyncedAtRef.current = refreshed.lastSyncedAt;
-        }
-
-        if (refreshed?.syncStatus) {
-          setSyncStatus(refreshed.syncStatus);
-        }
+      if (isMountedRef.current && latestSnapshotRef.current === pendingSnapshot) {
+        setIsSavingLocally(false);
+        setSyncStatus("failed");
       }
-    } catch {
-      setIsSavingLocally(false);
-      setSyncStatus("failed");
+
+      return false;
     }
   }, [
     bodyText,
     initialUpdatedAt,
+    isHydrated,
     notebookId,
     pageId,
     serializedDocument,
@@ -599,7 +654,41 @@ export function NoteEditor({
     userId,
   ]);
 
-  function flushPendingSave() {
+  const flushRemoteSync = useCallback(async (reason: string) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return;
+    }
+
+    try {
+      await processSyncQueue(userId);
+      const refreshed = await getLocalPage(userId, pageId);
+
+      if (refreshed?.lastSyncedAt) {
+        lastSyncedAtRef.current = refreshed.lastSyncedAt;
+      }
+
+      if (refreshed?.syncStatus && isMountedRef.current) {
+        setSyncStatus(refreshed.syncStatus);
+      }
+    } catch (error) {
+      console.error(`Failed to sync page draft during ${reason}.`, error);
+
+      if (isMountedRef.current) {
+        setSyncStatus((current) => (current === "failed" ? current : "pending"));
+        setIsSavingLocally(false);
+      }
+    }
+  }, [pageId, userId]);
+
+  const persistDraftAndSync = useCallback(async (reason: string) => {
+    const persisted = await persistLocalDraft(reason);
+
+    if (persisted) {
+      await flushRemoteSync(reason);
+    }
+  }, [flushRemoteSync, persistLocalDraft]);
+
+  const flushPendingSave = useCallback((reason: string) => {
     if (!isHydrated) {
       return;
     }
@@ -610,13 +699,19 @@ export function NoteEditor({
     }
 
     if (snapshot === lastSavedSnapshotRef.current) {
-      setIsSavingLocally(false);
+      if (isMountedRef.current) {
+        setIsSavingLocally(false);
+      }
+
       return;
     }
 
-    setIsSavingLocally(true);
-    void saveNoteLocally();
-  }
+    if (isMountedRef.current) {
+      setIsSavingLocally(true);
+    }
+
+    void persistDraftAndSync(reason);
+  }, [isHydrated, persistDraftAndSync, snapshot]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -634,15 +729,44 @@ export function NoteEditor({
     }
 
     autosaveTimerRef.current = setTimeout(() => {
-      void saveNoteLocally();
-    }, 500);
+      void persistDraftAndSync("autosave");
+    }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [isHydrated, saveNoteLocally, snapshot]);
+  }, [isHydrated, persistDraftAndSync, snapshot]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    const handlePageHide = () => {
+      flushPendingSave("pagehide");
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushPendingSave("visibilitychange");
+      }
+    };
+    const handleBeforeUnload = () => {
+      flushPendingSave("beforeunload");
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      flushPendingSave("unmount");
+    };
+  }, [flushPendingSave, isHydrated]);
 
   useEffect(() => {
     const listener = (event: Event) => {
@@ -713,6 +837,7 @@ export function NoteEditor({
     };
 
     const addBlock = () => {
+      markEditorInteraction();
       setBlocks((current) => [...current, block]);
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
@@ -809,6 +934,7 @@ export function NoteEditor({
     updater: (block: FreeformBlock) => FreeformBlock,
     trackHistory = true,
   ) {
+    markEditorInteraction();
     setBlocks((current) =>
       current.map((block) => {
         if (block.id !== id) {
@@ -833,6 +959,7 @@ export function NoteEditor({
     updater: (block: FreeformBlock) => FreeformBlock,
     trackHistory = true,
   ) {
+    markEditorInteraction();
     setBlocks((current) =>
       current.map((block) => {
         if (!ids.includes(block.id)) {
@@ -878,6 +1005,7 @@ export function NoteEditor({
   }
 
   function removeBlockIfEmpty(id: string) {
+    markEditorInteraction();
     setBlocks((current) => {
       const target = current.find((block) => block.id === id);
 
@@ -895,12 +1023,14 @@ export function NoteEditor({
   }
 
   function deleteBlock(id: string) {
+    markEditorInteraction();
     setBlocks((current) => current.filter((block) => block.id !== id));
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 
   function deleteBlocks(ids: string[]) {
+    markEditorInteraction();
     setBlocks((current) =>
       current.filter((block) => !ids.includes(block.id)),
     );
@@ -1080,6 +1210,7 @@ export function NoteEditor({
       event.clientY - rect.top - dragStateRef.current.pointerOffsetY,
     );
 
+    markEditorInteraction();
     setBlocks((current) =>
       current.map((block) =>
         block.id === dragStateRef.current?.id
@@ -1104,6 +1235,7 @@ export function NoteEditor({
   }, []);
 
   function undoBlock(id: string) {
+    markEditorInteraction();
     setBlocks((current) =>
       current.map((block) => {
         if (block.id !== id) {
@@ -1123,6 +1255,7 @@ export function NoteEditor({
   }
 
   function redoBlock(id: string) {
+    markEditorInteraction();
     setBlocks((current) =>
       current.map((block) => {
         if (block.id !== id) {
@@ -1300,8 +1433,11 @@ export function NoteEditor({
             >
               <input
                 value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                onBlur={flushPendingSave}
+                onChange={(event) => {
+                  markEditorInteraction();
+                  setTitle(event.target.value);
+                }}
+                onBlur={() => flushPendingSave("title-blur")}
                 placeholder="صفحه بدون عنوان"
                 className="mb-2 w-full border-none bg-transparent text-[22px] font-normal text-[#111] outline-none placeholder:text-[#7d7d7d]"
                 dir="rtl"
@@ -1413,7 +1549,10 @@ export function NoteEditor({
                     onChange={(event) => updateBlockText(block.id, event.target.value)}
                     onKeyDown={(event) => handleBlockKeyDown(event, block)}
                     onFocus={() => selectSingleBlock(block.id)}
-                    onBlur={() => removeBlockIfEmpty(block.id)}
+                    onBlur={() => {
+                      removeBlockIfEmpty(block.id);
+                      flushPendingSave("block-blur");
+                    }}
                     onMouseDown={(event) => {
                       if (event.ctrlKey || event.metaKey) {
                         event.preventDefault();
