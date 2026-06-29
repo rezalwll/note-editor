@@ -8,15 +8,16 @@ import {
   fetchPullChanges,
   hasOfflineBootstrap,
   listPendingQueue,
+  pushQueue,
   seedOfflineBootstrap,
   setLastPullAt,
   upsertConflictRecords,
   updateLocalSyncStatus,
-  pushQueue,
 } from "@/lib/offline-db/client";
 import type { SyncStatus } from "@/lib/offline-db/types";
 
 let syncInFlight: Promise<void> | null = null;
+let syncRerunRequested = false;
 
 function dispatchSyncIndicatorEvent(detail: {
   phase: "start" | "complete" | "error";
@@ -55,6 +56,7 @@ export async function pullRemoteChanges(userId: string) {
 
 export async function processSyncQueue(userId: string) {
   if (syncInFlight) {
+    syncRerunRequested = true;
     return syncInFlight;
   }
 
@@ -67,34 +69,17 @@ export async function processSyncQueue(userId: string) {
     }
 
     try {
-      const queue = await listPendingQueue(userId);
+      let syncStatus: SyncStatus = "synced";
 
-      if (queue.length === 0) {
-        await pullRemoteChanges(userId);
-        dispatchSyncIndicatorEvent({ phase: "complete", syncStatus: "synced" });
+      do {
+        syncRerunRequested = false;
+        syncStatus = await processSyncQueueOnce(userId);
+      } while (syncRerunRequested);
+
+      if (syncStatus === "conflict" || syncStatus === "failed") {
+        dispatchSyncIndicatorEvent({ phase: "error", syncStatus });
         return;
       }
-
-      const result = await pushQueue(queue);
-      await applySyncPushResult(userId, result);
-      await upsertConflictRecords(userId, result.conflicts);
-
-      for (const page of result.pages) {
-        await updateLocalSyncStatus(
-          userId,
-          page.id,
-          page.syncStatus,
-          page.lastSyncedAt ?? null,
-        );
-      }
-
-      if (result.conflicts.length > 0) {
-        dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "conflict" });
-        return;
-      }
-
-      const remainingQueue = await listPendingQueue(userId);
-      const syncStatus = remainingQueue.length > 0 ? "pending" : "synced";
 
       dispatchSyncIndicatorEvent({ phase: "complete", syncStatus });
     } catch (error) {
@@ -106,6 +91,35 @@ export async function processSyncQueue(userId: string) {
   });
 
   return syncInFlight;
+}
+
+async function processSyncQueueOnce(userId: string): Promise<SyncStatus> {
+  const queue = await listPendingQueue(userId);
+
+  if (queue.length === 0) {
+    await pullRemoteChanges(userId);
+    return "synced";
+  }
+
+  const result = await pushQueue(queue);
+  await applySyncPushResult(userId, result);
+  await upsertConflictRecords(userId, result.conflicts);
+
+  for (const page of result.pages) {
+    await updateLocalSyncStatus(
+      userId,
+      page.id,
+      page.syncStatus,
+      page.lastSyncedAt ?? null,
+    );
+  }
+
+  if (result.conflicts.length > 0) {
+    return "conflict";
+  }
+
+  const remainingQueue = await listPendingQueue(userId);
+  return remainingQueue.length > 0 ? "pending" : "synced";
 }
 
 export async function resetOfflineState(userId: string) {
