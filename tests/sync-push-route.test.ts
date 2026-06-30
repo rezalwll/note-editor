@@ -187,6 +187,73 @@ describe("sync push route", () => {
     ]);
   });
 
+  it("does not create duplicate recovered pages for idempotent page upserts", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.page.findUnique.mockResolvedValue({
+      id: "page-1",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Synced draft",
+      bodyHtml: "<p>Same body</p>",
+      bodyText: "Same body",
+      archived: false,
+      updatedAt: new Date("2026-06-30T10:00:00.000Z"),
+      deletedAt: null,
+    });
+    mocks.prisma.notebook.findFirst.mockResolvedValue({ id: "notebook-1" });
+    mocks.prisma.page.update.mockResolvedValue({
+      id: "page-1",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Synced draft",
+      bodyHtml: "<p>Same body</p>",
+      bodyText: "Same body",
+      archived: false,
+      updatedAt: new Date("2026-06-30T10:01:00.000Z"),
+      deletedAt: null,
+    });
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notavanote.ir/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [
+            {
+              id: 11,
+              entityType: "page",
+              entityId: "page-1",
+              operation: "upsert",
+              baseUpdatedAt: "2026-06-30T09:00:00.000Z",
+              payload: {
+                id: "page-1",
+                notebookId: "notebook-1",
+                title: "Synced draft",
+                bodyHtml: "<p>Same body</p>",
+                archived: false,
+              },
+              createdAt: "2026-06-30T10:02:00.000Z",
+            },
+          ],
+        }),
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.page.create).not.toHaveBeenCalled();
+    expect(payload.conflicts).toEqual([]);
+    expect(payload.applied).toEqual([
+      {
+        queueId: 11,
+        entityType: "page",
+        entityId: "page-1",
+        operation: "upsert",
+      },
+    ]);
+  });
+
   it("recovers orphan page upserts into an active notebook", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue(null);

@@ -1643,7 +1643,7 @@ export function NoteEditor({
     );
   });
 
-  const handleImageResize = useEffectEvent((event: PointerEvent) => {
+  const handleBlockResize = useEffectEvent((event: PointerEvent) => {
     if (!canvasRef.current || !resizeStateRef.current) {
       return;
     }
@@ -1657,14 +1657,15 @@ export function NoteEditor({
       return;
     }
 
+    const minWidth = isImageBlock(currentBlock) ? IMAGE_MIN_WIDTH : BLOCK_MIN_WIDTH;
     const maxWidth = Math.max(
-      IMAGE_MIN_WIDTH,
+      minWidth,
       rect.width - currentBlock.x - getBlockRightGutter(rect.width),
     );
     const nextWidth = Math.min(
       maxWidth,
       Math.max(
-        IMAGE_MIN_WIDTH,
+        minWidth,
         resizeStateRef.current.startWidth +
           event.clientX -
           resizeStateRef.current.startClientX,
@@ -1684,7 +1685,7 @@ export function NoteEditor({
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => handleBlockDrag(event);
     const handleResizePointerMove = (event: PointerEvent) =>
-      handleImageResize(event);
+      handleBlockResize(event);
     const handlePointerUp = () => {
       dragStateRef.current = null;
       resizeStateRef.current = null;
@@ -1915,7 +1916,7 @@ export function NoteEditor({
     };
   }
 
-  function startResizingImage(
+  function startResizingBlock(
     event: React.PointerEvent<HTMLButtonElement>,
     block: FreeformBlock,
   ) {
@@ -2266,7 +2267,7 @@ export function NoteEditor({
                     <button
                       type="button"
                       onPointerDown={(event) =>
-                        startResizingImage(event, block)
+                        startResizingBlock(event, block)
                       }
                       className="absolute -bottom-2 -right-2 z-10 h-5 w-5 touch-none cursor-se-resize rounded-full border-2 border-white bg-[#4f9b6c] opacity-100 shadow transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                       aria-label="تغییر اندازه تصویر"
@@ -2296,6 +2297,14 @@ export function NoteEditor({
                   >
                     <GripVertical className="h-3.5 w-3.5" />
                   </button>
+
+                  <button
+                    type="button"
+                    data-testid={`resize-block-${block.id}`}
+                    onPointerDown={(event) => startResizingBlock(event, block)}
+                    className="absolute -bottom-2 -right-2 z-10 h-4 w-4 touch-none cursor-ew-resize rounded-full border-2 border-white bg-[#4f9b6c] opacity-0 shadow transition hover:bg-[#3f895c] group-hover:opacity-100 group-focus-within:opacity-100"
+                    aria-label="تغییر عرض بلوک"
+                  />
 
                   <textarea
                     ref={(element) => {

@@ -782,6 +782,110 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("resizes a text block from the right edge and stores the new width", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "resizable", x: 48, y: 72, width: 240, text: "resize me" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const textBlock = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-testid="note-block-resizable"]',
+      ) as HTMLDivElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLDivElement;
+    });
+    const resizeButton = container.querySelector(
+      '[data-testid="resize-block-resizable"]',
+    ) as HTMLButtonElement;
+
+    fireEvent.pointerDown(resizeButton, {
+      button: 0,
+      clientX: 288,
+      pointerId: 21,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 408,
+      pointerId: 21,
+    });
+    fireEvent.pointerUp(window, { pointerId: 21 });
+
+    await waitFor(() => {
+      expect(textBlock).toHaveStyle({ width: "360px" });
+    });
+
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      const savedPage = mocks.upsertLocalPage.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("resizable"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "resizable",
+            width: 360,
+          }),
+        ]),
+      );
+    });
+  });
+
+  it("clamps text block resize to the minimum width", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "min-width", x: 48, y: 72, width: 240, text: "clamp me" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+
+    const textBlock = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-testid="note-block-min-width"]',
+      ) as HTMLDivElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLDivElement;
+    });
+    const resizeButton = container.querySelector(
+      '[data-testid="resize-block-min-width"]',
+    ) as HTMLButtonElement;
+
+    fireEvent.pointerDown(resizeButton, {
+      button: 0,
+      clientX: 288,
+      pointerId: 22,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: -120,
+      pointerId: 22,
+    });
+    fireEvent.pointerUp(window, { pointerId: 22 });
+
+    await waitFor(() => {
+      expect(textBlock).toHaveStyle({ width: "180px" });
+    });
+  });
+
   it("flushes a title change to local storage on pagehide before debounce completes", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

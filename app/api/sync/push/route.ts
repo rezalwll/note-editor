@@ -445,6 +445,8 @@ export async function POST(request: Request) {
     const bodyText = freeformDocument
       ? extractFreeformPlainText(freeformDocument)
       : extractPlainText(safeHtml);
+    const nextTitle = nonEmptyText(payload.title, existing?.title ?? DEFAULT_PAGE_TITLE);
+    const nextArchived = payload.archived ?? existing?.archived ?? false;
 
     if (item.operation === "archive") {
       if (!existing) {
@@ -490,8 +492,18 @@ export async function POST(request: Request) {
     if (existing && item.baseUpdatedAt) {
       const serverUpdatedAt = existing.updatedAt.getTime();
       const baseUpdatedAt = new Date(item.baseUpdatedAt).getTime();
+      const incomingMatchesServer =
+        existing.notebookId === targetNotebookId &&
+        existing.title === nextTitle &&
+        existing.bodyHtml === safeHtml &&
+        existing.archived === nextArchived;
 
-      if (Number.isFinite(serverUpdatedAt) && Number.isFinite(baseUpdatedAt) && serverUpdatedAt > baseUpdatedAt) {
+      if (
+        Number.isFinite(serverUpdatedAt) &&
+        Number.isFinite(baseUpdatedAt) &&
+        serverUpdatedAt > baseUpdatedAt &&
+        !incomingMatchesServer
+      ) {
         const recovered = await prisma.page.create({
           data: {
             userId: user.id,
@@ -519,10 +531,10 @@ export async function POST(request: Request) {
           data: {
             userId: user.id,
             notebookId: targetNotebookId,
-            title: nonEmptyText(payload.title, existing.title || DEFAULT_PAGE_TITLE),
+            title: nextTitle,
             bodyHtml: safeHtml,
             bodyText,
-            archived: payload.archived ?? existing.archived,
+            archived: nextArchived,
           },
         })
         : await prisma.page.create({
@@ -530,10 +542,10 @@ export async function POST(request: Request) {
             id: pageId,
             userId: user.id,
             notebookId: targetNotebookId,
-            title: nonEmptyText(payload.title, DEFAULT_PAGE_TITLE),
+            title: nextTitle,
             bodyHtml: safeHtml,
             bodyText,
-            archived: payload.archived ?? false,
+            archived: nextArchived,
           },
         });
 
