@@ -45,7 +45,6 @@ export type ConflictRecord = {
   id: string;
   entityType: QueueEntityType;
   entityId: string;
-  recoveredEntityId?: string | null;
   createdAt: string;
   message: string;
 };

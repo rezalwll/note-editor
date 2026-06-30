@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/auth";
 import type {
-  ConflictRecord,
   LocalNotebook,
   LocalPage,
   SyncPushResult,
@@ -23,7 +22,6 @@ import {
 
 const DEFAULT_NOTEBOOK_NAME = "مجموعه بدون عنوان";
 const DEFAULT_PAGE_TITLE = "صفحه بدون عنوان";
-const RECOVERED_NOTES_NOTEBOOK_NAME = "یادداشت‌های بازیابی‌شده";
 
 const optionalStringSchema = z
   .union([z.string(), z.null()])
@@ -256,16 +254,16 @@ async function getFallbackPageNotebookId(userId: string) {
   }
 
   const fallbackGroupId = await getFallbackNotebookGroupId(userId);
-  const recoveredNotebook = await prisma.notebook.create({
+  const fallbackNotebook = await prisma.notebook.create({
     data: {
       userId,
       groupId: fallbackGroupId,
-      name: RECOVERED_NOTES_NOTEBOOK_NAME,
+      name: DEFAULT_NOTEBOOK_NAME,
     },
     select: { id: true },
   });
 
-  return recoveredNotebook.id;
+  return fallbackNotebook.id;
 }
 
 export async function POST(request: Request) {
@@ -277,7 +275,6 @@ export async function POST(request: Request) {
   }
 
   const applied: SyncPushResult["applied"] = [];
-  const conflicts: ConflictRecord[] = [];
   const notebooks = new Map<string, LocalNotebook>();
   const pages = new Map<string, LocalPage>();
 
@@ -489,68 +486,6 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (existing && item.baseUpdatedAt) {
-      const serverUpdatedAt = existing.updatedAt.getTime();
-      const baseUpdatedAt = new Date(item.baseUpdatedAt).getTime();
-      const incomingMatchesServer =
-        existing.notebookId === targetNotebookId &&
-        existing.title === nextTitle &&
-        existing.bodyHtml === safeHtml &&
-        existing.archived === nextArchived;
-
-      if (
-        Number.isFinite(serverUpdatedAt) &&
-        Number.isFinite(baseUpdatedAt) &&
-        serverUpdatedAt > baseUpdatedAt &&
-        !incomingMatchesServer
-      ) {
-        const recoveredTitle = `${existing.title} (Recovered)`;
-        const recovered =
-          (await prisma.page.findFirst({
-            where: {
-              userId: user.id,
-              notebookId: existing.notebookId,
-              title: recoveredTitle,
-              bodyHtml: existing.bodyHtml,
-              bodyText: existing.bodyText,
-              archived: existing.archived,
-              deletedAt: existing.deletedAt,
-            },
-          })) ??
-          (await prisma.page.create({
-            data: {
-              userId: user.id,
-              notebookId: existing.notebookId,
-              title: recoveredTitle,
-              bodyHtml: existing.bodyHtml,
-              bodyText: existing.bodyText,
-              archived: existing.archived,
-            },
-          }));
-
-        pages.set(recovered.id, toPageResponse({
-          id: recovered.id,
-          userId: recovered.userId,
-          notebookId: recovered.notebookId,
-          title: recovered.title,
-          bodyHtml: recovered.bodyHtml,
-          bodyText: recovered.bodyText,
-          archived: recovered.archived,
-          updatedAt: recovered.updatedAt,
-          deletedAt: recovered.deletedAt,
-        }));
-
-        conflicts.push({
-          id: `${pageId}:${recovered.id}`,
-          entityType: "page",
-          entityId: pageId,
-          recoveredEntityId: recovered.id,
-          createdAt: new Date().toISOString(),
-          message: "Remote changes were recovered before applying the local version.",
-        });
-      }
-    }
-
     const page = existing
       ? await prisma.page.update({
           where: { id: pageId },
@@ -586,13 +521,9 @@ export async function POST(request: Request) {
 
   const payload: SyncPushResult = {
     applied,
-    conflicts,
+    conflicts: [],
     notebooks: [...notebooks.values()],
-    pages: [...pages.values()].map((page) =>
-      conflicts.some((conflict) => conflict.entityId === page.id)
-        ? { ...page, syncStatus: "conflict" }
-        : page,
-    ),
+    pages: [...pages.values()],
     pulledAt: new Date().toISOString(),
   };
 

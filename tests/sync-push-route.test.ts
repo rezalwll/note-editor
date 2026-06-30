@@ -188,7 +188,7 @@ describe("sync push route", () => {
     ]);
   });
 
-  it("does not create duplicate recovered pages for idempotent page upserts", async () => {
+  it("does not create extra pages for idempotent page upserts", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue({
       id: "page-1",
@@ -255,7 +255,7 @@ describe("sync push route", () => {
     ]);
   });
 
-  it("reuses an existing recovered page for repeated stale conflict upserts", async () => {
+  it("applies stale local page updates without creating extra copies", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue({
       id: "page-1",
@@ -269,17 +269,6 @@ describe("sync push route", () => {
       deletedAt: null,
     });
     mocks.prisma.notebook.findFirst.mockResolvedValue({ id: "notebook-1" });
-    mocks.prisma.page.findFirst.mockResolvedValue({
-      id: "recovered-existing",
-      userId: "user-1",
-      notebookId: "notebook-1",
-      title: "Remote version (Recovered)",
-      bodyHtml: "<p>Remote body</p>",
-      bodyText: "Remote body",
-      archived: false,
-      updatedAt: new Date("2026-06-30T10:00:30.000Z"),
-      deletedAt: null,
-    });
     mocks.prisma.page.update.mockResolvedValue({
       id: "page-1",
       userId: "user-1",
@@ -321,29 +310,26 @@ describe("sync push route", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.prisma.page.findFirst).toHaveBeenCalledWith(
+    expect(mocks.prisma.page.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          title: "Remote version (Recovered)",
-          bodyHtml: "<p>Remote body</p>",
+        where: { id: "page-1" },
+        data: expect.objectContaining({
+          title: "Local version",
+          bodyHtml: "<p>Local body</p>",
         }),
       }),
     );
     expect(mocks.prisma.page.create).not.toHaveBeenCalled();
-    expect(payload.conflicts).toEqual([
+    expect(mocks.prisma.page.findFirst).not.toHaveBeenCalled();
+    expect(payload.conflicts).toEqual([]);
+    expect(payload.pages).toEqual([
       expect.objectContaining({
-        id: "page-1:recovered-existing",
-        recoveredEntityId: "recovered-existing",
+        id: "page-1",
+        title: "Local version",
+        bodyHtml: "<p>Local body</p>",
+        syncStatus: "synced",
       }),
     ]);
-    expect(payload.pages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "recovered-existing",
-          title: "Remote version (Recovered)",
-        }),
-      ]),
-    );
   });
 
   it("recovers orphan page upserts into an active notebook", async () => {
