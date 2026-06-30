@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { GripVertical, LoaderCircle, Trash2 } from "lucide-react";
+import { ArrowLeftRight, GripVertical, LoaderCircle, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -2302,9 +2302,11 @@ export function NoteEditor({
                     type="button"
                     data-testid={`resize-block-${block.id}`}
                     onPointerDown={(event) => startResizingBlock(event, block)}
-                    className="absolute -bottom-2 -right-2 z-10 h-4 w-4 touch-none cursor-ew-resize rounded-full border-2 border-white bg-[#4f9b6c] opacity-0 shadow transition hover:bg-[#3f895c] group-hover:opacity-100 group-focus-within:opacity-100"
+                    className="absolute -bottom-3 -right-3 z-10 inline-flex h-6 w-6 touch-none cursor-ew-resize items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#5f7688] opacity-0 shadow-sm transition hover:bg-[#f7fbff] hover:text-[#233746] group-hover:opacity-100 group-focus-within:opacity-100"
                     aria-label="تغییر عرض بلوک"
-                  />
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                  </button>
 
                   <textarea
                     ref={(element) => {
