@@ -23,6 +23,7 @@ import {
 
 const DEFAULT_NOTEBOOK_NAME = "مجموعه بدون عنوان";
 const DEFAULT_PAGE_TITLE = "صفحه بدون عنوان";
+const RECOVERED_NOTES_NOTEBOOK_NAME = "یادداشت‌های بازیابی‌شده";
 
 const optionalStringSchema = z
   .union([z.string(), z.null()])
@@ -235,6 +236,38 @@ async function getFallbackNotebookGroupId(userId: string) {
   return createdGroup.id;
 }
 
+async function getFallbackPageNotebookId(userId: string) {
+  const activeNotebook = await prisma.notebook.findFirst({
+    where: {
+      userId,
+      archived: false,
+      deletedAt: null,
+      group: {
+        userId,
+        OR: [{ systemKey: null }, { systemKey: { not: TRASH_GROUP_SYSTEM_KEY } }],
+      },
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  if (activeNotebook) {
+    return activeNotebook.id;
+  }
+
+  const fallbackGroupId = await getFallbackNotebookGroupId(userId);
+  const recoveredNotebook = await prisma.notebook.create({
+    data: {
+      userId,
+      groupId: fallbackGroupId,
+      name: RECOVERED_NOTES_NOTEBOOK_NAME,
+    },
+    select: { id: true },
+  });
+
+  return recoveredNotebook.id;
+}
+
 export async function POST(request: Request) {
   const user = await requireUser();
   const parsed = pushSchema.safeParse(await request.json());
@@ -395,6 +428,11 @@ export async function POST(request: Request) {
         where: { id: existing.notebookId, userId: user.id },
         select: { id: true },
       });
+    }
+
+    if (!notebook && item.operation === "upsert") {
+      targetNotebookId = await getFallbackPageNotebookId(user.id);
+      notebook = { id: targetNotebookId };
     }
 
     if (!notebook || !targetNotebookId) {

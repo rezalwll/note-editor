@@ -187,6 +187,72 @@ describe("sync push route", () => {
     ]);
   });
 
+  it("recovers orphan page upserts into an active notebook", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.page.findUnique.mockResolvedValue(null);
+    mocks.prisma.notebook.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "fallback-notebook" });
+    mocks.prisma.page.create.mockResolvedValue({
+      id: "orphan-page",
+      userId: "user-1",
+      notebookId: "fallback-notebook",
+      title: "Local draft",
+      bodyHtml: "<p>Still here</p>",
+      bodyText: "Still here",
+      archived: false,
+      updatedAt: new Date("2026-06-30T00:00:00.000Z"),
+      deletedAt: null,
+    });
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notavanote.ir/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [
+            {
+              id: 10,
+              entityType: "page",
+              entityId: "orphan-page",
+              operation: "upsert",
+              payload: {
+                id: "orphan-page",
+                notebookId: "deleted-notebook",
+                title: "Local draft",
+                bodyHtml: "<p>Still here</p>",
+                archived: false,
+              },
+              createdAt: "2026-06-30T00:00:00.000Z",
+            },
+          ],
+        }),
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.page.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id: "orphan-page",
+          notebookId: "fallback-notebook",
+          title: "Local draft",
+          bodyHtml: "<p>Still here</p>",
+        }),
+      }),
+    );
+    expect(payload.applied).toEqual([
+      {
+        queueId: 10,
+        entityType: "page",
+        entityId: "orphan-page",
+        operation: "upsert",
+      },
+    ]);
+  });
+
   it("treats already-removed archive operations as applied", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue(null);
