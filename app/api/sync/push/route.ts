@@ -504,18 +504,44 @@ export async function POST(request: Request) {
         serverUpdatedAt > baseUpdatedAt &&
         !incomingMatchesServer
       ) {
-        const recovered = await prisma.page.create({
-          data: {
-            userId: user.id,
-            notebookId: existing.notebookId,
-            title: `${existing.title} (Recovered)`,
-            bodyHtml: existing.bodyHtml,
-            bodyText: existing.bodyText,
-          },
-        });
+        const recoveredTitle = `${existing.title} (Recovered)`;
+        const recovered =
+          (await prisma.page.findFirst({
+            where: {
+              userId: user.id,
+              notebookId: existing.notebookId,
+              title: recoveredTitle,
+              bodyHtml: existing.bodyHtml,
+              bodyText: existing.bodyText,
+              archived: existing.archived,
+              deletedAt: existing.deletedAt,
+            },
+          })) ??
+          (await prisma.page.create({
+            data: {
+              userId: user.id,
+              notebookId: existing.notebookId,
+              title: recoveredTitle,
+              bodyHtml: existing.bodyHtml,
+              bodyText: existing.bodyText,
+              archived: existing.archived,
+            },
+          }));
+
+        pages.set(recovered.id, toPageResponse({
+          id: recovered.id,
+          userId: recovered.userId,
+          notebookId: recovered.notebookId,
+          title: recovered.title,
+          bodyHtml: recovered.bodyHtml,
+          bodyText: recovered.bodyText,
+          archived: recovered.archived,
+          updatedAt: recovered.updatedAt,
+          deletedAt: recovered.deletedAt,
+        }));
 
         conflicts.push({
-          id: `${pageId}:${Date.now()}`,
+          id: `${pageId}:${recovered.id}`,
           entityType: "page",
           entityId: pageId,
           recoveredEntityId: recovered.id,

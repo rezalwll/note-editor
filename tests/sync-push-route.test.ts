@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     },
     page: {
       create: vi.fn(),
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
@@ -252,6 +253,97 @@ describe("sync push route", () => {
         operation: "upsert",
       },
     ]);
+  });
+
+  it("reuses an existing recovered page for repeated stale conflict upserts", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.page.findUnique.mockResolvedValue({
+      id: "page-1",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Remote version",
+      bodyHtml: "<p>Remote body</p>",
+      bodyText: "Remote body",
+      archived: false,
+      updatedAt: new Date("2026-06-30T10:00:00.000Z"),
+      deletedAt: null,
+    });
+    mocks.prisma.notebook.findFirst.mockResolvedValue({ id: "notebook-1" });
+    mocks.prisma.page.findFirst.mockResolvedValue({
+      id: "recovered-existing",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Remote version (Recovered)",
+      bodyHtml: "<p>Remote body</p>",
+      bodyText: "Remote body",
+      archived: false,
+      updatedAt: new Date("2026-06-30T10:00:30.000Z"),
+      deletedAt: null,
+    });
+    mocks.prisma.page.update.mockResolvedValue({
+      id: "page-1",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Local version",
+      bodyHtml: "<p>Local body</p>",
+      bodyText: "Local body",
+      archived: false,
+      updatedAt: new Date("2026-06-30T10:01:00.000Z"),
+      deletedAt: null,
+    });
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notavanote.ir/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [
+            {
+              id: 12,
+              entityType: "page",
+              entityId: "page-1",
+              operation: "upsert",
+              baseUpdatedAt: "2026-06-30T09:00:00.000Z",
+              payload: {
+                id: "page-1",
+                notebookId: "notebook-1",
+                title: "Local version",
+                bodyHtml: "<p>Local body</p>",
+                archived: false,
+              },
+              createdAt: "2026-06-30T10:02:00.000Z",
+            },
+          ],
+        }),
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.page.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          title: "Remote version (Recovered)",
+          bodyHtml: "<p>Remote body</p>",
+        }),
+      }),
+    );
+    expect(mocks.prisma.page.create).not.toHaveBeenCalled();
+    expect(payload.conflicts).toEqual([
+      expect.objectContaining({
+        id: "page-1:recovered-existing",
+        recoveredEntityId: "recovered-existing",
+      }),
+    ]);
+    expect(payload.pages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "recovered-existing",
+          title: "Remote version (Recovered)",
+        }),
+      ]),
+    );
   });
 
   it("recovers orphan page upserts into an active notebook", async () => {
