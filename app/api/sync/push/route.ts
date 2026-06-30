@@ -15,27 +15,44 @@ import {
   sanitizeNoteHtml,
 } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
-import { moveNotebookToTrash, movePageToTrash } from "@/lib/trash";
+import {
+  moveNotebookToTrash,
+  movePageToTrash,
+  TRASH_GROUP_SYSTEM_KEY,
+} from "@/lib/trash";
+
+const DEFAULT_NOTEBOOK_NAME = "مجموعه بدون عنوان";
+const DEFAULT_PAGE_TITLE = "صفحه بدون عنوان";
+
+const optionalStringSchema = z
+  .union([z.string(), z.null()])
+  .optional()
+  .transform((value) => value ?? undefined);
+
+const optionalBooleanSchema = z
+  .union([z.boolean(), z.null()])
+  .optional()
+  .transform((value) => value ?? undefined);
 
 const notebookPayloadSchema = z.object({
-  id: z.string(),
+  id: optionalStringSchema,
   userId: z.string().optional(),
   groupId: z.string().nullable().optional(),
-  name: z.string(),
+  name: optionalStringSchema,
   description: z.string().nullable().optional(),
-  archived: z.boolean(),
-  updatedAt: z.string(),
+  archived: optionalBooleanSchema,
+  updatedAt: optionalStringSchema,
 });
 
 const pagePayloadSchema = z.object({
-  id: z.string(),
+  id: optionalStringSchema,
   userId: z.string().optional(),
-  notebookId: z.string(),
-  title: z.string(),
-  bodyHtml: z.string(),
+  notebookId: optionalStringSchema,
+  title: optionalStringSchema,
+  bodyHtml: optionalStringSchema,
   bodyText: z.string().optional(),
-  archived: z.boolean(),
-  updatedAt: z.string(),
+  archived: optionalBooleanSchema,
+  updatedAt: optionalStringSchema,
 });
 
 const queueIdSchema = z
@@ -178,6 +195,46 @@ function syncPushError(
   );
 }
 
+function nonEmptyText(value: string | undefined, fallback: string) {
+  const trimmedValue = value?.trim();
+  return trimmedValue ? trimmedValue : fallback;
+}
+
+async function getFallbackNotebookGroupId(userId: string) {
+  const activeGroup = await prisma.notebookGroup.findFirst({
+    where: {
+      userId,
+      OR: [{ systemKey: null }, { systemKey: { not: TRASH_GROUP_SYSTEM_KEY } }],
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  if (activeGroup) {
+    return activeGroup.id;
+  }
+
+  const anyGroup = await prisma.notebookGroup.findFirst({
+    where: { userId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  if (anyGroup) {
+    return anyGroup.id;
+  }
+
+  const createdGroup = await prisma.notebookGroup.create({
+    data: {
+      userId,
+      name: DEFAULT_NOTEBOOK_NAME,
+    },
+    select: { id: true },
+  });
+
+  return createdGroup.id;
+}
+
 export async function POST(request: Request) {
   const user = await requireUser();
   const parsed = pushSchema.safeParse(await request.json());
@@ -205,34 +262,24 @@ export async function POST(request: Request) {
       }
 
       const payload = parsedNotebook.data;
+      const notebookId = payload.id ?? item.entityId;
       const existing = await prisma.notebook.findUnique({
-        where: { id: payload.id },
+        where: { id: notebookId },
       });
 
       if (existing && existing.userId !== user.id) {
         return syncPushError("Forbidden notebook scope.", 403, item);
       }
 
-      const targetGroupId = payload.groupId ?? existing?.groupId;
-
-      if (!targetGroupId) {
-        return syncPushError("Invalid notebook group.", 400, item);
-      }
-
-      if (payload.groupId) {
-        const group = await prisma.notebookGroup.findFirst({
-          where: { id: payload.groupId, userId: user.id },
-          select: { id: true },
-        });
-
-        if (!group) {
-          return syncPushError("Invalid notebook group.", 400, item);
-        }
-      }
-
       if (item.operation === "archive") {
         if (!existing) {
-          return syncPushError("Notebook to archive was not found.", 404, item);
+          applied.push({
+            queueId: item.id,
+            entityType: item.entityType,
+            entityId: item.entityId,
+            operation: item.operation,
+          });
+          continue;
         }
 
         await moveNotebookToTrash(user.id, existing.id);
@@ -250,25 +297,46 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const payloadGroup = payload.groupId
+        ? await prisma.notebookGroup.findFirst({
+            where: { id: payload.groupId, userId: user.id },
+            select: { id: true },
+          })
+        : null;
+
+      if (payload.groupId && !payloadGroup) {
+        return syncPushError("Invalid notebook group.", 400, item);
+      }
+
+      const targetGroupId =
+        payloadGroup?.id ?? existing?.groupId ?? (await getFallbackNotebookGroupId(user.id));
+
+      const nextName = nonEmptyText(payload.name, existing?.name ?? DEFAULT_NOTEBOOK_NAME);
+      const nextDescription =
+        payload.description === undefined
+          ? (existing?.description ?? null)
+          : (payload.description ?? null);
+      const nextArchived = payload.archived ?? existing?.archived ?? false;
+
       const notebook = existing
         ? await prisma.notebook.update({
-            where: { id: payload.id },
+            where: { id: notebookId },
             data: {
               userId: user.id,
               groupId: targetGroupId,
-              name: payload.name,
-              description: payload.description ?? null,
-              archived: payload.archived,
+              name: nextName,
+              description: nextDescription,
+              archived: nextArchived,
             },
           })
         : await prisma.notebook.create({
             data: {
-              id: payload.id,
+              id: notebookId,
               userId: user.id,
               groupId: targetGroupId,
-              name: payload.name,
-              description: payload.description ?? null,
-              archived: payload.archived,
+              name: nextName,
+              description: nextDescription,
+              archived: nextArchived,
             },
           });
 
@@ -294,38 +362,76 @@ export async function POST(request: Request) {
     }
 
     const payload = parsedPage.data;
-    const notebook = await prisma.notebook.findFirst({
-      where: { id: payload.notebookId, userId: user.id },
-      select: { id: true },
-    });
-
-    if (!notebook) {
-      return syncPushError("Invalid page notebook.", 400, item);
-    }
-
+    const pageId = payload.id ?? item.entityId;
     const existing = await prisma.page.findUnique({
-      where: { id: payload.id },
+      where: { id: pageId },
     });
 
     if (existing && existing.userId !== user.id) {
       return syncPushError("Forbidden page scope.", 403, item);
     }
 
-    const freeformDocument = parseFreeformDocument(payload.bodyHtml);
-    const safeHtml = freeformDocument
-      ? payload.bodyHtml
-      : sanitizeNoteHtml(payload.bodyHtml);
+    if (item.operation === "archive" && !existing) {
+      applied.push({
+        queueId: item.id,
+        entityType: item.entityType,
+        entityId: item.entityId,
+        operation: item.operation,
+      });
+      continue;
+    }
+
+    let targetNotebookId = payload.notebookId ?? existing?.notebookId;
+    let notebook = targetNotebookId
+      ? await prisma.notebook.findFirst({
+          where: { id: targetNotebookId, userId: user.id },
+          select: { id: true },
+        })
+      : null;
+
+    if (!notebook && existing) {
+      targetNotebookId = existing.notebookId;
+      notebook = await prisma.notebook.findFirst({
+        where: { id: existing.notebookId, userId: user.id },
+        select: { id: true },
+      });
+    }
+
+    if (!notebook || !targetNotebookId) {
+      return syncPushError("Invalid page notebook.", 400, item);
+    }
+
+    const rawBodyHtml = payload.bodyHtml ?? existing?.bodyHtml ?? "";
+    const freeformDocument = parseFreeformDocument(rawBodyHtml);
+    const safeHtml = freeformDocument ? rawBodyHtml : sanitizeNoteHtml(rawBodyHtml);
     const bodyText = freeformDocument
       ? extractFreeformPlainText(freeformDocument)
       : extractPlainText(safeHtml);
 
     if (item.operation === "archive") {
       if (!existing) {
-        return syncPushError("Page to archive was not found.", 404, item);
+        applied.push({
+          queueId: item.id,
+          entityType: item.entityType,
+          entityId: item.entityId,
+          operation: item.operation,
+        });
+        continue;
       }
 
       const moved = await movePageToTrash(user.id, existing.id);
       if (!moved) {
+        if (existing.deletedAt) {
+          pages.set(existing.id, toPageResponse(existing));
+          applied.push({
+            queueId: item.id,
+            entityType: item.entityType,
+            entityId: item.entityId,
+            operation: item.operation,
+          });
+          continue;
+        }
+
         return syncPushError("Page could not be moved to trash.", 409, item);
       }
 
@@ -359,9 +465,9 @@ export async function POST(request: Request) {
         });
 
         conflicts.push({
-          id: `${payload.id}:${Date.now()}`,
+          id: `${pageId}:${Date.now()}`,
           entityType: "page",
-          entityId: payload.id,
+          entityId: pageId,
           recoveredEntityId: recovered.id,
           createdAt: new Date().toISOString(),
           message: "Remote changes were recovered before applying the local version.",
@@ -371,25 +477,25 @@ export async function POST(request: Request) {
 
     const page = existing
       ? await prisma.page.update({
-          where: { id: payload.id },
+          where: { id: pageId },
           data: {
             userId: user.id,
-            notebookId: payload.notebookId,
-            title: payload.title,
+            notebookId: targetNotebookId,
+            title: nonEmptyText(payload.title, existing.title || DEFAULT_PAGE_TITLE),
             bodyHtml: safeHtml,
             bodyText,
-            archived: payload.archived,
+            archived: payload.archived ?? existing.archived,
           },
         })
         : await prisma.page.create({
           data: {
-            id: payload.id,
+            id: pageId,
             userId: user.id,
-            notebookId: payload.notebookId,
-            title: payload.title,
+            notebookId: targetNotebookId,
+            title: nonEmptyText(payload.title, DEFAULT_PAGE_TITLE),
             bodyHtml: safeHtml,
             bodyText,
-            archived: payload.archived,
+            archived: payload.archived ?? false,
           },
         });
 
