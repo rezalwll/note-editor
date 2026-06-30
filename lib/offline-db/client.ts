@@ -371,7 +371,26 @@ export async function pushQueue(items: SyncQueueItem[]) {
   });
 
   if (!response.ok) {
-    throw new Error("PUSH_FAILED");
+    let detail = "";
+
+    try {
+      const payload = (await response.json()) as {
+        error?: string;
+        issues?: Array<{ path?: string; message?: string }>;
+      };
+      const issueText = payload.issues
+        ?.map((issue) => [issue.path, issue.message].filter(Boolean).join(": "))
+        .filter(Boolean)
+        .join("; ");
+
+      detail = [payload.error, issueText].filter(Boolean).join(" - ");
+    } catch {
+      detail = await response.text().catch(() => "");
+    }
+
+    throw new Error(
+      ["PUSH_FAILED", response.status, detail].filter(Boolean).join(" "),
+    );
   }
 
   return (await response.json()) as SyncPushResult;

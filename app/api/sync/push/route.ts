@@ -130,12 +130,60 @@ function toPageResponse(page: {
   };
 }
 
+function getIssueSummary(error: z.ZodError) {
+  return error.issues.map((issue) => ({
+    code: issue.code,
+    message: issue.message,
+    path: issue.path.join("."),
+  }));
+}
+
+function getItemSummary(item: {
+  id?: number;
+  entityType?: string;
+  entityId?: string;
+  operation?: string;
+}) {
+  return {
+    queueId: item.id,
+    entityType: item.entityType,
+    entityId: item.entityId,
+    operation: item.operation,
+  };
+}
+
+function syncPushError(
+  message: string,
+  status: number,
+  item?: {
+    id?: number;
+    entityType?: string;
+    entityId?: string;
+    operation?: string;
+  },
+  issues?: ReturnType<typeof getIssueSummary>,
+) {
+  console.warn("Rejected sync push operation.", {
+    message,
+    item: item ? getItemSummary(item) : undefined,
+    issues,
+  });
+
+  return NextResponse.json(
+    {
+      error: message,
+      issues,
+    },
+    { status },
+  );
+}
+
 export async function POST(request: Request) {
   const user = await requireUser();
   const parsed = pushSchema.safeParse(await request.json());
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid sync payload." }, { status: 400 });
+    return syncPushError("Invalid sync payload.", 400, undefined, getIssueSummary(parsed.error));
   }
 
   const applied: SyncPushResult["applied"] = [];
@@ -145,19 +193,30 @@ export async function POST(request: Request) {
 
   for (const item of parsed.data.operations) {
     if (item.entityType === "notebook") {
-      const payload = notebookPayloadSchema.parse(item.payload);
+      const parsedNotebook = notebookPayloadSchema.safeParse(item.payload);
+
+      if (!parsedNotebook.success) {
+        return syncPushError(
+          "Invalid notebook sync payload.",
+          400,
+          item,
+          getIssueSummary(parsedNotebook.error),
+        );
+      }
+
+      const payload = parsedNotebook.data;
       const existing = await prisma.notebook.findUnique({
         where: { id: payload.id },
       });
 
       if (existing && existing.userId !== user.id) {
-        return NextResponse.json({ error: "Forbidden notebook scope." }, { status: 403 });
+        return syncPushError("Forbidden notebook scope.", 403, item);
       }
 
       const targetGroupId = payload.groupId ?? existing?.groupId;
 
       if (!targetGroupId) {
-        return NextResponse.json({ error: "Invalid notebook group." }, { status: 400 });
+        return syncPushError("Invalid notebook group.", 400, item);
       }
 
       if (payload.groupId) {
@@ -167,16 +226,13 @@ export async function POST(request: Request) {
         });
 
         if (!group) {
-          return NextResponse.json({ error: "Invalid notebook group." }, { status: 400 });
+          return syncPushError("Invalid notebook group.", 400, item);
         }
       }
 
       if (item.operation === "archive") {
         if (!existing) {
-          return NextResponse.json(
-            { error: "Notebook to archive was not found." },
-            { status: 404 },
-          );
+          return syncPushError("Notebook to archive was not found.", 404, item);
         }
 
         await moveNotebookToTrash(user.id, existing.id);
@@ -226,14 +282,25 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const payload = pagePayloadSchema.parse(item.payload);
+    const parsedPage = pagePayloadSchema.safeParse(item.payload);
+
+    if (!parsedPage.success) {
+      return syncPushError(
+        "Invalid page sync payload.",
+        400,
+        item,
+        getIssueSummary(parsedPage.error),
+      );
+    }
+
+    const payload = parsedPage.data;
     const notebook = await prisma.notebook.findFirst({
       where: { id: payload.notebookId, userId: user.id },
       select: { id: true },
     });
 
     if (!notebook) {
-      return NextResponse.json({ error: "Invalid page notebook." }, { status: 400 });
+      return syncPushError("Invalid page notebook.", 400, item);
     }
 
     const existing = await prisma.page.findUnique({
@@ -241,7 +308,7 @@ export async function POST(request: Request) {
     });
 
     if (existing && existing.userId !== user.id) {
-      return NextResponse.json({ error: "Forbidden page scope." }, { status: 403 });
+      return syncPushError("Forbidden page scope.", 403, item);
     }
 
     const freeformDocument = parseFreeformDocument(payload.bodyHtml);
@@ -254,18 +321,12 @@ export async function POST(request: Request) {
 
     if (item.operation === "archive") {
       if (!existing) {
-        return NextResponse.json(
-          { error: "Page to archive was not found." },
-          { status: 404 },
-        );
+        return syncPushError("Page to archive was not found.", 404, item);
       }
 
       const moved = await movePageToTrash(user.id, existing.id);
       if (!moved) {
-        return NextResponse.json(
-          { error: "Page could not be moved to trash." },
-          { status: 409 },
-        );
+        return syncPushError("Page could not be moved to trash.", 409, item);
       }
 
       const archived = await prisma.page.findUniqueOrThrow({
