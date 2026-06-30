@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   archivePage: vi.fn(),
   restorePage: vi.fn(),
   deletePage: vi.fn(),
+  reorderPages: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -36,6 +37,7 @@ vi.mock("@/app/actions", () => ({
   archivePageInlineAction: mocks.archivePage,
   createPageInlineAction: vi.fn(),
   deletePagePermanentlyInlineAction: mocks.deletePage,
+  reorderPagesInlineAction: mocks.reorderPages,
   restorePageInlineAction: mocks.restorePage,
 }));
 
@@ -184,5 +186,30 @@ describe("PagesSidebar", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "نام جدید زیر مجموعه" })).toBeInTheDocument();
     });
+  });
+
+  it("shows a pointer page row and a drag handle on live pages", () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "زیر مجموعه اول",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "صفحه اول",
+                updatedAt: new Date(),
+                deletedAt: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("صفحه اول").closest("a")).toHaveClass("cursor-pointer");
+    expect(screen.getByLabelText("جابجایی صفحه")).toBeInTheDocument();
   });
 });

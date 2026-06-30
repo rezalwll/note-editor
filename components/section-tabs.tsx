@@ -66,6 +66,7 @@ type SectionTabsProps = {
 };
 
 const TRASH_GROUP_KEY = "deleted-items";
+const TRASH_PAGES_NOTEBOOK_KEY = "deleted-pages";
 function reorderIds(ids: string[], draggedId: string, targetId: string) {
   if (draggedId === targetId) {
     return ids;
@@ -80,6 +81,17 @@ function reorderIds(ids: string[], draggedId: string, targetId: string) {
 
   nextIds.splice(targetIndex, 0, draggedId);
   return nextIds;
+}
+
+function getTrashItemCount(notebooks: NotebookTab[]) {
+  return notebooks.reduce(
+    (count, notebook) =>
+      count +
+      (notebook.systemKey === TRASH_PAGES_NOTEBOOK_KEY
+        ? (notebook.pageIds?.length ?? 0)
+        : 1),
+    0,
+  );
 }
 
 export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
@@ -361,14 +373,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const groupTabs = useMemo(
     () =>
       groupItems
-        .map((group) => ({
-          id: group.id,
-          name: group.name,
-          notebookCount: displayItems.filter((item) => item.groupId === group.id).length,
-          sortOrder: group.sortOrder,
-          themeKey: group.themeKey,
-          systemKey: group.systemKey ?? null,
-        }))
+        .map((group) => {
+          const groupNotebooks = displayItems.filter((item) => item.groupId === group.id);
+
+          return {
+            id: group.id,
+            name: group.name,
+            notebookCount:
+              group.systemKey === TRASH_GROUP_KEY
+                ? getTrashItemCount(groupNotebooks)
+                : groupNotebooks.length,
+            sortOrder: group.sortOrder,
+            themeKey: group.themeKey,
+            systemKey: group.systemKey ?? null,
+          };
+        })
         .sort(
           (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
         ),

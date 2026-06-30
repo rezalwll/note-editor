@@ -7,6 +7,10 @@ import { PagesSidebar } from "@/components/pages-sidebar";
 import { SectionTabs } from "@/components/section-tabs";
 import { ShellContentLayout } from "@/components/shell-content-layout";
 import { getSidebarData } from "@/lib/queries";
+import {
+  TRASH_GROUP_SYSTEM_KEY,
+  TRASH_PAGES_NOTEBOOK_SYSTEM_KEY,
+} from "@/lib/trash";
 import { getUserAccent, getUserInitials } from "@/lib/users";
 
 type AppShellProps = {
@@ -43,7 +47,19 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
   const shellGroups = groups.map((group) => ({
     id: group.id,
     name: group.name,
-    notebookCount: group._count.notebooks,
+    notebookCount:
+      group.systemKey === TRASH_GROUP_SYSTEM_KEY
+        ? shellNotebooks
+            .filter((notebook) => notebook.groupId === group.id)
+            .reduce(
+              (count, notebook) =>
+                count +
+                (notebook.systemKey === TRASH_PAGES_NOTEBOOK_SYSTEM_KEY
+                  ? notebook.pages.length
+                  : 1),
+              0,
+            )
+        : group._count.notebooks,
     sortOrder: group.sortOrder,
     themeKey: group.themeKey,
     systemKey: group.systemKey,

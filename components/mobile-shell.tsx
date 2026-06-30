@@ -98,6 +98,19 @@ type ActionSheetState =
   | null;
 
 const UNGROUPED_ID = "ungrouped";
+const TRASH_GROUP_KEY = "deleted-items";
+const TRASH_PAGES_NOTEBOOK_KEY = "deleted-pages";
+
+function getTrashItemCount(notebooks: MobileNotebook[]) {
+  return notebooks.reduce(
+    (count, notebook) =>
+      count +
+      (notebook.systemKey === TRASH_PAGES_NOTEBOOK_KEY
+        ? notebook.pages.length
+        : 1),
+    0,
+  );
+}
 
 export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
   const pathname = usePathname();
@@ -329,13 +342,22 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
   const groupedNotebooks = useMemo<MobileGroupSection[]>(
     () => [
-      ...mergedGroups.map((group) => ({
-        id: group.id,
-        name: groupNameOverrides[group.id] ?? group.name,
-        notebookCount: group.notebookCount,
-        systemKey: group.systemKey,
-        notebooks: displayNotebooks.filter((notebook) => notebook.groupId === group.id),
-      })),
+      ...mergedGroups.map((group) => {
+        const groupNotebooks = displayNotebooks.filter(
+          (notebook) => notebook.groupId === group.id,
+        );
+
+        return {
+          id: group.id,
+          name: groupNameOverrides[group.id] ?? group.name,
+          notebookCount:
+            group.systemKey === TRASH_GROUP_KEY
+              ? getTrashItemCount(groupNotebooks)
+              : group.notebookCount,
+          systemKey: group.systemKey,
+          notebooks: groupNotebooks,
+        };
+      }),
       {
         id: UNGROUPED_ID,
         name: "بدون مجموعه",
@@ -351,7 +373,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     selectedGroupId ??
     routeNotebook?.groupId ??
     groupedNotebooks.find(
-      (group) => group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items",
+      (group) => group.id !== UNGROUPED_ID && group.systemKey !== TRASH_GROUP_KEY,
     )?.id ??
     groupedNotebooks.find((group) => group.id !== UNGROUPED_ID)?.id ??
     null;
@@ -768,7 +790,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   .filter((group) => group.id !== UNGROUPED_ID)
                   .map((group) => {
                   const canManageGroup =
-                    group.id !== UNGROUPED_ID && group.systemKey !== "deleted-items";
+                    group.id !== UNGROUPED_ID && group.systemKey !== TRASH_GROUP_KEY;
                   const isEditing = editingGroupId === group.id;
                   const isActiveGroup = activeGroupId === group.id;
 
@@ -807,11 +829,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                               ].join(" ")}
                             />
                             <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#50607a]">
-                              {group.notebooks.length}
+                              {group.notebookCount}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-sm font-semibold text-[#23324d]">
-                            {group.systemKey === "deleted-items" ? (
+                            {group.systemKey === TRASH_GROUP_KEY ? (
                               <Trash2 className="h-3.5 w-3.5" />
                             ) : null}
                             {isEditing ? (

@@ -277,6 +277,47 @@ describe("SectionTabs", () => {
     expect(screen.queryByTitle("زیر مجموعه جدید")).not.toBeInTheDocument();
   });
 
+  it("counts deleted pages in the trash group badge", () => {
+    render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
+          {
+            id: "trash-group",
+            name: "Trash",
+            notebookCount: 0,
+            systemKey: "deleted-items",
+          },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: ["page-1"],
+          },
+          {
+            id: "trash-pages",
+            name: "Deleted Pages",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            systemKey: "deleted-pages",
+            pageIds: ["page-trash-1", "page-trash-2", "page-trash-3"],
+          },
+          {
+            id: "deleted-notebook",
+            name: "Deleted Notebook",
+            groupId: "trash-group",
+            deletedAt: new Date(),
+            pageIds: ["nested-page"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Trash").closest("button")).toHaveTextContent("4");
+  });
+
   it("keeps the active group outlined in green regardless of its theme", () => {
     render(
       <SectionTabs

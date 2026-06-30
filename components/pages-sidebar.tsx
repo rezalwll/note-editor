@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CirclePlus } from "lucide-react";
+import { CirclePlus, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
@@ -475,19 +475,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             const isSelected = selectedPageIds.includes(page.id);
 
             return (
-              <Link
+              <div
                 key={page.id}
-                href={`/pages/${page.id}`}
                 data-page-item="true"
-                draggable={!activeNotebook.deletedAt}
-                onDragStart={() => {
-                  if (activeNotebook.deletedAt) {
-                    return;
-                  }
-
-                  setDraggedPageId(page.id);
-                }}
-                onDragEnd={() => setDraggedPageId(null)}
                 onDragOver={(event) => {
                   if (draggedPageId && !activeNotebook.deletedAt) {
                     event.preventDefault();
@@ -496,15 +486,6 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 onDrop={(event) => {
                   event.preventDefault();
                   handlePageDrop(page.id);
-                }}
-                onClick={(event) => {
-                  if (event.ctrlKey || event.metaKey) {
-                    event.preventDefault();
-                    togglePageSelection(page.id);
-                    return;
-                  }
-
-                  selectSinglePage(page.id);
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -585,7 +566,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                           ],
                   });
                 }}
-                className="block border-b px-3 py-3 transition"
+                className="group relative border-b transition"
                 style={{
                   borderColor: activeTheme?.sidebarBorder,
                   backgroundColor: isActive
@@ -593,22 +574,45 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                     : isSelected
                       ? activeTheme?.sidebarHover
                       : "transparent",
-                  cursor: activeNotebook.deletedAt
-                    ? "default"
-                    : draggedPageId === page.id
-                      ? "grabbing"
-                      : "grab",
                   opacity: draggedPageId === page.id ? 0.72 : 1,
                 }}
                 dir="rtl"
               >
-                <div className="truncate text-sm" style={{ color: activeTheme?.sidebarText }}>
-                  {page.title}
-                </div>
-                <div className="mt-1 text-[11px]" style={{ color: activeTheme?.sidebarMuted }}>
-                  {formatDate(new Date(page.updatedAt))}
-                </div>
-              </Link>
+                <Link
+                  href={`/pages/${page.id}`}
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                      event.preventDefault();
+                      togglePageSelection(page.id);
+                      return;
+                    }
+
+                    selectSinglePage(page.id);
+                  }}
+                  className="block cursor-pointer px-3 py-3 pl-10"
+                >
+                  <div className="truncate text-sm" style={{ color: activeTheme?.sidebarText }}>
+                    {page.title}
+                  </div>
+                  <div className="mt-1 text-[11px]" style={{ color: activeTheme?.sidebarMuted }}>
+                    {formatDate(new Date(page.updatedAt))}
+                  </div>
+                </Link>
+
+                {!activeNotebook.deletedAt ? (
+                  <button
+                    type="button"
+                    draggable
+                    onClick={(event) => event.preventDefault()}
+                    onDragStart={() => setDraggedPageId(page.id)}
+                    onDragEnd={() => setDraggedPageId(null)}
+                    className="absolute left-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] active:cursor-grabbing group-hover:opacity-100"
+                    aria-label="جابجایی صفحه"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
             );
           })}
           {activePages.length === 0 ? (
