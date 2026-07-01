@@ -7,13 +7,13 @@ import { dispatchOpenSearch } from "@/lib/search-events";
 type SearchTriggerProps = {
   ariaLabel?: string;
   className?: string;
-  showShortcut?: boolean;
+  label?: string;
 };
 
 export function SearchTrigger({
   ariaLabel = "باز کردن جست‌وجو",
   className,
-  showShortcut = false,
+  label = "جست‌وجو",
 }: SearchTriggerProps) {
   return (
     <button
@@ -22,11 +22,10 @@ export function SearchTrigger({
       className={className}
       aria-label={ariaLabel}
       title={ariaLabel}
+      dir="rtl"
     >
-      <Search className="h-[18px] w-[18px]" aria-hidden="true" />
-      {showShortcut ? (
-        <span className="hidden text-[11px] text-[#6b7280] md:inline">Ctrl+K</span>
-      ) : null}
+      <span className="text-sm font-medium">{label}</span>
+      <Search className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
     </button>
   );
 }

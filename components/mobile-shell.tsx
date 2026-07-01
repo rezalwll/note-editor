@@ -667,9 +667,6 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
           <div className="flex items-center gap-2">
             <SyncStatusIndicator />
-            <SearchTrigger
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            />
             <button
               ref={profileTriggerRef}
               type="button"
@@ -683,6 +680,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             >
               <UserRound className="h-5 w-5" />
             </button>
+            <SearchTrigger
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/60 bg-white/78 px-3 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
+            />
           </div>
         </div>
 

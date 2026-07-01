@@ -5,6 +5,7 @@ import { EditorToolbar } from "@/components/editor-toolbar";
 import { GlobalSearchOverlay } from "@/components/global-search-overlay";
 import { MobileShell } from "@/components/mobile-shell";
 import { PagesSidebar } from "@/components/pages-sidebar";
+import { SearchTrigger } from "@/components/search-trigger";
 import { SectionTabs } from "@/components/section-tabs";
 import { ShellContentLayout } from "@/components/shell-content-layout";
 import { getSidebarData } from "@/lib/queries";
@@ -85,6 +86,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                   priority
                   showWordmark={false}
                 />
+                <SearchTrigger className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/55 bg-white/84 px-3 py-1.5 text-[#32406d] shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:bg-white" />
                 <EditorToolbar />
               </div>
 
