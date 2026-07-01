@@ -5,8 +5,8 @@ function withAppName(value?: string | null) {
   return trimmed ? `${trimmed} | ${APP_NAME}` : APP_NAME;
 }
 
-export function getPageDocumentTitle(title?: string | null) {
-  return withAppName(title?.trim() || "صفحه بدون عنوان");
+export function getPageDocumentTitle(_title?: string | null) {
+  return APP_NAME;
 }
 
 export function getNotebookDocumentTitle(name?: string | null) {
