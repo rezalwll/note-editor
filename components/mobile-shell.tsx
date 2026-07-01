@@ -31,6 +31,7 @@ import {
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
+import { SearchTrigger } from "@/components/search-trigger";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import {
   dispatchGroupRenamed,
@@ -666,6 +667,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
           <div className="flex items-center gap-2">
             <SyncStatusIndicator />
+            <SearchTrigger
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
+            />
             <button
               ref={profileTriggerRef}
               type="button"

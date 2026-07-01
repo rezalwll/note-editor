@@ -2,6 +2,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { ContextMenuProvider } from "@/components/context-menu";
 import { DesktopProfileMenu } from "@/components/desktop-profile-menu";
 import { EditorToolbar } from "@/components/editor-toolbar";
+import { GlobalSearchOverlay } from "@/components/global-search-overlay";
 import { MobileShell } from "@/components/mobile-shell";
 import { PagesSidebar } from "@/components/pages-sidebar";
 import { SectionTabs } from "@/components/section-tabs";
@@ -73,6 +74,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
           groups={shellGroups}
           currentUser={currentUser}
         />
+        <GlobalSearchOverlay />
 
         <div className="sticky top-0 z-40 hidden overflow-visible xl:block">
           <header className="border-b border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_32%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">

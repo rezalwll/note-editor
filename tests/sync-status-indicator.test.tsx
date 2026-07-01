@@ -78,5 +78,6 @@ describe("SyncStatusIndicator", () => {
 
     expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /@owner/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "باز کردن جست‌وجو" })).toBeInTheDocument();
   });
 });

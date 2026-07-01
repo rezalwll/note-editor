@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { logoutAction } from "@/app/actions";
+import { SearchTrigger } from "@/components/search-trigger";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 
 type DesktopProfileMenuProps = {
@@ -83,6 +84,10 @@ export function DesktopProfileMenu({
   return (
     <div className="relative flex items-center gap-2">
       <SyncStatusIndicator />
+      <SearchTrigger
+        showShortcut
+        className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[#d6dee8] bg-white px-3 py-1.5 text-[#32406d] shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition hover:bg-[#f7fbff]"
+      />
 
       <button
         ref={triggerRef}

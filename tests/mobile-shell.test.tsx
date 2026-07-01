@@ -122,5 +122,6 @@ describe("MobileShell", () => {
     );
 
     expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "باز کردن جست‌وجو" })).toBeInTheDocument();
   });
 });
