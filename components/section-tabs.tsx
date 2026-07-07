@@ -897,10 +897,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   ].filter((item) => item.id !== "move-ungrouped"),
                 });
               }}
-              className={cn(
-                "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
-                draggedGroupId === group.id ? "cursor-grabbing opacity-70" : !isTrash ? "cursor-grab" : null,
-              )}
+               className={cn(
+                 "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition duration-200 hover:-translate-y-px",
+                 "cursor-pointer",
+                 draggedGroupId === group.id ? "opacity-70" : null,
+               )}
               style={{
                 borderColor: pillTheme.border,
                 backgroundColor: isTrash ? "#ffe5ea" : pillTheme.bg,
@@ -1164,15 +1165,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                   ],
                 });
               }}
-              className={cn(
-                "inline-flex h-6 items-center rounded-t-md px-4 text-xs transition",
-                isActive ? "translate-y-[1px]" : "hover:-translate-y-px",
-                draggedNotebookId === notebook.id
-                  ? "cursor-grabbing opacity-70"
-                  : !isDeleted && !isSystemNotebook && !isTrashGroup(activeGroupKey)
-                    ? "cursor-grab"
-                    : null,
-              )}
+               className={cn(
+                 "inline-flex h-6 items-center rounded-t-md px-4 text-xs transition",
+                 "cursor-pointer",
+                 isActive ? "translate-y-[1px]" : "hover:-translate-y-px",
+                 draggedNotebookId === notebook.id ? "opacity-70" : null,
+               )}
               style={{
                 backgroundColor: theme.tab,
                 color: theme.tabText,
