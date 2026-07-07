@@ -52,4 +52,9 @@ jobs:
             PORT='${{ secrets.PROD_PORT }}' \
             APP_DIR='${{ secrets.PROD_APP_DIR }}' \
             VERIFY_ON_SERVER='false' \
-            bash /root/deploy-notebook.sh"
+            bash /root/deploy-notebook.sh && \
+            systemctl disable --now notebook-auto-deploy.timer >/dev/null 2>&1 || true && \
+            rm -f /etc/systemd/system/notebook-auto-deploy.service /etc/systemd/system/notebook-auto-deploy.timer && \
+            systemctl daemon-reload && \
+            rm -f /usr/local/bin/notebook-auto-deploy /etc/notebook-auto-deploy.env /var/lock/notebook-auto-deploy.lock && \
+            rm -rf /var/lib/notebook-auto-deploy /opt/notebook-source"

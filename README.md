@@ -74,7 +74,9 @@ This repository now supports GitHub Actions based CI/CD.
 The deploy workflow uploads a release archive to the production server and runs
 `scripts/deploy-notebook.sh`. CI already validates lint, types, tests, and
 build, so production deploys set `VERIFY_ON_SERVER=false` to avoid repeating the
-full verification workload on the server.
+full verification workload on the server. The workflow also removes the legacy
+`notebook-auto-deploy` timer/service if they still exist on the server, so only
+GitHub Actions remains responsible for production deploys.
 
 ### Required GitHub secrets
 
@@ -118,22 +120,6 @@ Notes:
 - Default port is `3000` behind Nginx on port `80`.
 - The bootstrap password should be overridden at runtime for production.
 - The deploy script now creates a dedicated Postgres login named `notebook_app` by default instead of reusing `postgres`.
-
-## Git-based auto deploy
-
-If you want the server to redeploy itself after every `git push`, install the poller once on the server. For a private GitHub repository, point it at an SSH deploy key:
-
-```bash
-chmod +x scripts/install-auto-deploy.sh scripts/auto-deploy-server.sh
-sudo APP_DIR=/var/www/notebook PORT=3000 scripts/install-auto-deploy.sh
-```
-
-What it does:
-
-- Installs a `systemd` timer named `notebook-auto-deploy.timer`
-- Checks the GitHub `master` branch every minute
-- Runs a fresh deploy only when a new commit is detected
-- Keeps the last deployed commit in `/var/lib/notebook-auto-deploy/last-deployed-commit`
 
 ## Database portability
 
