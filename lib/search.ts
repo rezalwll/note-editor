@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { TRASH_GROUP_SYSTEM_KEY } from "@/lib/trash";
 
@@ -20,12 +21,12 @@ export type SearchResultsPayload = {
 
 const RESULTS_PER_TYPE = 5;
 
-const NON_TRASH_GROUP_FILTER = {
+const NON_TRASH_GROUP_FILTER: Prisma.NotebookGroupWhereInput = {
   OR: [
     { systemKey: null },
     { systemKey: { not: TRASH_GROUP_SYSTEM_KEY } },
   ],
-} as const;
+};
 
 function normalizeQuery(query: string) {
   return query.trim().replace(/\s+/g, " ").toLocaleLowerCase();

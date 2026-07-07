@@ -1,6 +1,7 @@
 import argon2 from "argon2";
 import { SignJWT, jwtVerify } from "jose";
 import { Prisma } from "@/generated/prisma/client";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -116,7 +117,7 @@ export async function verifySession(token?: string | null) {
   }
 }
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   const session = await verifySession(token);
@@ -128,7 +129,7 @@ export async function getCurrentUser() {
   return prisma.user.findUnique({
     where: { id: session.userId },
   });
-}
+});
 
 export async function requireUser() {
   const user = await getCurrentUser();

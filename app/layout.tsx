@@ -12,11 +12,6 @@ const iranYekanSans = localFont({
       weight: "400",
       style: "normal",
     },
-    {
-      path: "./fonts/iranyekan.ttf",
-      weight: "400",
-      style: "normal",
-    },
   ],
   display: "swap",
 });
@@ -26,11 +21,6 @@ const iranYekanSerif = localFont({
   src: [
     {
       path: "./fonts/iranyekan.woff2",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "./fonts/iranyekan.ttf",
       weight: "400",
       style: "normal",
     },
