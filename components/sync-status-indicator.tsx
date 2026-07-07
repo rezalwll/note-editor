@@ -40,7 +40,13 @@ function getStateFromSyncDetail(detail: SyncEventDetail): SyncIndicatorState | n
 }
 
 export function SyncStatusIndicator() {
-  const [state, setState] = useState<SyncIndicatorState>("synced");
+  const [state, setState] = useState<SyncIndicatorState>(() => {
+    if (typeof navigator === "undefined") {
+      return "synced";
+    }
+
+    return navigator.onLine ? "synced" : "error";
+  });
   const label = STATUS_COPY[state];
 
   useEffect(() => {
@@ -56,7 +62,6 @@ export function SyncStatusIndicator() {
     const handleOnline = () => setState("syncing");
     const handleOffline = () => setState("error");
 
-    setState(navigator.onLine ? "synced" : "error");
     window.addEventListener("notava-sync", handleSyncEvent);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);

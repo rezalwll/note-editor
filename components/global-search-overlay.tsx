@@ -48,6 +48,7 @@ function getVisibleResultCount(results: SearchResultsPayload["results"]) {
 export function GlobalSearchOverlay() {
   const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const previousPathnameRef = useRef(pathname);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -90,8 +91,22 @@ export function GlobalSearchOverlay() {
   }, [open]);
 
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+    if (previousPathnameRef.current === pathname) {
+      return;
+    }
+
+    previousPathnameRef.current = pathname;
+
+    if (!open) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setOpen(false);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [open, pathname]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -107,8 +122,6 @@ export function GlobalSearchOverlay() {
     }
 
     if (!debouncedQuery) {
-      setResults(createEmptyResults());
-      setIsLoading(false);
       return;
     }
 
@@ -151,7 +164,9 @@ export function GlobalSearchOverlay() {
     return null;
   }
 
-  const visibleCount = getVisibleResultCount(results);
+  const visibleResults = debouncedQuery ? results : createEmptyResults();
+  const visibleCount = getVisibleResultCount(visibleResults);
+  const shouldShowLoading = Boolean(debouncedQuery) && isLoading;
 
   return (
     <div className="fixed inset-0 z-[220] bg-black/35 backdrop-blur-[2px]">
@@ -187,7 +202,7 @@ export function GlobalSearchOverlay() {
             <div className="rounded-2xl border border-dashed border-[#dbe4f0] bg-white px-4 py-8 text-center text-sm text-[#6b7280]">
               با `Ctrl+K` یا دکمه جست‌وجو از هرجای برنامه سریع‌تر به نتیجه برسید.
             </div>
-          ) : isLoading ? (
+          ) : shouldShowLoading ? (
             <div className="flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-8 text-sm text-[#4b5d87]">
               <LoaderCircle className="h-4 w-4 animate-spin" />
               در حال جست‌وجو...
@@ -199,7 +214,7 @@ export function GlobalSearchOverlay() {
           ) : (
             <div className="grid gap-4">
               {(Object.keys(SECTION_LABELS) as SearchResultType[]).map((type) => {
-                const items = results[type];
+                const items = visibleResults[type];
 
                 if (items.length === 0) {
                   return null;
