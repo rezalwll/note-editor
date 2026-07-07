@@ -64,6 +64,28 @@ This validates the Prisma schema, runs ESLint and TypeScript, executes the
 functional tests, and creates a production build. Use `npm run test:watch`
 while developing a focused change.
 
+## CI/CD
+
+This repository now supports GitHub Actions based CI/CD.
+
+- `CI`: runs on every pull request and every push to `master`
+- `Deploy`: runs only after `CI` succeeds on `master`
+
+The deploy workflow uploads a release archive to the production server and runs
+`scripts/deploy-notebook.sh`. CI already validates lint, types, tests, and
+build, so production deploys set `VERIFY_ON_SERVER=false` to avoid repeating the
+full verification workload on the server.
+
+### Required GitHub secrets
+
+- `PROD_SSH_HOST`: production server hostname or IP
+- `PROD_SSH_USER`: SSH user, for example `root`
+- `PROD_SSH_PRIVATE_KEY`: private key for the deployment user
+- `PROD_DOMAIN`: public domain, for example `notavanote.ir`
+- `PROD_SSL_EMAIL`: email used by Certbot
+- `PROD_PORT`: app port on the server, for example `3000`
+- `PROD_APP_DIR`: deployment directory, for example `/var/www/notebook`
+
 ## Deployment notes
 
 - Put the app behind HTTPS and a reverse proxy.

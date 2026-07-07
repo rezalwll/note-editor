@@ -16,6 +16,7 @@ DOMAIN=${DOMAIN:-}
 DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
 SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
 DEPLOY_LOCK_FILE=${DEPLOY_LOCK_FILE:-/var/lock/notebook-deploy.lock}
+VERIFY_ON_SERVER=${VERIFY_ON_SERVER:-true}
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -231,13 +232,16 @@ build_app() {
   npx prisma migrate resolve --rolled-back 20260614120000_multi_user_accounts >/dev/null 2>&1 || true
   npm run prisma:deploy
 
-  if ! su - postgres -c "psql -d '${DB_NAME}' -tAc 'SELECT 1 FROM users LIMIT 1'" 2>/dev/null | grep -q 1; then
+  if ! su - postgres -c "psql -d '${DB_NAME}' -Atqc 'SELECT COUNT(*) FROM users'" 2>/dev/null | grep -qx '[1-9][0-9]*'; then
     npm run prisma:seed
   fi
 
-  npm run lint
-  npm run typecheck
-  npm run test
+  if [[ "${VERIFY_ON_SERVER}" == "true" ]]; then
+    npm run lint
+    npm run typecheck
+    npm run test
+  fi
+
   NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512} npx next build --webpack
 }
 
