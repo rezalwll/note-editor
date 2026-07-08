@@ -11,6 +11,10 @@ export function formatDate(date: Date) {
   }).format(date);
 }
 
+export function formatNumber(value: number) {
+  return new Intl.NumberFormat("fa-IR").format(value);
+}
+
 export function slugifyFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
 }

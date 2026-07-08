@@ -315,7 +315,7 @@ describe("SectionTabs", () => {
       />,
     );
 
-    expect(screen.getByText("Trash").closest("button")).toHaveTextContent("4");
+    expect(screen.getByText("Trash").closest("button")).toHaveTextContent("۴");
   });
 
   it("keeps the active group outlined in green regardless of its theme", () => {

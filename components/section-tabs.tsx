@@ -37,7 +37,7 @@ import {
   getRandomThemeKey,
   type ThemeKey,
 } from "@/lib/notebook-theme";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 
 type NotebookTab = {
   id: string;
@@ -950,19 +950,19 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 >
                   {isTrash ? <Trash2 className="h-3.5 w-3.5" /> : null}
                   <span>{group.name}</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px]",
-                    )}
-                    style={{
-                      backgroundColor: isTrash
-                        ? "rgba(255,255,255,0.72)"
-                        : pillTheme.badgeBg,
-                      color: isTrash ? "#1f2937" : pillTheme.badgeText,
-                    }}
-                  >
-                    {group.notebookCount}
-                  </span>
+                    <span
+                      className={cn(
+                        "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] leading-none tabular-nums",
+                      )}
+                      style={{
+                        backgroundColor: isTrash
+                          ? "rgba(255,255,255,0.72)"
+                          : pillTheme.badgeBg,
+                        color: isTrash ? "#1f2937" : pillTheme.badgeText,
+                      }}
+                    >
+                      {formatNumber(group.notebookCount)}
+                    </span>
                 </button>
               )}
             </div>
