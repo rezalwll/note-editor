@@ -192,30 +192,29 @@ function getImageBlockHeight(block: FreeformBlock, width: number) {
   return width / (block.aspectRatio ?? IMAGE_DEFAULT_ASPECT_RATIO);
 }
 
+function isEmptyTextBlock(block: FreeformBlock) {
+  return block.type !== "image" && !block.text.trim();
+}
+
+function getPersistableBlocks(blocks: FreeformBlock[]) {
+  return blocks.filter((block) => !isEmptyTextBlock(block));
+}
+
 function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   const parsed = parseFreeformDocument(initialHtml);
 
   if (parsed) {
-    return parsed.blocks.length > 0
-      ? parsed.blocks
-      : [
-          {
-            id: createId(),
-            x: PAGE_SIDE_PADDING_DESKTOP,
-            y: 72,
-            text: "",
-            align: "right",
-            direction: "rtl",
-            textColor: "#222222",
-            fontSize: 15,
-          },
-        ];
+    return getPersistableBlocks(parsed.blocks);
   }
 
   const plainText = initialHtml
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+  if (!plainText) {
+    return [];
+  }
 
   return [
     {
@@ -357,7 +356,7 @@ export function NoteEditor({
     () =>
       serializeFreeformDocument({
         type: "freeform-v1",
-        blocks,
+        blocks: getPersistableBlocks(blocks),
       }),
     [blocks],
   );
@@ -1436,12 +1435,9 @@ export function NoteEditor({
         return current;
       }
 
-      if (current.length === 1) {
-        return current;
-      }
-
       return current.filter((block) => block.id !== id);
     });
+    setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
 

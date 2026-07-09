@@ -158,6 +158,74 @@ describe("NoteEditor freeform placement", () => {
   }
 
   it.each([
+    ["empty legacy HTML", "<p></p>"],
+    [
+      "an empty freeform document",
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    ],
+  ])("does not create a default block for %s", async (_, initialHtml) => {
+    const { container } = renderEditor(initialHtml);
+
+    await waitForHydration();
+
+    expect(container.querySelectorAll("[data-editor-block='true']")).toHaveLength(0);
+    expect(container.querySelectorAll("textarea")).toHaveLength(0);
+  });
+
+  it("ignores saved empty text blocks when loading a page", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "blank", x: 48, y: 72, text: "" }],
+      }),
+    );
+
+    await waitForHydration();
+
+    expect(container.querySelectorAll("[data-editor-block='true']")).toHaveLength(0);
+    expect(container.querySelectorAll("textarea")).toHaveLength(0);
+  });
+
+  it("drops a newly created empty block on blur without saving it", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 900,
+      clientY: 360,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 900,
+      clientY: 360,
+      pointerId: 1,
+    });
+
+    const textarea = await waitFor(() => {
+      const textareas = container.querySelectorAll("textarea");
+      expect(textareas).toHaveLength(1);
+      return textareas[0] as HTMLTextAreaElement;
+    });
+
+    fireEvent.blur(textarea);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("[data-editor-block='true']")).toHaveLength(0);
+      expect(container.querySelectorAll("textarea")).toHaveLength(0);
+    });
+    expect(mocks.upsertLocalPage).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { clientX: 40, expectedLeft: "16px" },
     { clientX: 320, expectedLeft: "92px" },
   ])(
@@ -187,9 +255,9 @@ describe("NoteEditor freeform placement", () => {
 
       await waitFor(() => {
         const textareas = container.querySelectorAll("textarea");
-        expect(textareas).toHaveLength(2);
-        expect(document.activeElement).toBe(textareas[1]);
-        expect(textareas[1].parentElement).toHaveStyle({
+        expect(textareas).toHaveLength(1);
+        expect(document.activeElement).toBe(textareas[0]);
+        expect(textareas[0].parentElement).toHaveStyle({
           left: expectedLeft,
           top: "500px",
           width: "240px",
