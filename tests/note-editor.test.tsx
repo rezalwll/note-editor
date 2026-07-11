@@ -547,6 +547,38 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("applies text color and font size changes from the toolbar controls", async () => {
+    const { container, getByDisplayValue } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "styled-toolbar", x: 48, y: 72, width: 240, text: "style me" }],
+      }),
+      true,
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.focus(textarea);
+
+    await waitFor(() => {
+      expect(getByDisplayValue("#222222")).not.toBeNull();
+      expect(getByDisplayValue("15")).not.toBeNull();
+    });
+
+    fireEvent.change(getByDisplayValue("#222222"), {
+      target: { value: "#ff3366" },
+    });
+    fireEvent.change(getByDisplayValue("15"), {
+      target: { value: "24" },
+    });
+
+    await waitFor(() => {
+      expect(textarea).toHaveStyle({
+        color: "rgb(255, 51, 102)",
+        fontSize: "24px",
+      });
+    });
+  });
+
   it("deletes the right-clicked block even when it was not selected beforehand", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
