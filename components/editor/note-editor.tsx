@@ -1737,16 +1737,15 @@ export function NoteEditor({
     );
   }
 
-  const handleEditorCommand = useEffectEvent(
-    (
-      command: EditorCommand,
-      payload?: {
-        textColor?: string;
-        fontSize?: number;
-        targetBlockIds?: string[];
-        primaryBlockId?: string | null;
-      },
-    ) => {
+  function runEditorCommand(
+    command: EditorCommand,
+    payload?: {
+      textColor?: string;
+      fontSize?: number;
+      targetBlockIds?: string[];
+      primaryBlockId?: string | null;
+    },
+  ) {
     if (command === "insert-image") {
       imageFileInputRef.current?.click();
       return;
@@ -1839,6 +1838,19 @@ export function NoteEditor({
         deleteBlocks(targetIds);
         return;
     }
+  }
+
+  const handleEditorCommandEvent = useEffectEvent(
+    (
+      command: EditorCommand,
+      payload?: {
+        textColor?: string;
+        fontSize?: number;
+        targetBlockIds?: string[];
+        primaryBlockId?: string | null;
+      },
+    ) => {
+      runEditorCommand(command, payload);
     },
   );
 
@@ -1849,7 +1861,7 @@ export function NoteEditor({
         textColor?: string;
         fontSize?: number;
       }>;
-      handleEditorCommand(customEvent.detail.command, {
+      handleEditorCommandEvent(customEvent.detail.command, {
         textColor: customEvent.detail.textColor,
         fontSize: customEvent.detail.fontSize,
       });
@@ -2396,7 +2408,7 @@ export function NoteEditor({
                                   id: "align-right",
                                   label: "تراز راست",
                                   onSelect: () =>
-                                    handleEditorCommand("align-right", {
+                                    runEditorCommand("align-right", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2405,7 +2417,7 @@ export function NoteEditor({
                                   id: "align-center",
                                   label: "تراز وسط",
                                   onSelect: () =>
-                                    handleEditorCommand("align-center", {
+                                    runEditorCommand("align-center", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2414,7 +2426,7 @@ export function NoteEditor({
                                   id: "align-justify",
                                   label: "تراز کامل",
                                   onSelect: () =>
-                                    handleEditorCommand("align-justify", {
+                                    runEditorCommand("align-justify", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2424,7 +2436,7 @@ export function NoteEditor({
                                   id: "italic",
                                   label: "مورب کردن انتخاب",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-italic", {
+                                    runEditorCommand("toggle-italic", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2433,7 +2445,7 @@ export function NoteEditor({
                                   id: "bold",
                                   label: "پررنگ کردن انتخاب",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-bold", {
+                                    runEditorCommand("toggle-bold", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2444,7 +2456,7 @@ export function NoteEditor({
                                   label: "حذف بلوک‌های انتخاب‌شده",
                                   danger: true,
                                   onSelect: () =>
-                                    handleEditorCommand("delete-block", {
+                                    runEditorCommand("delete-block", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2461,7 +2473,7 @@ export function NoteEditor({
                                   id: "undo",
                                   label: "واگرد",
                                   onSelect: () =>
-                                    handleEditorCommand("undo", {
+                                    runEditorCommand("undo", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2470,7 +2482,7 @@ export function NoteEditor({
                                   id: "redo",
                                   label: "انجام دوباره",
                                   onSelect: () =>
-                                    handleEditorCommand("redo", {
+                                    runEditorCommand("redo", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2480,7 +2492,7 @@ export function NoteEditor({
                                   id: "align-right",
                                   label: "تراز راست",
                                   onSelect: () =>
-                                    handleEditorCommand("align-right", {
+                                    runEditorCommand("align-right", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2489,7 +2501,7 @@ export function NoteEditor({
                                   id: "align-center",
                                   label: "تراز وسط",
                                   onSelect: () =>
-                                    handleEditorCommand("align-center", {
+                                    runEditorCommand("align-center", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2498,7 +2510,7 @@ export function NoteEditor({
                                   id: "align-justify",
                                   label: "تراز کامل",
                                   onSelect: () =>
-                                    handleEditorCommand("align-justify", {
+                                    runEditorCommand("align-justify", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2508,7 +2520,7 @@ export function NoteEditor({
                                   id: "italic",
                                   label: block.italic ? "برداشتن حالت مورب" : "مورب",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-italic", {
+                                    runEditorCommand("toggle-italic", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2517,7 +2529,7 @@ export function NoteEditor({
                                   id: "bold",
                                   label: block.bold ? "برداشتن حالت پررنگ" : "پررنگ",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-bold", {
+                                    runEditorCommand("toggle-bold", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2527,7 +2539,7 @@ export function NoteEditor({
                                   id: "bullet-list",
                                   label: "تبدیل به فهرست نشانه‌دار",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-bullet-list", {
+                                    runEditorCommand("toggle-bullet-list", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2536,7 +2548,7 @@ export function NoteEditor({
                                   id: "todo-list",
                                   label: "تبدیل به فهرست کارها",
                                   onSelect: () =>
-                                    handleEditorCommand("toggle-todo-list", {
+                                    runEditorCommand("toggle-todo-list", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
@@ -2547,7 +2559,7 @@ export function NoteEditor({
                                   label: "حذف بلوک",
                                   danger: true,
                                   onSelect: () =>
-                                    handleEditorCommand("delete-block", {
+                                    runEditorCommand("delete-block", {
                                       targetBlockIds: selectedIds,
                                       primaryBlockId: block.id,
                                     }),
