@@ -484,6 +484,36 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("keeps the active block commandable when clicking toolbar buttons", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "toolbar-bold",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "bold me",
+          },
+        ],
+      }),
+      true,
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const boldButton = container.querySelector(
+      'button[aria-label="پررنگ"]',
+    ) as HTMLButtonElement;
+
+    fireEvent.focus(textarea);
+    fireEvent.mouseDown(boldButton);
+    fireEvent.click(boldButton);
+
+    await waitFor(() => {
+      expect(textarea).toHaveStyle({ fontWeight: "700" });
+    });
+  });
+
   it("copies the selected text from the editor context menu", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

@@ -46,6 +46,9 @@ function ToolbarButton({
       type="button"
       aria-label={label}
       title={label}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
       onClick={onClick}
       disabled={disabled}
       className={[
