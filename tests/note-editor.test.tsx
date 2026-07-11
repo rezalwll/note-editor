@@ -547,6 +547,46 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("deletes the right-clicked block even when it was not selected beforehand", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "first-block",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "first",
+          },
+          {
+            id: "second-block",
+            x: 360,
+            y: 72,
+            width: 240,
+            text: "second",
+          },
+        ],
+      }),
+    );
+    const textareas = container.querySelectorAll("textarea");
+
+    fireEvent.focus(textareas[0]);
+    fireEvent.contextMenu(textareas[1]);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const deleteAction = menu.items.find(
+      (item: { id: string }) => item.id === "delete-block",
+    );
+    await deleteAction.onSelect();
+
+    await waitFor(() => {
+      const remainingTextareas = container.querySelectorAll("textarea");
+      expect(remainingTextareas).toHaveLength(1);
+      expect(remainingTextareas[0]).toHaveValue("first");
+    });
+  });
+
   it("pastes clipboard text into a new block at the canvas context position", async () => {
     mocks.clipboardReadText.mockResolvedValue("new clipboard block");
     const { container } = renderEditor(

@@ -1740,7 +1740,12 @@ export function NoteEditor({
   const handleEditorCommand = useEffectEvent(
     (
       command: EditorCommand,
-      payload?: { textColor?: string; fontSize?: number },
+      payload?: {
+        textColor?: string;
+        fontSize?: number;
+        targetBlockIds?: string[];
+        primaryBlockId?: string | null;
+      },
     ) => {
     if (command === "insert-image") {
       imageFileInputRef.current?.click();
@@ -1748,7 +1753,9 @@ export function NoteEditor({
     }
 
     const targetIds =
-      selectedBlockIds.length > 0
+      payload?.targetBlockIds && payload.targetBlockIds.length > 0
+        ? payload.targetBlockIds
+        : selectedBlockIds.length > 0
         ? selectedBlockIds
         : activeBlockId
           ? [activeBlockId]
@@ -1758,7 +1765,7 @@ export function NoteEditor({
       return;
     }
 
-    const primaryBlockId = activeBlockId ?? targetIds[0];
+    const primaryBlockId = payload?.primaryBlockId ?? activeBlockId ?? targetIds[0];
     const activeElement = primaryBlockId
       ? blockRefs.current[primaryBlockId]
       : null;
@@ -2388,30 +2395,48 @@ export function NoteEditor({
                                 {
                                   id: "align-right",
                                   label: "تراز راست",
-                                  onSelect: () => dispatchEditorCommand("align-right"),
+                                  onSelect: () =>
+                                    handleEditorCommand("align-right", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "align-center",
                                   label: "تراز وسط",
-                                  onSelect: () => dispatchEditorCommand("align-center"),
+                                  onSelect: () =>
+                                    handleEditorCommand("align-center", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "align-justify",
                                   label: "تراز کامل",
-                                  onSelect: () => dispatchEditorCommand("align-justify"),
+                                  onSelect: () =>
+                                    handleEditorCommand("align-justify", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-1", separator: true },
                                 {
                                   id: "italic",
                                   label: "مورب کردن انتخاب",
                                   onSelect: () =>
-                                    dispatchEditorCommand("toggle-italic"),
+                                    handleEditorCommand("toggle-italic", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "bold",
                                   label: "پررنگ کردن انتخاب",
                                   onSelect: () =>
-                                    dispatchEditorCommand("toggle-bold"),
+                                    handleEditorCommand("toggle-bold", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-2", separator: true },
                                 {
@@ -2419,7 +2444,10 @@ export function NoteEditor({
                                   label: "حذف بلوک‌های انتخاب‌شده",
                                   danger: true,
                                   onSelect: () =>
-                                    dispatchEditorCommand("delete-block"),
+                                    handleEditorCommand("delete-block", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "clear-selection",
@@ -2432,56 +2460,86 @@ export function NoteEditor({
                                 {
                                   id: "undo",
                                   label: "واگرد",
-                                  onSelect: () => dispatchEditorCommand("undo"),
+                                  onSelect: () =>
+                                    handleEditorCommand("undo", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "redo",
                                   label: "انجام دوباره",
-                                  onSelect: () => dispatchEditorCommand("redo"),
+                                  onSelect: () =>
+                                    handleEditorCommand("redo", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-1", separator: true },
                                 {
                                   id: "align-right",
                                   label: "تراز راست",
                                   onSelect: () =>
-                                    dispatchEditorCommand("align-right"),
+                                    handleEditorCommand("align-right", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "align-center",
                                   label: "تراز وسط",
                                   onSelect: () =>
-                                    dispatchEditorCommand("align-center"),
+                                    handleEditorCommand("align-center", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "align-justify",
                                   label: "تراز کامل",
                                   onSelect: () =>
-                                    dispatchEditorCommand("align-justify"),
+                                    handleEditorCommand("align-justify", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-2", separator: true },
                                 {
                                   id: "italic",
                                   label: block.italic ? "برداشتن حالت مورب" : "مورب",
                                   onSelect: () =>
-                                    dispatchEditorCommand("toggle-italic"),
+                                    handleEditorCommand("toggle-italic", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "bold",
                                   label: block.bold ? "برداشتن حالت پررنگ" : "پررنگ",
-                                  onSelect: () => dispatchEditorCommand("toggle-bold"),
+                                  onSelect: () =>
+                                    handleEditorCommand("toggle-bold", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-3", separator: true },
                                 {
                                   id: "bullet-list",
                                   label: "تبدیل به فهرست نشانه‌دار",
                                   onSelect: () =>
-                                    dispatchEditorCommand("toggle-bullet-list"),
+                                    handleEditorCommand("toggle-bullet-list", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 {
                                   id: "todo-list",
                                   label: "تبدیل به فهرست کارها",
                                   onSelect: () =>
-                                    dispatchEditorCommand("toggle-todo-list"),
+                                    handleEditorCommand("toggle-todo-list", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                                 { id: "separator-4", separator: true },
                                 {
@@ -2489,7 +2547,10 @@ export function NoteEditor({
                                   label: "حذف بلوک",
                                   danger: true,
                                   onSelect: () =>
-                                    dispatchEditorCommand("delete-block"),
+                                    handleEditorCommand("delete-block", {
+                                      targetBlockIds: selectedIds,
+                                      primaryBlockId: block.id,
+                                    }),
                                 },
                               ],
                       });

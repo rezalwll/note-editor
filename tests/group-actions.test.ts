@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { serializeFreeformDocument } from "@/lib/notes";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
@@ -157,7 +158,7 @@ describe("group actions", () => {
         userId: "user-1",
         notebookId: "clnotebook000000000000001",
         title: "صفحه بدون عنوان",
-        bodyHtml: "<p></p>",
+        bodyHtml: serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
         bodyText: "",
         sortOrder: 0,
       },

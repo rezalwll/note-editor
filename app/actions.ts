@@ -23,7 +23,7 @@ import {
   sendSignupVerificationCodeEmail,
 } from "@/lib/email-auth";
 import { getFriendlyDatabaseError } from "@/lib/errors";
-import { parseTags } from "@/lib/notes";
+import { parseTags, serializeFreeformDocument } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
 import {
   clearAttempts,
@@ -69,6 +69,11 @@ export type ResetPasswordActionState = {
   error?: string;
   success?: string;
 };
+
+const emptyFreeformDocument = serializeFreeformDocument({
+  type: "freeform-v1",
+  blocks: [],
+});
 
 const notebookSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -888,7 +893,7 @@ export async function createNotebookInlineAction(
         userId: user.id,
         notebookId: notebook.id,
         title: defaultInlinePageTitle,
-        bodyHtml: "<p></p>",
+        bodyHtml: emptyFreeformDocument,
         bodyText: "",
         sortOrder: 0,
       },
@@ -952,7 +957,7 @@ export async function createNotebookGroupInlineAction(
         userId: user.id,
         notebookId: notebook.id,
         title: defaultInlinePageTitle,
-        bodyHtml: "<p></p>",
+        bodyHtml: emptyFreeformDocument,
         bodyText: "",
         sortOrder: 0,
       },
@@ -1418,7 +1423,7 @@ export async function createPageAction(formData: FormData) {
       userId: user.id,
       notebookId: parsed.data.notebookId,
       title: parsed.data.title,
-      bodyHtml: "<p></p>",
+      bodyHtml: emptyFreeformDocument,
       bodyText: "",
       sortOrder,
     },
@@ -1453,7 +1458,7 @@ export async function createPageInlineAction(notebookId: string, title: string) 
       userId: user.id,
       notebookId: parsed.data.notebookId,
       title: parsed.data.title,
-      bodyHtml: "<p></p>",
+      bodyHtml: emptyFreeformDocument,
       bodyText: "",
       sortOrder,
     },
