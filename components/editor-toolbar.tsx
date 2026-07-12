@@ -16,6 +16,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { dispatchEditorCommand, type ToolbarState } from "@/lib/editor-events";
 
 const defaultState: ToolbarState = {
@@ -69,6 +70,11 @@ function ToolbarButton({
 export function EditorToolbar() {
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultState);
   const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
+  const [fontSizeMenuPosition, setFontSizeMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const fontSizeButtonRef = useRef<HTMLButtonElement | null>(null);
   const fontSizeMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -95,15 +101,47 @@ export function EditorToolbar() {
       return;
     }
 
+    const updateMenuPosition = () => {
+      const rect = fontSizeButtonRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      setFontSizeMenuPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 64,
+      });
+    };
+
+    updateMenuPosition();
+
     const handleMouseDown = (event: MouseEvent) => {
-      if (!fontSizeMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !fontSizeMenuRef.current?.contains(target) &&
+        !fontSizeButtonRef.current?.contains(target)
+      ) {
         setIsFontSizeMenuOpen(false);
       }
     };
 
+    const handleViewportChange = () => updateMenuPosition();
+
     window.addEventListener("mousedown", handleMouseDown);
-    return () => window.removeEventListener("mousedown", handleMouseDown);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
   }, [isFontSizeMenuOpen]);
+
+  useEffect(() => {
+    if (!toolbarState.hasActiveBlock) {
+      setIsFontSizeMenuOpen(false);
+    }
+  }, [toolbarState.hasActiveBlock]);
 
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
@@ -232,12 +270,10 @@ export function EditorToolbar() {
           className="h-6 w-6 cursor-pointer rounded border-none bg-transparent p-0"
         />
       </label>
-      <div
-        ref={fontSizeMenuRef}
-        className="relative flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]"
-      >
+      <div className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
         <span>سایز</span>
         <button
+          ref={fontSizeButtonRef}
           type="button"
           aria-label="font-size"
           aria-expanded={isFontSizeMenuOpen}
@@ -252,39 +288,49 @@ export function EditorToolbar() {
           <span>{toolbarState.fontSize}</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        {isFontSizeMenuOpen ? (
-          <div
-            role="menu"
-            className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-16 rounded-xl border border-white/70 bg-white p-1 shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
-          >
-            {[14, 15, 16, 18, 20, 24, 28, 32].map((size) => (
-              <button
-                key={size}
-                type="button"
-                role="menuitemradio"
-                aria-checked={toolbarState.fontSize === size}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                onClick={() => {
-                  dispatchEditorCommand("set-font-size", {
-                    fontSize: size,
-                  });
-                  setIsFontSizeMenuOpen(false);
-                }}
-                className={[
-                  "flex w-full items-center justify-center rounded-lg px-2 py-1.5 text-xs transition",
-                  toolbarState.fontSize === size
-                    ? "bg-[#eef2ff] text-[#23316a]"
-                    : "hover:bg-[#f5f7ff]",
-                ].join(" ")}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
+      {isFontSizeMenuOpen && fontSizeMenuPosition
+        ? createPortal(
+            <div
+              ref={fontSizeMenuRef}
+              role="menu"
+              style={{
+                position: "fixed",
+                top: fontSizeMenuPosition.top,
+                left: fontSizeMenuPosition.left,
+                zIndex: 2000,
+              }}
+              className="min-w-16 rounded-xl border border-white/70 bg-white p-1 shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
+            >
+              {[14, 15, 16, 18, 20, 24, 28, 32].map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={toolbarState.fontSize === size}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => {
+                    dispatchEditorCommand("set-font-size", {
+                      fontSize: size,
+                    });
+                    setIsFontSizeMenuOpen(false);
+                  }}
+                  className={[
+                    "flex w-full items-center justify-center rounded-lg px-2 py-1.5 text-xs transition",
+                    toolbarState.fontSize === size
+                      ? "bg-[#eef2ff] text-[#23316a]"
+                      : "hover:bg-[#f5f7ff]",
+                  ].join(" ")}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
