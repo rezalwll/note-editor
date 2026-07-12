@@ -197,7 +197,12 @@ export function EditorToolbar() {
       </ToolbarButton>
 
       <div className="mx-1 h-7 w-px bg-white/55" />
-      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+      <label
+        onMouseDown={(event) => {
+          event.preventDefault();
+        }}
+        className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]"
+      >
         <span>رنگ</span>
         <input
           type="color"
@@ -211,7 +216,12 @@ export function EditorToolbar() {
           className="h-6 w-6 cursor-pointer rounded border-none bg-transparent p-0"
         />
       </label>
-      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+      <label
+        onMouseDown={(event) => {
+          event.preventDefault();
+        }}
+        className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]"
+      >
         <span>سایز</span>
         <select
           value={toolbarState.fontSize}

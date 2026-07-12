@@ -594,10 +594,15 @@ describe("NoteEditor freeform placement", () => {
       expect(getByDisplayValue("15")).not.toBeNull();
     });
 
-    fireEvent.change(getByDisplayValue("#222222"), {
+    const colorInput = getByDisplayValue("#222222");
+    const fontSizeSelect = getByDisplayValue("15");
+
+    fireEvent.mouseDown(colorInput);
+    fireEvent.change(colorInput, {
       target: { value: "#ff3366" },
     });
-    fireEvent.change(getByDisplayValue("15"), {
+    fireEvent.mouseDown(fontSizeSelect);
+    fireEvent.change(fontSizeSelect, {
       target: { value: "24" },
     });
 
