@@ -80,8 +80,9 @@ export function EditorToolbar() {
   useEffect(() => {
     const listener = (event: Event) => {
       const customEvent = event as CustomEvent<ToolbarState>;
+      const hasActiveBlock = Boolean(customEvent.detail?.hasActiveBlock);
       setToolbarState({
-        hasActiveBlock: Boolean(customEvent.detail?.hasActiveBlock),
+        hasActiveBlock,
         canInsertImage: Boolean(customEvent.detail?.canInsertImage),
         align: customEvent.detail?.align ?? "right",
         direction: customEvent.detail?.direction ?? "rtl",
@@ -90,6 +91,10 @@ export function EditorToolbar() {
         textColor: customEvent.detail?.textColor ?? "#222222",
         fontSize: customEvent.detail?.fontSize ?? 15,
       });
+
+      if (!hasActiveBlock) {
+        setIsFontSizeMenuOpen(false);
+      }
     };
 
     window.addEventListener("note-editor-state", listener);
@@ -136,12 +141,6 @@ export function EditorToolbar() {
       window.removeEventListener("scroll", handleViewportChange, true);
     };
   }, [isFontSizeMenuOpen]);
-
-  useEffect(() => {
-    if (!toolbarState.hasActiveBlock) {
-      setIsFontSizeMenuOpen(false);
-    }
-  }, [toolbarState.hasActiveBlock]);
 
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
