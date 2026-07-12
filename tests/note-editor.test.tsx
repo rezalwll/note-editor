@@ -1,4 +1,5 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteEditor } from "@/components/editor/note-editor";
@@ -578,6 +579,7 @@ describe("NoteEditor freeform placement", () => {
   });
 
   it("applies text color and font size changes from the toolbar controls", async () => {
+    const user = userEvent.setup();
     const { container, getByDisplayValue } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
@@ -591,20 +593,19 @@ describe("NoteEditor freeform placement", () => {
 
     await waitFor(() => {
       expect(getByDisplayValue("#222222")).not.toBeNull();
-      expect(getByDisplayValue("15")).not.toBeNull();
     });
 
     const colorInput = getByDisplayValue("#222222");
-    const fontSizeSelect = getByDisplayValue("15");
+    const fontSizeButton = container.querySelector(
+      'button[aria-label="font-size"]',
+    ) as HTMLButtonElement;
 
     fireEvent.mouseDown(colorInput);
     fireEvent.change(colorInput, {
       target: { value: "#ff3366" },
     });
-    fireEvent.mouseDown(fontSizeSelect);
-    fireEvent.change(fontSizeSelect, {
-      target: { value: "24" },
-    });
+    await user.click(fontSizeButton);
+    await user.click(screen.getByRole("menuitemradio", { name: "24" }));
 
     await waitFor(() => {
       expect(textarea).toHaveStyle({
