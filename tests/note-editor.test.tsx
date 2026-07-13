@@ -1008,12 +1008,12 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
-  it("resizes a text block from the right edge and stores the new width", async () => {
+  it("resizes a text block from the left edge and stores its position and width", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
         blocks: [
-          { id: "resizable", x: 48, y: 72, width: 240, text: "resize me" },
+          { id: "resizable", x: 240, y: 72, width: 240, text: "resize me" },
         ],
       }),
     );
@@ -1034,20 +1034,22 @@ describe("NoteEditor freeform placement", () => {
     const resizeButton = container.querySelector(
       '[data-testid="resize-block-resizable"]',
     ) as HTMLButtonElement;
+    expect(resizeButton).toHaveClass("-left-3");
+    expect(resizeButton).not.toHaveClass("-right-3");
 
     fireEvent.pointerDown(resizeButton, {
       button: 0,
-      clientX: 288,
+      clientX: 240,
       pointerId: 21,
     });
     fireEvent.pointerMove(window, {
-      clientX: 408,
+      clientX: 120,
       pointerId: 21,
     });
     fireEvent.pointerUp(window, { pointerId: 21 });
 
     await waitFor(() => {
-      expect(textBlock).toHaveStyle({ width: "360px" });
+      expect(textBlock).toHaveStyle({ left: "120px", width: "360px" });
     });
 
     fireEvent(window, new Event("pagehide"));
@@ -1064,6 +1066,7 @@ describe("NoteEditor freeform placement", () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: "resizable",
+            x: 120,
             width: 360,
           }),
         ]),
@@ -1076,7 +1079,7 @@ describe("NoteEditor freeform placement", () => {
       serializeFreeformDocument({
         type: "freeform-v1",
         blocks: [
-          { id: "min-width", x: 48, y: 72, width: 240, text: "clamp me" },
+          { id: "min-width", x: 240, y: 72, width: 240, text: "clamp me" },
         ],
       }),
     );
@@ -1098,17 +1101,17 @@ describe("NoteEditor freeform placement", () => {
 
     fireEvent.pointerDown(resizeButton, {
       button: 0,
-      clientX: 288,
+      clientX: 240,
       pointerId: 22,
     });
     fireEvent.pointerMove(window, {
-      clientX: -120,
+      clientX: 720,
       pointerId: 22,
     });
     fireEvent.pointerUp(window, { pointerId: 22 });
 
     await waitFor(() => {
-      expect(textBlock).toHaveStyle({ width: "180px" });
+      expect(textBlock).toHaveStyle({ left: "300px", width: "180px" });
     });
   });
 

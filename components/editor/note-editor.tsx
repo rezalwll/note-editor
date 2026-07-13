@@ -379,7 +379,9 @@ export function NoteEditor({
   } | null>(null);
   const resizeStateRef = useRef<{
     id: string;
+    edge: "left" | "right";
     startClientX: number;
+    startX: number;
     startWidth: number;
   } | null>(null);
   const historyRef = useRef<
@@ -1735,26 +1737,30 @@ export function NoteEditor({
       return;
     }
 
+    const resizeState = resizeStateRef.current;
     const minWidth = isImageBlock(currentBlock) ? IMAGE_MIN_WIDTH : BLOCK_MIN_WIDTH;
-    const maxWidth = Math.max(
-      minWidth,
-      rect.width - currentBlock.x - getBlockRightGutter(rect.width),
-    );
-    const nextWidth = Math.min(
-      maxWidth,
-      Math.max(
-        minWidth,
-        resizeStateRef.current.startWidth +
-          event.clientX -
-          resizeStateRef.current.startClientX,
-      ),
-    );
+    const pointerDelta = event.clientX - resizeState.startClientX;
+    const rightEdge = resizeState.startX + resizeState.startWidth;
+    const maxWidth =
+      resizeState.edge === "left"
+        ? Math.max(minWidth, rightEdge - getCanvasInset(rect.width))
+        : Math.max(
+            minWidth,
+            rect.width - resizeState.startX - getBlockRightGutter(rect.width),
+          );
+    const desiredWidth =
+      resizeState.edge === "left"
+        ? resizeState.startWidth - pointerDelta
+        : resizeState.startWidth + pointerDelta;
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, desiredWidth));
+    const nextX =
+      resizeState.edge === "left" ? rightEdge - nextWidth : resizeState.startX;
 
     markEditorInteraction();
     setBlocks((current) =>
       current.map((block) =>
         block.id === resizeStateRef.current?.id
-          ? { ...block, width: nextWidth }
+          ? { ...block, x: nextX, width: nextWidth }
           : block,
       ),
     );
@@ -2076,6 +2082,7 @@ export function NoteEditor({
   function startResizingBlock(
     event: React.PointerEvent<HTMLButtonElement>,
     block: FreeformBlock,
+    edge: "left" | "right" = "right",
   ) {
     if (!canvasRef.current) {
       return;
@@ -2086,7 +2093,9 @@ export function NoteEditor({
     selectSingleBlock(block.id);
     resizeStateRef.current = {
       id: block.id,
+      edge,
       startClientX: event.clientX,
+      startX: block.x,
       startWidth: getRenderedBlockWidth(
         block,
         canvasRef.current.getBoundingClientRect().width,
@@ -2458,8 +2467,10 @@ export function NoteEditor({
                   <button
                     type="button"
                     data-testid={`resize-block-${block.id}`}
-                    onPointerDown={(event) => startResizingBlock(event, block)}
-                    className="absolute -bottom-3 -right-3 z-10 inline-flex h-6 w-6 touch-none cursor-ew-resize items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#5f7688] opacity-0 shadow-sm transition hover:bg-[#f7fbff] hover:text-[#233746] group-hover:opacity-100 group-focus-within:opacity-100"
+                    onPointerDown={(event) =>
+                      startResizingBlock(event, block, "left")
+                    }
+                    className="absolute -bottom-3 -left-3 z-10 inline-flex h-6 w-6 touch-none cursor-ew-resize items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#5f7688] opacity-0 shadow-sm transition hover:bg-[#f7fbff] hover:text-[#233746] group-hover:opacity-100 group-focus-within:opacity-100"
                     aria-label="تغییر عرض بلوک"
                   >
                     <ArrowLeftRight className="h-3.5 w-3.5" />
