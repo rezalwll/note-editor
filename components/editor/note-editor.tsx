@@ -1979,7 +1979,7 @@ export function NoteEditor({
         >
           <div className="px-4 pt-5 text-right md:px-[48px] md:pt-6" dir="rtl">
             <div
-              className="w-full border-b pb-3 align-top"
+              className="w-full border-b align-top"
               style={{ borderColor: notebookTheme.accent }}
             >
               <input
