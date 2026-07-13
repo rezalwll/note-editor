@@ -615,6 +615,56 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("applies text color and font size only to the selected text", async () => {
+    const user = userEvent.setup();
+    const { container, getByDisplayValue } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "inline-styled", x: 48, y: 72, width: 240, text: "style me" },
+        ],
+      }),
+      true,
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(0, 5);
+    fireEvent.select(textarea);
+    fireEvent.change(getByDisplayValue("#222222"), {
+      target: { value: "#ff3366" },
+    });
+
+    const richTextEditor = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-rich-text-editor="true"]',
+      ) as HTMLElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+
+    const fontSizeButton = container.querySelector(
+      'button[aria-label="font-size"]',
+    ) as HTMLButtonElement;
+    await user.click(fontSizeButton);
+    await user.click(screen.getByRole("menuitemradio", { name: "24" }));
+
+    await waitFor(() => {
+      const colorSpan = richTextEditor.querySelector(
+        'span[style*="color"]',
+      ) as HTMLElement | null;
+      const fontSizeSpan = richTextEditor.querySelector(
+        'span[style*="font-size"]',
+      ) as HTMLElement | null;
+
+      expect(richTextEditor).toHaveTextContent("style me");
+      expect(colorSpan).toHaveTextContent("style");
+      expect(colorSpan).toHaveStyle({ color: "rgb(255, 51, 102)" });
+      expect(fontSizeSpan).toHaveTextContent("style");
+      expect(fontSizeSpan).toHaveStyle({ fontSize: "24px" });
+    });
+  });
+
   it("deletes the right-clicked block even when it was not selected beforehand", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

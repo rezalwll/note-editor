@@ -44,6 +44,17 @@ a {
   text-decoration: none;
 }
 
+.freeform-rich-text .ProseMirror {
+  min-height: 28px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+
+.freeform-rich-text .ProseMirror p {
+  margin: 0;
+}
+
 button:not(:disabled),
 a[href],
 [role="button"],

@@ -14,6 +14,10 @@ import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
 import {
+  RichTextBlockEditor,
+  type RichTextBlockHandle,
+} from "@/components/editor/rich-text-block-editor";
+import {
   dispatchEditorCommand,
   type EditorCommand,
 } from "@/lib/editor-events";
@@ -60,6 +64,7 @@ type NoteEditorProps = {
 type BlockSnapshot = Pick<
   FreeformBlock,
   | "text"
+  | "richText"
   | "align"
   | "direction"
   | "bold"
@@ -196,6 +201,37 @@ function isEmptyTextBlock(block: FreeformBlock) {
   return block.type !== "image" && !block.text.trim();
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function textToHtml(value: string) {
+  return escapeHtml(value).replaceAll("\n", "<br>");
+}
+
+function createRichTextSelectionHtml(
+  text: string,
+  start: number,
+  end: number,
+  style: { textColor?: string; fontSize?: number },
+) {
+  const styleValue = [
+    style.textColor ? `color: ${style.textColor}` : "",
+    style.fontSize ? `font-size: ${style.fontSize}px` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  return `<p>${textToHtml(text.slice(0, start))}<span style="${styleValue}">${textToHtml(
+    text.slice(start, end),
+  )}</span>${textToHtml(text.slice(end))}</p>`;
+}
+
 function getPersistableBlocks(blocks: FreeformBlock[]) {
   return blocks.filter((block) => !isEmptyTextBlock(block));
 }
@@ -237,6 +273,7 @@ function toSnapshot(block: FreeformBlock): BlockSnapshot {
     direction: block.direction ?? "rtl",
     bold: block.bold ?? false,
     italic: block.italic ?? false,
+    richText: block.richText,
     textColor: block.textColor ?? "#222222",
     fontSize: block.fontSize ?? 15,
   };
@@ -250,6 +287,7 @@ function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
     direction: snapshotValue.direction ?? "rtl",
     bold: snapshotValue.bold ?? false,
     italic: snapshotValue.italic ?? false,
+    richText: snapshotValue.richText,
     textColor: snapshotValue.textColor ?? "#222222",
     fontSize: snapshotValue.fontSize ?? 15,
   };
@@ -310,6 +348,14 @@ export function NoteEditor({
   const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  const [richTextInitialSelections, setRichTextInitialSelections] = useState<
+    Record<string, { start: number; end: number }>
+  >({});
+  const [activeRichTextStyle, setActiveRichTextStyle] = useState<{
+    blockId: string;
+    textColor: string;
+    fontSize: number;
+  } | null>(null);
   const [isDesktopViewport, setIsDesktopViewport] = useState(true);
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
@@ -322,6 +368,10 @@ export function NoteEditor({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const richTextBlockRefs = useRef<Record<string, RichTextBlockHandle | null>>({});
+  const textSelectionRef = useRef<
+    Record<string, { start: number; end: number }>
+  >({});
   const dragStateRef = useRef<{
     id: string;
     pointerOffsetX: number;
@@ -380,6 +430,14 @@ export function NoteEditor({
     if (!isHydrated) {
       userEditedBeforeHydrationRef.current = true;
     }
+  }
+
+  function getTextBlockElement(blockId: string) {
+    return (
+      blockRefs.current[blockId] ??
+      richTextBlockRefs.current[blockId]?.getElement() ??
+      null
+    );
   }
 
   useEffect(() => {
@@ -518,6 +576,15 @@ export function NoteEditor({
       return;
     }
 
+    const richTextHandle = richTextBlockRefs.current[activeBlockId];
+    if (richTextHandle) {
+      const richTextElement = richTextHandle.getElement();
+      if (!richTextElement?.contains(document.activeElement)) {
+        richTextHandle.focus();
+      }
+      return;
+    }
+
     const element = blockRefs.current[activeBlockId];
     if (!element || document.activeElement === element) {
       return;
@@ -538,7 +605,7 @@ export function NoteEditor({
 
     if (!selectionRestoreRef.current) {
       const nextLowestBlockBottom = blocks.reduce((max, block) => {
-        const element = blockRefs.current[block.id];
+        const element = getTextBlockElement(block.id);
         const blockWidth = getRenderedBlockWidth(block, canvasWidth);
         const blockHeight = isImageBlock(block)
           ? getImageBlockHeight(block, blockWidth)
@@ -566,7 +633,7 @@ export function NoteEditor({
     element.setSelectionRange(restore.start, restore.end);
 
     const nextLowestBlockBottom = blocks.reduce((max, block) => {
-      const blockElement = blockRefs.current[block.id];
+      const blockElement = getTextBlockElement(block.id);
       const blockWidth = getRenderedBlockWidth(block, canvasWidth);
       const blockHeight = isImageBlock(block)
         ? getImageBlockHeight(block, blockWidth)
@@ -847,6 +914,12 @@ export function NoteEditor({
   }, [pageId, userId]);
 
   function focusBlockElement(blockId: string, caretPosition = 0) {
+    const richTextHandle = richTextBlockRefs.current[blockId];
+    if (richTextHandle) {
+      richTextHandle.focus();
+      return true;
+    }
+
     const element = blockRefs.current[blockId];
 
     if (!element) {
@@ -918,7 +991,7 @@ export function NoteEditor({
         selectedBlock,
         targetCanvasWidth,
       );
-      const selectedElement = blockRefs.current[selectedBlock.id];
+      const selectedElement = getTextBlockElement(selectedBlock.id);
       const selectedHeight = isImageBlock(selectedBlock)
         ? getImageBlockHeight(selectedBlock, selectedWidth)
         : Math.max(
@@ -1238,6 +1311,12 @@ export function NoteEditor({
           return;
         }
 
+        const richTextHandle = richTextBlockRefs.current[targetBlockId];
+        if (richTextHandle) {
+          richTextHandle.replaceSelection(clipboardContent.text);
+          return;
+        }
+
         const nextText =
           targetBlock.text.slice(0, selectionStart) +
           clipboardContent.text +
@@ -1299,6 +1378,8 @@ export function NoteEditor({
   function isEditorControlTarget(target: HTMLElement) {
     return Boolean(
       target.closest("[data-editor-block]") ||
+      target.closest("[data-rich-text-editor]") ||
+      target.closest('[contenteditable="true"]') ||
       target.closest("textarea") ||
       target.closest("button") ||
       target.closest("input"),
@@ -1401,7 +1482,7 @@ export function NoteEditor({
     );
   }
 
-  function updateBlockText(id: string, text: string) {
+  function updateBlockText(id: string, text: string, richText?: string) {
     updateBlock(id, (block) => {
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
@@ -1420,6 +1501,7 @@ export function NoteEditor({
       return {
         ...block,
         text,
+        ...(richText === undefined ? {} : { richText }),
         x: nextX,
         width: isLegacyColumnBlock ? block.width : nextWidth,
       };
@@ -1737,6 +1819,42 @@ export function NoteEditor({
     );
   }
 
+  function applyInlineTextStyle(
+    blockId: string,
+    style: { textColor?: string; fontSize?: number },
+  ) {
+    const richTextHandle = richTextBlockRefs.current[blockId];
+    if (richTextHandle) {
+      if (style.textColor) {
+        richTextHandle.setTextColor(style.textColor);
+      }
+      if (style.fontSize) {
+        richTextHandle.setFontSize(style.fontSize);
+      }
+      return true;
+    }
+
+    const selection = textSelectionRef.current[blockId];
+    if (!selection || selection.start === selection.end) {
+      return false;
+    }
+
+    setRichTextInitialSelections((current) => ({
+      ...current,
+      [blockId]: selection,
+    }));
+    updateBlock(blockId, (block) => ({
+      ...block,
+      richText: createRichTextSelectionHtml(
+        block.text,
+        selection.start,
+        selection.end,
+        style,
+      ),
+    }));
+    return true;
+  }
+
   function runEditorCommand(
     command: EditorCommand,
     payload?: {
@@ -1765,9 +1883,11 @@ export function NoteEditor({
     }
 
     const primaryBlockId = payload?.primaryBlockId ?? activeBlockId ?? targetIds[0];
-    const activeElement = primaryBlockId
-      ? blockRefs.current[primaryBlockId]
+    const activeRichTextHandle = primaryBlockId
+      ? richTextBlockRefs.current[primaryBlockId]
       : null;
+    const activeElement = primaryBlockId ? blockRefs.current[primaryBlockId] : null;
+    activeRichTextHandle?.focus();
     activeElement?.focus();
 
     switch (command) {
@@ -1823,12 +1943,28 @@ export function NoteEditor({
         );
         return;
       case "set-text-color":
+        if (
+          primaryBlockId &&
+          applyInlineTextStyle(primaryBlockId, {
+            textColor: payload?.textColor ?? "#222222",
+          })
+        ) {
+          return;
+        }
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
           textColor: payload?.textColor ?? "#222222",
         }));
         return;
       case "set-font-size":
+        if (
+          primaryBlockId &&
+          applyInlineTextStyle(primaryBlockId, {
+            fontSize: Math.min(32, Math.max(13, payload?.fontSize ?? 15)),
+          })
+        ) {
+          return;
+        }
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
           fontSize: Math.min(32, Math.max(13, payload?.fontSize ?? 15)),
@@ -1882,8 +2018,14 @@ export function NoteEditor({
             direction: activeBlock?.direction ?? "rtl",
             bold: activeBlock?.bold ?? false,
             italic: activeBlock?.italic ?? false,
-            textColor: activeBlock?.textColor ?? "#222222",
-            fontSize: activeBlock?.fontSize ?? 15,
+            textColor:
+              activeRichTextStyle?.blockId === activeBlock?.id
+                ? activeRichTextStyle?.textColor ?? "#222222"
+                : activeBlock?.textColor ?? "#222222",
+            fontSize:
+              activeRichTextStyle?.blockId === activeBlock?.id
+                ? activeRichTextStyle?.fontSize ?? 15
+                : activeBlock?.fontSize ?? 15,
             selectionCount: selectedBlockIds.length,
           },
         }),
@@ -1893,7 +2035,7 @@ export function NoteEditor({
     dispatchToolbarState();
     const animationFrameId = requestAnimationFrame(dispatchToolbarState);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [activeBlock, selectedBlockIds.length]);
+  }, [activeBlock, activeRichTextStyle, selectedBlockIds.length]);
 
   useEffect(
     () => () => {
@@ -2323,6 +2465,61 @@ export function NoteEditor({
                     <ArrowLeftRight className="h-3.5 w-3.5" />
                   </button>
 
+                  {block.richText ? (
+                    <RichTextBlockEditor
+                      ref={(handle) => {
+                        richTextBlockRefs.current[block.id] = handle;
+                      }}
+                      html={block.richText}
+                      direction={block.direction ?? "rtl"}
+                      textAlign={block.align ?? "right"}
+                      defaultColor={block.textColor ?? "#222222"}
+                      defaultFontSize={block.fontSize ?? 15}
+                      bold={block.bold ?? false}
+                      italic={block.italic ?? false}
+                      isSelected={isSelected}
+                      selectionColor={notebookTheme.accent}
+                      initialSelection={richTextInitialSelections[block.id]}
+                      onFocus={() => selectSingleBlock(block.id)}
+                      onBlur={() => {
+                        removeBlockIfEmpty(block.id);
+                        flushPendingSave("block-blur");
+                      }}
+                      onUpdate={(text, richText) =>
+                        updateBlockText(block.id, text, richText)
+                      }
+                      onSelectionStyleChange={(style) =>
+                        setActiveRichTextStyle({ blockId: block.id, ...style })
+                      }
+                      onContextMenu={(event, selectedText) => {
+                        selectSingleBlock(block.id);
+                        openMenu(event, {
+                          title: "Ø¨Ù„ÙˆÚ© Ù…ØªÙ†",
+                          items: [
+                            {
+                              id: "copy-text",
+                              label: "Ú©Ù¾ÛŒ",
+                              disabled: !selectedText,
+                              onSelect: () => copyTextToClipboard(selectedText),
+                            },
+                            {
+                              id: "paste-text",
+                              label: "Ù¾ÛŒØ³Øª",
+                              onSelect: () =>
+                                pasteFromClipboard({ targetBlockId: block.id }),
+                            },
+                            { id: "separator-clipboard", separator: true },
+                            {
+                              id: "delete-block",
+                              label: "Ø­Ø°Ù Ø¨Ù„ÙˆÚ©",
+                              danger: true,
+                              onSelect: () => deleteBlock(block.id),
+                            },
+                          ],
+                        });
+                      }}
+                    />
+                  ) : (
                   <textarea
                     ref={(element) => {
                       blockRefs.current[block.id] = element;
@@ -2331,6 +2528,15 @@ export function NoteEditor({
                     onChange={(event) => updateBlockText(block.id, event.target.value)}
                     onKeyDown={(event) => handleBlockKeyDown(event, block)}
                     onFocus={() => selectSingleBlock(block.id)}
+                    onSelect={(event) => {
+                      textSelectionRef.current[block.id] = {
+                        start: event.currentTarget.selectionStart ?? 0,
+                        end:
+                          event.currentTarget.selectionEnd ??
+                          event.currentTarget.selectionStart ??
+                          0,
+                      };
+                    }}
                     onBlur={() => {
                       removeBlockIfEmpty(block.id);
                       flushPendingSave("block-blur");
@@ -2581,6 +2787,7 @@ export function NoteEditor({
                     className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
                     dir={block.direction ?? "rtl"}
                   />
+                  )}
                 </div>
                 );
               })}

@@ -71,6 +71,27 @@ describe("note content", () => {
     );
   });
 
+  it("round-trips inline rich-text styles", () => {
+    const richText =
+      '<p><span style="color: #ff3366; font-size: 24px">styled</span> text</p>';
+    const serialized = serializeFreeformDocument({
+      type: "freeform-v1",
+      blocks: [
+        {
+          id: "rich-text",
+          x: 48,
+          y: 72,
+          text: "styled text",
+          richText,
+        },
+      ],
+    });
+
+    expect(parseFreeformDocument(serialized)?.blocks[0]).toEqual(
+      expect.objectContaining({ richText }),
+    );
+  });
+
   it("round-trips image blocks with their attachment and layout metadata", () => {
     const serialized = serializeFreeformDocument({
       type: "freeform-v1",

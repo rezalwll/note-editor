@@ -62,6 +62,7 @@ const freeformBlockSchema = z.object({
   y: z.number(),
   width: z.number().optional(),
   text: z.string(),
+  richText: z.string().optional(),
   type: z.enum(["text", "image"]).optional(),
   attachmentId: z.string().trim().min(1).optional(),
   fileName: z.string().trim().max(255).optional(),
