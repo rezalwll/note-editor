@@ -21,6 +21,7 @@ import {
   dispatchEditorCommand,
   type EditorCommand,
 } from "@/lib/editor-events";
+import { looksLikeMarkdown, markdownToHtml } from "@/lib/markdown";
 import {
   enqueuePageUpsert,
   getLocalPage,
@@ -61,17 +62,12 @@ type NoteEditorProps = {
   attachments: Attachment[];
 };
 
-type BlockSnapshot = Pick<
-  FreeformBlock,
-  | "text"
-  | "richText"
-  | "align"
-  | "direction"
-  | "bold"
-  | "italic"
-  | "textColor"
-  | "fontSize"
->;
+type EditorDocumentSnapshot = {
+  title: string;
+  blocks: FreeformBlock[];
+  activeBlockId: string | null;
+  selectedBlockIds: string[];
+};
 type CanvasCoordinates = {
   x: number;
   y: number;
@@ -297,30 +293,17 @@ function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   ];
 }
 
-function toSnapshot(block: FreeformBlock): BlockSnapshot {
+function cloneDocumentSnapshot(
+  title: string,
+  blocks: FreeformBlock[],
+  activeBlockId: string | null,
+  selectedBlockIds: string[],
+): EditorDocumentSnapshot {
   return {
-    text: block.text,
-    align: block.align ?? "right",
-    direction: block.direction ?? "rtl",
-    bold: block.bold ?? false,
-    italic: block.italic ?? false,
-    richText: block.richText,
-    textColor: block.textColor ?? "#222222",
-    fontSize: block.fontSize ?? 15,
-  };
-}
-
-function applySnapshot(block: FreeformBlock, snapshotValue: BlockSnapshot) {
-  return {
-    ...block,
-    text: snapshotValue.text,
-    align: snapshotValue.align ?? "right",
-    direction: snapshotValue.direction ?? "rtl",
-    bold: snapshotValue.bold ?? false,
-    italic: snapshotValue.italic ?? false,
-    richText: snapshotValue.richText,
-    textColor: snapshotValue.textColor ?? "#222222",
-    fontSize: snapshotValue.fontSize ?? 15,
+    title,
+    blocks: blocks.map((block) => ({ ...block })),
+    activeBlockId,
+    selectedBlockIds: [...selectedBlockIds],
   };
 }
 
@@ -416,9 +399,17 @@ export function NoteEditor({
     startX: number;
     startWidth: number;
   } | null>(null);
-  const historyRef = useRef<
-    Record<string, { past: BlockSnapshot[]; future: BlockSnapshot[] }>
-  >({});
+  const historyRef = useRef<{
+    past: EditorDocumentSnapshot[];
+    future: EditorDocumentSnapshot[];
+  }>({ past: [], future: [] });
+  const lastHistoryActionRef = useRef<string | null>(null);
+  const currentDocumentStateRef = useRef({
+    title,
+    blocks,
+    activeBlockId,
+    selectedBlockIds,
+  });
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef("");
   const lastSyncedAtRef = useRef(initialUpdatedAt);
@@ -430,6 +421,7 @@ export function NoteEditor({
     start: number;
     end: number;
   } | null>(null);
+
   const pagePointerStartRef = useRef<{
     pointerId: number;
     clientX: number;
@@ -478,6 +470,15 @@ export function NoteEditor({
     latestSnapshotRef.current = snapshot;
   }, [snapshot]);
 
+  useEffect(() => {
+    currentDocumentStateRef.current = {
+      title,
+      blocks,
+      activeBlockId,
+      selectedBlockIds,
+    };
+  }, [activeBlockId, blocks, selectedBlockIds, title]);
+
   function getCanvasBoundedX(
     targetCanvasWidth: number,
     desiredX: number,
@@ -495,14 +496,37 @@ export function NoteEditor({
     );
   }
 
-  function pushHistoryEntry(block: FreeformBlock) {
-    const bucket = historyRef.current[block.id] ?? { past: [], future: [] };
-    bucket.past.push(toSnapshot(block));
-    if (bucket.past.length > 100) {
-      bucket.past.shift();
+  function recordDocumentHistory(coalesceKey?: string) {
+    if (!isHydrated) {
+      return;
     }
-    bucket.future = [];
-    historyRef.current[block.id] = bucket;
+
+    const shouldCoalesce = Boolean(
+      coalesceKey && lastHistoryActionRef.current === coalesceKey,
+    );
+
+    if (!shouldCoalesce) {
+      const current = currentDocumentStateRef.current;
+      historyRef.current.past.push(
+        cloneDocumentSnapshot(
+          current.title,
+          current.blocks,
+          current.activeBlockId,
+          current.selectedBlockIds,
+        ),
+      );
+
+      if (historyRef.current.past.length > 100) {
+        historyRef.current.past.shift();
+      }
+    }
+
+    historyRef.current.future = [];
+    lastHistoryActionRef.current = coalesceKey ?? null;
+  }
+
+  function finishHistoryGroup() {
+    lastHistoryActionRef.current = null;
   }
 
   useEffect(() => {
@@ -594,6 +618,8 @@ export function NoteEditor({
       }
 
       if (!isCancelled) {
+        historyRef.current = { past: [], future: [] };
+        lastHistoryActionRef.current = null;
         setIsHydrated(true);
       }
     }
@@ -982,6 +1008,7 @@ export function NoteEditor({
     shouldFocus = true,
     width = BLOCK_DEFAULT_WIDTH,
     initialText = "",
+    initialRichText?: string,
   ) {
     const block: FreeformBlock = {
       id: createId(),
@@ -989,6 +1016,7 @@ export function NoteEditor({
       y,
       width,
       text: initialText,
+      ...(initialRichText ? { richText: initialRichText } : {}),
       align: "right",
       direction: "rtl",
       textColor: "#222222",
@@ -997,6 +1025,7 @@ export function NoteEditor({
 
     const addBlock = () => {
       markEditorInteraction();
+      recordDocumentHistory();
       setBlocks((current) => [...current, block]);
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
@@ -1119,6 +1148,7 @@ export function NoteEditor({
         };
 
         markEditorInteraction();
+        recordDocumentHistory();
         setBlocks((current) => [...current, block]);
         setActiveBlockId(block.id);
         setSelectedBlockIds([block.id]);
@@ -1139,7 +1169,7 @@ export function NoteEditor({
     }
   }
 
-  function handleImagePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+  function handleEditorPaste(event: React.ClipboardEvent<HTMLDivElement>) {
     const itemFiles = Array.from(event.clipboardData.items)
       .filter(
         (item) => item.kind === "file" && item.type.startsWith("image/"),
@@ -1154,6 +1184,31 @@ export function NoteEditor({
           );
 
     if (imageFiles.length === 0) {
+      const pastedText = event.clipboardData.getData("text/plain");
+      const target = event.target as HTMLElement;
+      const blockElement = target.closest<HTMLElement>("[data-block-id]");
+      const blockId = blockElement?.dataset.blockId;
+      const textarea = target.closest("textarea");
+
+      if (!pastedText || !blockId || !textarea || !looksLikeMarkdown(pastedText)) {
+        return;
+      }
+
+      const targetBlock = blocks.find(
+        (block) => block.id === blockId && !isImageBlock(block),
+      );
+      if (!targetBlock) {
+        return;
+      }
+
+      event.preventDefault();
+      const selectionStart = textarea.selectionStart ?? targetBlock.text.length;
+      const selectionEnd = textarea.selectionEnd ?? selectionStart;
+      const nextText =
+        targetBlock.text.slice(0, selectionStart) +
+        pastedText +
+        targetBlock.text.slice(selectionEnd);
+      updateBlockText(blockId, nextText, markdownToHtml(nextText));
       return;
     }
 
@@ -1325,6 +1380,7 @@ export function NoteEditor({
           selectionStart + clipboardContent.text.length;
 
         markEditorInteraction();
+        recordDocumentHistory();
         setTitle(nextTitle);
         requestAnimationFrame(() => {
           titleInputRef.current?.focus();
@@ -1337,17 +1393,39 @@ export function NoteEditor({
       }
 
       if (targetBlockId) {
-        const targetBlock = blocks.find(
-          (block) => block.id === targetBlockId && !isImageBlock(block),
-        );
+        const currentBlocks = currentDocumentStateRef.current.blocks;
+        const targetBlock =
+          currentBlocks.find(
+            (block) => block.id === targetBlockId && !isImageBlock(block),
+          ) ??
+          blocks.find(
+            (block) => block.id === targetBlockId && !isImageBlock(block),
+          );
 
         if (!targetBlock) {
           return;
         }
 
+        if (!currentBlocks.some((block) => block.id === targetBlockId)) {
+          flushSync(() => {
+            setBlocks((current) =>
+              current.some((block) => block.id === targetBlockId)
+                ? current
+                : [...current, targetBlock],
+            );
+            setActiveBlockId(targetBlockId);
+            setSelectedBlockIds([targetBlockId]);
+          });
+        }
+
         const richTextHandle = richTextBlockRefs.current[targetBlockId];
         if (richTextHandle) {
-          richTextHandle.replaceSelection(clipboardContent.text);
+          richTextHandle.replaceSelection(
+            clipboardContent.text,
+            looksLikeMarkdown(clipboardContent.text)
+              ? markdownToHtml(clipboardContent.text)
+              : undefined,
+          );
           return;
         }
 
@@ -1363,17 +1441,25 @@ export function NoteEditor({
           start: nextCaretPosition,
           end: nextCaretPosition,
         };
-        updateBlockText(targetBlockId, nextText);
+        updateBlockText(
+          targetBlockId,
+          nextText,
+          targetBlock.richText ? markdownToHtml(nextText) : undefined,
+        );
         return;
       }
 
       if (placement) {
+        const richText = looksLikeMarkdown(clipboardContent.text)
+          ? markdownToHtml(clipboardContent.text)
+          : undefined;
         addBlockAt(
           placement.x,
           placement.y,
           true,
           placement.width,
           clipboardContent.text,
+          richText,
         );
       }
     } catch (error) {
@@ -1472,22 +1558,11 @@ export function NoteEditor({
     trackHistory = true,
   ) {
     markEditorInteraction();
+    if (trackHistory) {
+      recordDocumentHistory();
+    }
     setBlocks((current) =>
-      current.map((block) => {
-        if (block.id !== id) {
-          return block;
-        }
-
-        const next = updater(block);
-        if (
-          trackHistory &&
-          JSON.stringify(toSnapshot(block)) !== JSON.stringify(toSnapshot(next))
-        ) {
-          pushHistoryEntry(block);
-        }
-
-        return next;
-      }),
+      current.map((block) => (block.id === id ? updater(block) : block)),
     );
   }
 
@@ -1497,26 +1572,16 @@ export function NoteEditor({
     trackHistory = true,
   ) {
     markEditorInteraction();
+    if (trackHistory) {
+      recordDocumentHistory();
+    }
     setBlocks((current) =>
-      current.map((block) => {
-        if (!ids.includes(block.id)) {
-          return block;
-        }
-
-        const next = updater(block);
-        if (
-          trackHistory &&
-          JSON.stringify(toSnapshot(block)) !== JSON.stringify(toSnapshot(next))
-        ) {
-          pushHistoryEntry(block);
-        }
-
-        return next;
-      }),
+      current.map((block) => (ids.includes(block.id) ? updater(block) : block)),
     );
   }
 
   function updateBlockText(id: string, text: string, richText?: string) {
+    recordDocumentHistory(`text:${id}`);
     updateBlock(id, (block) => {
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
@@ -1543,18 +1608,17 @@ export function NoteEditor({
         x: nextX,
         width: isLegacyColumnBlock ? block.width : nextWidth,
       };
-    });
+    }, false);
   }
 
   function removeBlockIfEmpty(id: string) {
     markEditorInteraction();
+    const target = blocks.find((block) => block.id === id);
+    if (!target || target.text.trim()) {
+      return;
+    }
+
     setBlocks((current) => {
-      const target = current.find((block) => block.id === id);
-
-      if (!target || target.text.trim()) {
-        return current;
-      }
-
       return current.filter((block) => block.id !== id);
     });
     setActiveBlockId((current) => (current === id ? null : current));
@@ -1563,6 +1627,7 @@ export function NoteEditor({
 
   function deleteBlock(id: string) {
     markEditorInteraction();
+    recordDocumentHistory();
     setBlocks((current) => current.filter((block) => block.id !== id));
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
@@ -1570,6 +1635,7 @@ export function NoteEditor({
 
   function deleteBlocks(ids: string[]) {
     markEditorInteraction();
+    recordDocumentHistory();
     setBlocks((current) =>
       current.filter((block) => !ids.includes(block.id)),
     );
@@ -1821,45 +1887,98 @@ export function NoteEditor({
     };
   }, []);
 
-  function undoBlock(id: string) {
-    markEditorInteraction();
-    setBlocks((current) =>
-      current.map((block) => {
-        if (block.id !== id) {
-          return block;
-        }
-
-        const bucket = historyRef.current[id];
-        const previous = bucket?.past.pop();
-        if (!bucket || !previous) {
-          return block;
-        }
-
-        bucket.future.push(toSnapshot(block));
-        return applySnapshot(block, previous);
-      }),
+  function applyDocumentSnapshot(nextSnapshot: EditorDocumentSnapshot) {
+    const existingBlockIds = new Set(nextSnapshot.blocks.map((block) => block.id));
+    const nextActiveBlockId =
+      nextSnapshot.activeBlockId && existingBlockIds.has(nextSnapshot.activeBlockId)
+        ? nextSnapshot.activeBlockId
+        : null;
+    const nextSelectedBlockIds = nextSnapshot.selectedBlockIds.filter((id) =>
+      existingBlockIds.has(id),
     );
+
+    currentDocumentStateRef.current = {
+      title: nextSnapshot.title,
+      blocks: nextSnapshot.blocks,
+      activeBlockId: nextActiveBlockId,
+      selectedBlockIds: nextSelectedBlockIds,
+    };
+    setTitle(nextSnapshot.title);
+    setBlocks(nextSnapshot.blocks.map((block) => ({ ...block })));
+    setActiveBlockId(nextActiveBlockId);
+    setSelectedBlockIds(nextSelectedBlockIds);
+    setActiveRichTextStyle(null);
+    setRichTextInitialSelections({});
   }
 
-  function redoBlock(id: string) {
+  function undoDocument() {
+    const previous = historyRef.current.past.pop();
+    if (!previous) {
+      return;
+    }
+
     markEditorInteraction();
-    setBlocks((current) =>
-      current.map((block) => {
-        if (block.id !== id) {
-          return block;
-        }
-
-        const bucket = historyRef.current[id];
-        const next = bucket?.future.pop();
-        if (!bucket || !next) {
-          return block;
-        }
-
-        bucket.past.push(toSnapshot(block));
-        return applySnapshot(block, next);
-      }),
+    const current = currentDocumentStateRef.current;
+    historyRef.current.future.push(
+      cloneDocumentSnapshot(
+        current.title,
+        current.blocks,
+        current.activeBlockId,
+        current.selectedBlockIds,
+      ),
     );
+    lastHistoryActionRef.current = null;
+    applyDocumentSnapshot(previous);
   }
+
+  function redoDocument() {
+    const next = historyRef.current.future.pop();
+    if (!next) {
+      return;
+    }
+
+    markEditorInteraction();
+    const current = currentDocumentStateRef.current;
+    historyRef.current.past.push(
+      cloneDocumentSnapshot(
+        current.title,
+        current.blocks,
+        current.activeBlockId,
+        current.selectedBlockIds,
+      ),
+    );
+    lastHistoryActionRef.current = null;
+    applyDocumentSnapshot(next);
+  }
+
+  const handleHistoryShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    const isUndo = key === "z" && !event.shiftKey;
+    const isRedo = key === "y" || (key === "z" && event.shiftKey);
+
+    if (!isUndo && !isRedo) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isRedo) {
+      redoDocument();
+    } else {
+      undoDocument();
+    }
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => handleHistoryShortcut(event);
+    window.addEventListener("keydown", listener, true);
+    return () => window.removeEventListener("keydown", listener, true);
+  }, []);
 
   function applyInlineTextStyle(
     blockId: string,
@@ -1910,6 +2029,16 @@ export function NoteEditor({
       primaryBlockId?: string | null;
     },
   ) {
+    if (command === "undo") {
+      undoDocument();
+      return;
+    }
+
+    if (command === "redo") {
+      redoDocument();
+      return;
+    }
+
     if (command === "insert-image") {
       imageFileInputRef.current?.click();
       return;
@@ -1937,16 +2066,6 @@ export function NoteEditor({
     activeElement?.focus();
 
     switch (command) {
-      case "undo":
-        if (primaryBlockId) {
-          undoBlock(primaryBlockId);
-        }
-        return;
-      case "redo":
-        if (primaryBlockId) {
-          redoBlock(primaryBlockId);
-        }
-        return;
       case "toggle-bold":
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
@@ -2079,6 +2198,8 @@ export function NoteEditor({
           detail: {
             hasActiveBlock: Boolean(activeBlock),
             canInsertImage: true,
+            canUndo: historyRef.current.past.length > 0,
+            canRedo: historyRef.current.future.length > 0,
             align: activeBlock?.align ?? "right",
             direction: activeBlock?.direction ?? "rtl",
             bold: activeBlock?.bold ?? false,
@@ -2104,7 +2225,7 @@ export function NoteEditor({
     dispatchToolbarState();
     const animationFrameId = requestAnimationFrame(dispatchToolbarState);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [activeBlock, activeRichTextStyle, selectedBlockIds.length]);
+  }, [activeBlock, activeRichTextStyle, blocks, selectedBlockIds.length, title]);
 
   useEffect(
     () => () => {
@@ -2113,6 +2234,8 @@ export function NoteEditor({
           detail: {
             hasActiveBlock: false,
             canInsertImage: false,
+            canUndo: false,
+            canRedo: false,
           },
         }),
       );
@@ -2130,6 +2253,7 @@ export function NoteEditor({
 
     event.preventDefault();
     event.stopPropagation();
+    recordDocumentHistory();
     selectSingleBlock(block.id);
 
     const rect = canvasRef.current.getBoundingClientRect();
@@ -2143,7 +2267,7 @@ export function NoteEditor({
   }
 
   function startResizingBlock(
-    event: React.PointerEvent<HTMLButtonElement>,
+    event: React.PointerEvent<HTMLElement>,
     block: FreeformBlock,
     edge: "left" | "right" = "right",
   ) {
@@ -2153,6 +2277,7 @@ export function NoteEditor({
 
     event.preventDefault();
     event.stopPropagation();
+    recordDocumentHistory();
     selectSingleBlock(block.id);
     resizeStateRef.current = {
       id: block.id,
@@ -2169,7 +2294,7 @@ export function NoteEditor({
   return (
     <div
       className="h-full bg-white"
-      onPaste={handleImagePaste}
+      onPaste={handleEditorPaste}
     >
       <input
         ref={imageFileInputRef}
@@ -2201,9 +2326,13 @@ export function NoteEditor({
                 value={title}
                 onChange={(event) => {
                   markEditorInteraction();
+                  recordDocumentHistory("title");
                   setTitle(event.target.value);
                 }}
-                onBlur={() => flushPendingSave("title-blur")}
+                onBlur={() => {
+                  finishHistoryGroup();
+                  flushPendingSave("title-blur");
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -2510,6 +2639,7 @@ export function NoteEditor({
                   key={block.id}
                   data-testid={`note-block-${block.id}`}
                   data-editor-block
+                  data-block-id={block.id}
                   data-layout="freeform"
                   style={{
                     left: `${blockX}px`,
@@ -2518,6 +2648,17 @@ export function NoteEditor({
                   }}
                   className="group absolute rounded-md"
                 >
+                  <div
+                    role="separator"
+                    aria-label="تغییر عرض بلوک از مرز چپ"
+                    aria-orientation="vertical"
+                    data-testid={`resize-edge-block-${block.id}`}
+                    onPointerDown={(event) =>
+                      startResizingBlock(event, block, "left")
+                    }
+                    className="absolute -left-1 top-0 z-10 h-full w-2 touch-none cursor-ew-resize"
+                  />
+
                   <button
                     type="button"
                     onPointerDown={(event) => startDraggingBlock(event, block)}
@@ -2556,6 +2697,7 @@ export function NoteEditor({
                       initialSelection={richTextInitialSelections[block.id]}
                       onFocus={() => selectSingleBlock(block.id)}
                       onBlur={() => {
+                        finishHistoryGroup();
                         removeBlockIfEmpty(block.id);
                         flushPendingSave("block-blur");
                       }}
@@ -2612,6 +2754,7 @@ export function NoteEditor({
                       };
                     }}
                     onBlur={() => {
+                      finishHistoryGroup();
                       removeBlockIfEmpty(block.id);
                       flushPendingSave("block-blur");
                     }}

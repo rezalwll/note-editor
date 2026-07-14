@@ -19,6 +19,8 @@ export type EditorCommand =
 export type ToolbarState = {
   hasActiveBlock: boolean;
   canInsertImage: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   align: "right" | "center" | "justify";
   direction: "rtl" | "ltr";
   bold: boolean;

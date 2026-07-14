@@ -55,6 +55,68 @@ a {
   margin: 0;
 }
 
+.freeform-rich-text .ProseMirror h1,
+.freeform-rich-text .ProseMirror h2,
+.freeform-rich-text .ProseMirror h3,
+.freeform-rich-text .ProseMirror h4,
+.freeform-rich-text .ProseMirror h5,
+.freeform-rich-text .ProseMirror h6 {
+  margin: 0.45em 0 0.25em;
+  line-height: 1.35;
+}
+
+.freeform-rich-text .ProseMirror h1 {
+  font-size: 1.7em;
+  font-weight: 800;
+}
+
+.freeform-rich-text .ProseMirror h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.freeform-rich-text .ProseMirror h3 {
+  font-size: 1.2em;
+  font-weight: 650;
+}
+
+.freeform-rich-text .ProseMirror ul,
+.freeform-rich-text .ProseMirror ol {
+  margin: 0.35em 0;
+  padding-inline-start: 1.6em;
+}
+
+.freeform-rich-text .ProseMirror ul {
+  list-style: disc;
+}
+
+.freeform-rich-text .ProseMirror ol {
+  list-style: decimal;
+}
+
+.freeform-rich-text .ProseMirror blockquote {
+  margin: 0.45em 0;
+  border-inline-start: 3px solid #cbd5e1;
+  padding-inline-start: 0.8em;
+  color: #526174;
+}
+
+.freeform-rich-text .ProseMirror pre {
+  overflow-x: auto;
+  border-radius: 8px;
+  background: #f1f5f9;
+  padding: 0.65em 0.8em;
+  direction: ltr;
+  text-align: left;
+}
+
+.freeform-rich-text .ProseMirror code {
+  border-radius: 4px;
+  background: #f1f5f9;
+  padding: 0.1em 0.3em;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 button:not(:disabled),
 a[href],
 [role="button"],

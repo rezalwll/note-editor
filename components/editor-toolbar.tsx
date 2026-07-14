@@ -23,6 +23,8 @@ import { dispatchEditorCommand, type ToolbarState } from "@/lib/editor-events";
 const defaultState: ToolbarState = {
   hasActiveBlock: false,
   canInsertImage: false,
+  canUndo: false,
+  canRedo: false,
   align: "right",
   direction: "rtl",
   bold: false,
@@ -214,6 +216,8 @@ export function EditorToolbar() {
       setToolbarState({
         hasActiveBlock,
         canInsertImage: Boolean(customEvent.detail?.canInsertImage),
+        canUndo: Boolean(customEvent.detail?.canUndo),
+        canRedo: Boolean(customEvent.detail?.canRedo),
         align: customEvent.detail?.align ?? "right",
         direction: customEvent.detail?.direction ?? "rtl",
         bold: Boolean(customEvent.detail?.bold),
@@ -339,14 +343,14 @@ export function EditorToolbar() {
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
       <ToolbarButton
         label="واگرد"
-        disabled={!toolbarState.hasActiveBlock}
+        disabled={!toolbarState.canUndo}
         onClick={() => dispatchEditorCommand("undo")}
       >
         <Undo2 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
         label="انجام دوباره"
-        disabled={!toolbarState.hasActiveBlock}
+        disabled={!toolbarState.canRedo}
         onClick={() => dispatchEditorCommand("redo")}
       >
         <Redo2 className="h-4 w-4" />

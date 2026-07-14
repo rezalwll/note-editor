@@ -660,6 +660,95 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("pastes from the context menu into a newly created empty block", async () => {
+    mocks.clipboardReadText.mockResolvedValue("متن پیست‌شده");
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 900,
+      clientY: 360,
+      pointerId: 31,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 900,
+      clientY: 360,
+      pointerId: 31,
+    });
+
+    const emptyTextarea = await waitFor(() => {
+      const element = container.querySelector("textarea") as HTMLTextAreaElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLTextAreaElement;
+    });
+    fireEvent.contextMenu(emptyTextarea);
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const pasteAction = menu.items.find(
+      (item: { id: string }) => item.id === "paste-text",
+    );
+
+    fireEvent.blur(emptyTextarea);
+    await waitFor(() => expect(container.querySelector("textarea")).toBeNull());
+    await pasteAction.onSelect();
+
+    await waitFor(() => {
+      expect(container.querySelector("textarea")).toHaveValue("متن پیست‌شده");
+    });
+  });
+
+  it("converts pasted Markdown headings and bullet lists to rich text", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "markdown-target", x: 48, y: 72, width: 420, text: "جایگزین" },
+        ],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const markdown = [
+      "# بانک جامع مهارت‌های فنی و رفتاری تیم توسعه وب",
+      "",
+      "## ۱. ویژگی‌های فردی و مهارت‌های رفتاری",
+      "",
+      "- انتقادپذیر و پذیرای **بازخورد**",
+    ].join("\n");
+
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [],
+        files: [],
+        getData: (type: string) => (type === "text/plain" ? markdown : ""),
+      },
+    });
+
+    await waitFor(() => {
+      const richTextEditor = container.querySelector(
+        '[data-rich-text-editor="true"]',
+      ) as HTMLElement | null;
+      expect(richTextEditor?.querySelector("h1")).toHaveTextContent(
+        "بانک جامع مهارت‌های فنی و رفتاری تیم توسعه وب",
+      );
+      expect(richTextEditor?.querySelector("h2")).toHaveTextContent(
+        "۱. ویژگی‌های فردی و مهارت‌های رفتاری",
+      );
+      expect(richTextEditor?.querySelector("ul li")).toHaveTextContent(
+        "انتقادپذیر و پذیرای بازخورد",
+      );
+      expect(richTextEditor?.querySelector("strong")).toHaveTextContent("بازخورد");
+    });
+  });
+
   it("applies text color and font size only to the selected text", async () => {
     const user = userEvent.setup();
     const { container } = renderEditor(
@@ -759,6 +848,65 @@ describe("NoteEditor freeform placement", () => {
       const remainingTextareas = container.querySelectorAll("textarea");
       expect(remainingTextareas).toHaveLength(1);
       expect(remainingTextareas[0]).toHaveValue("first");
+    });
+  });
+
+  it("undoes and redoes title and block deletion in one global history", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "global-history", x: 48, y: 72, width: 240, text: "keep me" },
+        ],
+      }),
+    );
+    await waitForHydration();
+
+    const titleInput = container.querySelector(
+      'input[aria-label]',
+    ) as HTMLInputElement;
+    const originalTitle = titleInput.value;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.change(titleInput, { target: { value: "Updated title" } });
+    fireEvent.blur(titleInput);
+    fireEvent.contextMenu(textarea);
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const deleteAction = menu.items.find(
+      (item: { id: string; onSelect?: () => void }) => item.id === "delete-block",
+    );
+    deleteAction.onSelect();
+
+    await waitFor(() => {
+      expect(container.querySelector("textarea")).toBeNull();
+      expect(titleInput).toHaveValue("Updated title");
+    });
+
+    titleInput.focus();
+    fireEvent.keyDown(titleInput, { key: "z", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(container.querySelector("textarea")).toHaveValue("keep me");
+      expect(titleInput).toHaveValue("Updated title");
+    });
+
+    fireEvent.keyDown(titleInput, { key: "z", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(titleInput).toHaveValue(originalTitle);
+      expect(container.querySelector("textarea")).toHaveValue("keep me");
+    });
+
+    fireEvent.keyDown(titleInput, { key: "y", ctrlKey: true });
+    await waitFor(() => {
+      expect(titleInput).toHaveValue("Updated title");
+      expect(container.querySelector("textarea")).toHaveValue("keep me");
+    });
+
+    fireEvent.keyDown(titleInput, { key: "y", ctrlKey: true });
+    await waitFor(() => {
+      expect(container.querySelector("textarea")).toBeNull();
+      expect(titleInput).toHaveValue("Updated title");
     });
   });
 
@@ -1094,7 +1242,11 @@ describe("NoteEditor freeform placement", () => {
     expect(resizeButton).toHaveClass("-left-3");
     expect(resizeButton).not.toHaveClass("-right-3");
 
-    fireEvent.pointerDown(resizeButton, {
+    const resizeEdge = container.querySelector(
+      '[data-testid="resize-edge-block-resizable"]',
+    ) as HTMLDivElement;
+
+    fireEvent.pointerDown(resizeEdge, {
       button: 0,
       clientX: 240,
       pointerId: 21,

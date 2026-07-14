@@ -11,6 +11,8 @@ import {
   useRef,
 } from "react";
 
+import { looksLikeMarkdown, markdownToHtml } from "@/lib/markdown";
+
 const TextColor = Mark.create({
   name: "textColor",
   addAttributes() {
@@ -55,7 +57,7 @@ export type RichTextBlockHandle = {
   focus: () => void;
   getElement: () => HTMLElement | null;
   getSelectedText: () => string;
-  replaceSelection: (text: string) => void;
+  replaceSelection: (text: string, html?: string) => void;
   setTextColor: (color: string) => void;
   setHighlightColor: (color: string) => void;
   setFontSize: (fontSize: number) => void;
@@ -187,11 +189,11 @@ export const RichTextBlockEditor = forwardRef<
         const { from, to } = editor.state.selection;
         return editor.state.doc.textBetween(from, to, "\n");
       },
-      replaceSelection: (text) => {
+      replaceSelection: (text, replacementHtml) => {
         editor
           ?.chain()
           .focus(undefined, { scrollIntoView: false })
-          .insertContent(text)
+          .insertContent(replacementHtml ?? text)
           .run();
       },
       setTextColor: (color) => {
@@ -225,6 +227,20 @@ export const RichTextBlockEditor = forwardRef<
     <div
       ref={rootRef}
       data-rich-text-editor="true"
+      onPaste={(event) => {
+        const pastedText = event.clipboardData.getData("text/plain");
+        if (!editor || !looksLikeMarkdown(pastedText)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        editor
+          .chain()
+          .focus(undefined, { scrollIntoView: false })
+          .insertContent(markdownToHtml(pastedText))
+          .run();
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
