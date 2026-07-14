@@ -61,14 +61,24 @@ npm run verify
 ```
 
 This validates the Prisma schema, runs ESLint and TypeScript, executes the
-functional tests, and creates a production build. Use `npm run test:watch`
-while developing a focused change.
+functional tests with enforced coverage thresholds, and creates a production
+build. Use `npm run test:watch` while developing a focused change. Browser
+smoke tests are available separately:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+The public `GET /api/health` endpoint reports whether the database and upload
+storage are ready without exposing application data.
 
 ## CI/CD
 
 This repository now supports GitHub Actions based CI/CD.
 
-- `CI`: runs on every pull request and every push to `master`
+- `CI`: runs unit/coverage, build, and browser smoke tests on every pull request
+  and every push to `master`
 - `Deploy`: runs only after `CI` succeeds on `master`
 
 The deploy workflow uploads a release archive to the production server and runs
@@ -120,6 +130,21 @@ Notes:
 - Default port is `3000` behind Nginx on port `80`.
 - The bootstrap password should be overridden at runtime for production.
 - The deploy script now creates a dedicated Postgres login named `notebook_app` by default instead of reusing `postgres`.
+- The Node process runs as the non-root `notebook` operating-system user.
+- A failed health check automatically restores and restarts the previous release.
+
+## Data safety and offline behavior
+
+- Sync detects stale notebook/page updates and records a conflict instead of
+  silently overwriting either side. Conflicted local edits remain available for
+  resolution and are not retried in a loop.
+- Private pages are never stored in the service-worker cache. Logout clears the
+  local IndexedDB database and application caches.
+- Attachment uploads are checked by file signature rather than trusting the
+  browser-supplied MIME type. PDF, JPEG, PNG, GIF, and WebP are supported.
+- Workspace imports are bounded to a 25 MB compressed archive, 100 MB of
+  declared extracted attachments, and 10,000 items. Imported rich text is
+  sanitized before it is stored.
 
 ## Database portability
 

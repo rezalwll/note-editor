@@ -6,6 +6,9 @@ const isDevelopment = process.env.NODE_ENV !== "production";
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  if (pathname === "/api/health") {
+    return NextResponse.next();
+  }
   const isGuestOnlyRoute =
     pathname === "/login" ||
     pathname === "/signup";

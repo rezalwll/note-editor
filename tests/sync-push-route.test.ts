@@ -255,7 +255,7 @@ describe("sync push route", () => {
     ]);
   });
 
-  it("applies stale local page updates without creating extra copies", async () => {
+  it("reports stale local page updates as conflicts without overwriting remote data", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue({
       id: "page-1",
@@ -310,23 +310,22 @@ describe("sync push route", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.prisma.page.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "page-1" },
-        data: expect.objectContaining({
-          title: "Local version",
-          bodyHtml: "<p>Local body</p>",
-        }),
-      }),
-    );
+    expect(mocks.prisma.page.update).not.toHaveBeenCalled();
     expect(mocks.prisma.page.create).not.toHaveBeenCalled();
     expect(mocks.prisma.page.findFirst).not.toHaveBeenCalled();
-    expect(payload.conflicts).toEqual([]);
+    expect(payload.conflicts).toEqual([
+      expect.objectContaining({
+        entityType: "page",
+        entityId: "page-1",
+        localPayload: expect.objectContaining({ title: "Local version" }),
+        remotePayload: expect.objectContaining({ title: "Remote version" }),
+      }),
+    ]);
     expect(payload.pages).toEqual([
       expect.objectContaining({
         id: "page-1",
-        title: "Local version",
-        bodyHtml: "<p>Local body</p>",
+        title: "Remote version",
+        bodyHtml: "<p>Remote body</p>",
         syncStatus: "synced",
       }),
     ]);

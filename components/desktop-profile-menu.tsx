@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import { logoutAction } from "@/app/actions";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { clearPrivateClientData } from "@/lib/clear-client-data";
 
 type DesktopProfileMenuProps = {
   currentUser: {
@@ -26,6 +27,11 @@ export function DesktopProfileMenu({
   const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  async function logoutAndClearClientData() {
+    await clearPrivateClientData();
+    await logoutAction();
+  }
 
   useEffect(() => {
     if (!open) {
@@ -130,7 +136,7 @@ export function DesktopProfileMenu({
                   تنظیمات
                 </Link>
 
-                <form action={logoutAction}>
+                <form action={logoutAndClearClientData}>
                   <button
                     type="submit"
                     className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"

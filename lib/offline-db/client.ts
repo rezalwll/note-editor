@@ -103,12 +103,25 @@ export async function applyPullChanges(
     offlineDb.pages,
     offlineDb.meta,
     async () => {
-      if (payload.notebooks.length > 0) {
-        await offlineDb.notebooks.bulkPut(payload.notebooks);
+      const [localNotebooks, localPages] = await Promise.all([
+        offlineDb.notebooks.bulkGet(payload.notebooks.map((item) => item.id)),
+        offlineDb.pages.bulkGet(payload.pages.map((item) => item.id)),
+      ]);
+      const canApplyRemote = (local: { syncStatus: SyncStatus } | undefined) =>
+        !local || local.syncStatus === "synced";
+      const notebooksToApply = payload.notebooks.filter((_, index) =>
+        canApplyRemote(localNotebooks[index]),
+      );
+      const pagesToApply = payload.pages.filter((_, index) =>
+        canApplyRemote(localPages[index]),
+      );
+
+      if (notebooksToApply.length > 0) {
+        await offlineDb.notebooks.bulkPut(notebooksToApply);
       }
 
-      if (payload.pages.length > 0) {
-        await offlineDb.pages.bulkPut(payload.pages);
+      if (pagesToApply.length > 0) {
+        await offlineDb.pages.bulkPut(pagesToApply);
       }
 
       await setLastPullAt(userId, payload.fetchedAt);
@@ -285,7 +298,11 @@ export async function enqueueNotebookArchive(
 
 export async function listPendingQueue(userId: string) {
   const queue = await offlineDb.queue.orderBy("createdAt").toArray();
-  return queue.filter((item) => (item.payload as { userId?: string }).userId === userId);
+  return queue.filter(
+    (item) =>
+      (item.payload as { userId?: string }).userId === userId &&
+      item.status !== "conflict",
+  );
 }
 
 export async function applySyncPushResult(userId: string, result: SyncPushResult) {
@@ -299,12 +316,27 @@ export async function applySyncPushResult(userId: string, result: SyncPushResult
       offlineDb.meta,
     ],
     async () => {
-      if (result.notebooks.length > 0) {
-        await offlineDb.notebooks.bulkPut(result.notebooks);
+      const conflictedNotebookIds = new Set(
+        result.conflicts
+          .filter((item) => item.entityType === "notebook")
+          .map((item) => item.entityId),
+      );
+      const conflictedPageIds = new Set(
+        result.conflicts
+          .filter((item) => item.entityType === "page")
+          .map((item) => item.entityId),
+      );
+      const notebooksToApply = result.notebooks.filter(
+        (item) => !conflictedNotebookIds.has(item.id),
+      );
+      const pagesToApply = result.pages.filter((item) => !conflictedPageIds.has(item.id));
+
+      if (notebooksToApply.length > 0) {
+        await offlineDb.notebooks.bulkPut(notebooksToApply);
       }
 
-      if (result.pages.length > 0) {
-        await offlineDb.pages.bulkPut(result.pages);
+      if (pagesToApply.length > 0) {
+        await offlineDb.pages.bulkPut(pagesToApply);
       }
 
       for (const applied of result.applied) {
@@ -314,6 +346,12 @@ export async function applySyncPushResult(userId: string, result: SyncPushResult
       }
 
       for (const conflict of result.conflicts) {
+        if (conflict.entityType === "page") {
+          await offlineDb.pages.update(conflict.entityId, { syncStatus: "conflict" });
+        } else {
+          await offlineDb.notebooks.update(conflict.entityId, { syncStatus: "conflict" });
+        }
+
         await offlineDb.conflicts.put({
           ...conflict,
           id: `${userId}:${conflict.id}`,
@@ -325,6 +363,19 @@ export async function applySyncPushResult(userId: string, result: SyncPushResult
           syncStatus: "conflict",
           conflict,
         });
+
+        const queuedItems = await offlineDb.queue
+          .where("entityId")
+          .equals(conflict.entityId)
+          .and((item) => item.entityType === conflict.entityType)
+          .toArray();
+        await Promise.all(
+          queuedItems.map((item) =>
+            item.id
+              ? offlineDb.queue.update(item.id, { status: "conflict" })
+              : Promise.resolve(0),
+          ),
+        );
       }
 
       await setLastPullAt(userId, result.pulledAt);

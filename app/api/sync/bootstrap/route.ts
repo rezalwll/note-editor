@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const user = await requireUser();
+  const fetchedAt = new Date();
 
   const [notebooks, pages] = await Promise.all([
     prisma.notebook.findMany({
@@ -23,7 +24,7 @@ export async function GET() {
   ]);
 
   const payload: SyncBootstrapPayload = {
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: fetchedAt.toISOString(),
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
       userId: user.id,

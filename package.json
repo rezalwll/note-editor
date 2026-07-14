@@ -9,8 +9,10 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
-    "verify": "npm run prisma:validate && npm run lint && npm run typecheck && npm run test && npm run build",
+    "verify": "npm run prisma:validate && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
     "db:dev": "node scripts/start-embedded-postgres.mjs",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
@@ -54,6 +56,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -63,14 +66,17 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/sanitize-html": "^2.16.0",
+    "@vitest/coverage-v8": "^3.2.6",
     "embedded-postgres": "^18.4.0-beta.17",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.2.7",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.17",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
   },
   "overrides": {
     "@hono/node-server": "^1.19.13",

@@ -38,7 +38,7 @@ export type SyncQueueItem = {
   payload: Record<string, unknown>;
   baseUpdatedAt?: string | null;
   createdAt: string;
-  status: Exclude<SyncStatus, "conflict" | "synced">;
+  status: Extract<SyncStatus, "pending" | "failed" | "conflict">;
 };
 
 export type ConflictRecord = {
@@ -47,6 +47,8 @@ export type ConflictRecord = {
   entityId: string;
   createdAt: string;
   message: string;
+  localPayload?: Record<string, unknown>;
+  remotePayload?: Record<string, unknown>;
 };
 
 export type SyncBootstrapPayload = {

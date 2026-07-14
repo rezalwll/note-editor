@@ -4,14 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { storeUpload } from "@/lib/storage";
-
-const ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
+import { inspectUpload } from "@/lib/upload-validation";
 
 type RouteProps = {
   params: Promise<{ id: string }>;
@@ -37,7 +30,9 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "هیچ فایلی بارگذاری نشده است." }, { status: 400 });
   }
 
-  if (!ALLOWED_TYPES.has(file.type)) {
+  const inspectedFile = await inspectUpload(file);
+
+  if (!inspectedFile) {
     return NextResponse.json(
       { error: "فقط فایل‌های تصویری و PDF مجاز هستند." },
       { status: 400 },
@@ -53,14 +48,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     );
   }
 
-  const stored = await storeUpload(file);
+  const stored = await storeUpload(file, inspectedFile.extension);
 
   const attachment = await prisma.attachment.create({
     data: {
       userId: user.id,
       pageId: id,
       fileName: file.name,
-      mimeType: file.type,
+      mimeType: inspectedFile.mimeType,
       sizeBytes: file.size,
       storageKey: stored.storageKey,
     },

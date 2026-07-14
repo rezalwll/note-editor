@@ -14,6 +14,7 @@ import {
   sanitizeNoteHtml,
 } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 import {
   moveNotebookToTrash,
   movePageToTrash,
@@ -67,7 +68,7 @@ const queueIdSchema = z
   });
 
 const optionalDateStringSchema = z
-  .union([z.string(), z.date(), z.null()])
+  .union([z.string().datetime(), z.date(), z.null()])
   .optional()
   .transform((value) => {
     if (value === undefined || value === null) {
@@ -179,7 +180,7 @@ function syncPushError(
   },
   issues?: ReturnType<typeof getIssueSummary>,
 ) {
-  console.warn("Rejected sync push operation.", {
+  logger.warn("Rejected sync push operation", {
     message,
     item: item ? getItemSummary(item) : undefined,
     issues,
@@ -197,6 +198,70 @@ function syncPushError(
 function nonEmptyText(value: string | undefined, fallback: string) {
   const trimmedValue = value?.trim();
   return trimmedValue ? trimmedValue : fallback;
+}
+
+function isStaleBase(updatedAt: Date, baseUpdatedAt?: string | null) {
+  return Boolean(baseUpdatedAt && updatedAt.toISOString() !== baseUpdatedAt);
+}
+
+function notebookPayloadMatches(
+  existing: {
+    groupId: string | null;
+    name: string;
+    description: string | null;
+    archived: boolean;
+  },
+  payload: z.infer<typeof notebookPayloadSchema>,
+  operation: z.infer<typeof queueSchema>["operation"],
+) {
+  if (operation === "archive") {
+    return existing.archived;
+  }
+
+  return (
+    (payload.groupId === undefined || payload.groupId === existing.groupId) &&
+    (payload.name === undefined || payload.name?.trim() === existing.name) &&
+    (payload.description === undefined || payload.description === existing.description) &&
+    (payload.archived === undefined || payload.archived === existing.archived)
+  );
+}
+
+function pagePayloadMatches(
+  existing: {
+    notebookId: string;
+    title: string;
+    bodyHtml: string;
+    archived: boolean;
+  },
+  payload: z.infer<typeof pagePayloadSchema>,
+  operation: z.infer<typeof queueSchema>["operation"],
+) {
+  if (operation === "archive") {
+    return existing.archived;
+  }
+
+  return (
+    (payload.notebookId === undefined || payload.notebookId === existing.notebookId) &&
+    (payload.title === undefined || payload.title?.trim() === existing.title) &&
+    (payload.bodyHtml === undefined || payload.bodyHtml === existing.bodyHtml) &&
+    (payload.archived === undefined || payload.archived === existing.archived)
+  );
+}
+
+function createConflict(
+  item: z.infer<typeof queueSchema>,
+  localPayload: Record<string, unknown>,
+  remotePayload: Record<string, unknown>,
+) {
+  return {
+    id: `${item.entityType}:${item.entityId}:${remotePayload.updatedAt ?? "unknown"}`,
+    entityType: item.entityType,
+    entityId: item.entityId,
+    createdAt: new Date().toISOString(),
+    message: "Remote data changed after this edit started.",
+    localPayload,
+    remotePayload,
+  } satisfies SyncPushResult["conflicts"][number];
 }
 
 async function getFallbackNotebookGroupId(userId: string) {
@@ -275,6 +340,7 @@ export async function POST(request: Request) {
   }
 
   const applied: SyncPushResult["applied"] = [];
+  const conflicts: SyncPushResult["conflicts"] = [];
   const notebooks = new Map<string, LocalNotebook>();
   const pages = new Map<string, LocalPage>();
 
@@ -299,6 +365,17 @@ export async function POST(request: Request) {
 
       if (existing && existing.userId !== user.id) {
         return syncPushError("Forbidden notebook scope.", 403, item);
+      }
+
+      if (
+        existing &&
+        isStaleBase(existing.updatedAt, item.baseUpdatedAt) &&
+        !notebookPayloadMatches(existing, parsedNotebook.data, item.operation)
+      ) {
+        const remote = toNotebookResponse(existing);
+        notebooks.set(existing.id, remote);
+        conflicts.push(createConflict(item, parsedNotebook.data, remote));
+        continue;
       }
 
       if (item.operation === "archive") {
@@ -399,6 +476,17 @@ export async function POST(request: Request) {
 
     if (existing && existing.userId !== user.id) {
       return syncPushError("Forbidden page scope.", 403, item);
+    }
+
+    if (
+      existing &&
+      isStaleBase(existing.updatedAt, item.baseUpdatedAt) &&
+      !pagePayloadMatches(existing, parsedPage.data, item.operation)
+    ) {
+      const remote = toPageResponse(existing);
+      pages.set(existing.id, remote);
+      conflicts.push(createConflict(item, parsedPage.data, remote));
+      continue;
     }
 
     if (item.operation === "archive" && !existing) {
@@ -521,7 +609,7 @@ export async function POST(request: Request) {
 
   const payload: SyncPushResult = {
     applied,
-    conflicts: [],
+    conflicts,
     notebooks: [...notebooks.values()],
     pages: [...pages.values()],
     pulledAt: new Date().toISOString(),

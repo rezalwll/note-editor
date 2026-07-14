@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   const user = await requireUser();
+  const fetchedAt = new Date();
 
   const { searchParams } = new URL(request.url);
   const since = searchParams.get("since");
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   ]);
 
   const payload: SyncBootstrapPayload = {
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: fetchedAt.toISOString(),
     notebooks: notebooks.map<LocalNotebook>((notebook) => ({
       id: notebook.id,
       userId: user.id,

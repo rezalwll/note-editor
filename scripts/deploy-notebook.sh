@@ -2,6 +2,8 @@
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/notebook}
+APP_USER=${APP_USER:-notebook}
+APP_USER_HOME=${APP_USER_HOME:-/var/lib/notebook}
 STAGING_DIR=${STAGING_DIR:-${APP_DIR}.staging}
 PREVIOUS_DIR=${PREVIOUS_DIR:-${APP_DIR}.previous}
 UPLOADS_DIR=${UPLOADS_DIR:-/var/www/notebook-uploads}
@@ -35,6 +37,12 @@ require_root() {
   if [[ ${EUID} -ne 0 ]]; then
     echo "Run this script as root." >&2
     exit 1
+  fi
+}
+
+ensure_app_user() {
+  if ! id -u "${APP_USER}" >/dev/null 2>&1; then
+    useradd --system --create-home --home-dir "${APP_USER_HOME}" --shell /usr/sbin/nologin "${APP_USER}"
   fi
 }
 
@@ -342,19 +350,45 @@ configure_ssl() {
 }
 
 start_app() {
+  chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}" "${UPLOADS_DIR}" "${APP_USER_HOME}"
+  chmod 600 "${APP_DIR}/.env"
   cd "${APP_DIR}"
-  if pm2 describe notebook >/dev/null 2>&1; then
-    pm2 restart notebook --update-env
+  pm2 delete notebook >/dev/null 2>&1 || true
+  if runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 describe notebook >/dev/null 2>&1; then
+    runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 restart notebook --update-env
   else
-    pm2 start npm --name notebook -- start -- --hostname 127.0.0.1 --port "${PORT}"
+    runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 start npm --name notebook -- start -- --hostname 127.0.0.1 --port "${PORT}"
   fi
-  pm2 save
-  env PATH="$PATH:/usr/bin" pm2 startup systemd -u root --hp /root >/dev/null
+  runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 save
+  env PATH="$PATH:/usr/bin" pm2 startup systemd -u "${APP_USER}" --hp "${APP_USER_HOME}" >/dev/null
+  systemctl enable "pm2-${APP_USER}" >/dev/null 2>&1 || true
+}
+
+verify_release() {
+  local attempt
+
+  for attempt in $(seq 1 20); do
+    if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/tmp/notebook-healthcheck.txt 2>/dev/null; then
+      return
+    fi
+    sleep 2
+  done
+
+  echo "Release health check failed; rolling back." >&2
+  runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 delete notebook >/dev/null 2>&1 || true
+  rm -rf "${APP_DIR}.failed"
+  mv "${APP_DIR}" "${APP_DIR}.failed"
+
+  if [[ -d "${PREVIOUS_DIR}" ]]; then
+    mv "${PREVIOUS_DIR}" "${APP_DIR}"
+    start_app
+  fi
+
+  exit 1
 }
 
 print_summary() {
   local server_ip
-  local attempt
 
   server_ip=$(hostname -I | awk '{print $1}')
 
@@ -363,22 +397,14 @@ print_summary() {
   echo "App upstream is running on: http://127.0.0.1:${PORT}"
   echo "Public IP expected by you: http://185.18.214.137"
   echo
-  pm2 status
+  runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 status
   echo
 
-  for attempt in $(seq 1 15); do
-    if curl -fsSI "http://127.0.0.1:${PORT}" >/tmp/notebook-healthcheck.txt 2>/dev/null; then
-      cat /tmp/notebook-healthcheck.txt
-      return
-    fi
-
-    sleep 2
-  done
-
-  echo "Warning: app did not answer on http://127.0.0.1:${PORT} before the health-check timeout." >&2
+  cat /tmp/notebook-healthcheck.txt
 }
 
 require_root
+ensure_app_user
 exec 9>"${DEPLOY_LOCK_FILE}"
 
 if ! flock -n 9; then
@@ -395,5 +421,6 @@ build_app
 configure_nginx
 activate_release
 start_app
+verify_release
 configure_ssl
 print_summary

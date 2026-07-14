@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { NextResponse } from "next/server";
+import { Readable } from "node:stream";
 
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -107,13 +108,13 @@ export async function GET() {
     zip.file(`attachments/${attachment.id}`, bytes);
   }
 
-  const archive = await zip.generateAsync({
-    type: "nodebuffer",
+  const archive = Readable.toWeb(zip.generateNodeStream({
     compression: "DEFLATE",
     compressionOptions: { level: 6 },
-  });
+    streamFiles: true,
+  }) as Readable) as ReadableStream<Uint8Array>;
 
-  return new NextResponse(new Uint8Array(archive), {
+  return new NextResponse(archive, {
     headers: {
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${getWorkspaceArchiveFileName(

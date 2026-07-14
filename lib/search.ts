@@ -151,6 +151,7 @@ export async function searchWorkspace(
           { tags: { some: { value: { contains: query, mode: "insensitive" } } } },
         ],
       },
+      orderBy: { updatedAt: "desc" },
       select: {
         id: true,
         title: true,
@@ -174,6 +175,7 @@ export async function searchWorkspace(
         name: { contains: query, mode: "insensitive" },
         group: NON_TRASH_GROUP_FILTER,
       },
+      orderBy: { updatedAt: "desc" },
       select: {
         id: true,
         name: true,
@@ -192,6 +194,7 @@ export async function searchWorkspace(
         ...NON_TRASH_GROUP_FILTER,
         name: { contains: query, mode: "insensitive" },
       },
+      orderBy: { updatedAt: "desc" },
       select: {
         id: true,
         name: true,
@@ -236,6 +239,7 @@ export async function searchWorkspace(
           },
         },
       },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         fileName: true,

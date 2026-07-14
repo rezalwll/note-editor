@@ -2,9 +2,13 @@ import JSZip from "jszip";
 import { z } from "zod";
 
 import { isValidStorageKey } from "@/lib/storage-key";
+import { detectUploadMimeType } from "@/lib/upload-validation";
 
 export const WORKSPACE_ARCHIVE_APP = "notebook";
 export const WORKSPACE_ARCHIVE_FORMAT_VERSION = 1;
+export const MAX_WORKSPACE_ARCHIVE_BYTES = 25 * 1024 * 1024;
+export const MAX_WORKSPACE_EXTRACTED_BYTES = 100 * 1024 * 1024;
+export const MAX_WORKSPACE_ITEMS = 10_000;
 
 const manifestSchema = z.object({
   formatVersion: z.number().int(),
@@ -75,6 +79,10 @@ export function getWorkspaceArchiveFileName(username: string, exportedAt: string
 }
 
 export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
+  if (bytes.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
+    throw new Error("حجم فایل آرشیو بیشتر از حد مجاز است.");
+  }
+
   let zip: JSZip;
 
   try {
@@ -99,6 +107,20 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
 
   if (!manifest.success || !workspace.success) {
     throw new Error("ساختار آرشیو نامعتبر است.");
+  }
+
+  const itemCount =
+    workspace.data.groups.length +
+    workspace.data.notebooks.length +
+    workspace.data.pages.length +
+    workspace.data.attachments.length;
+  const extractedBytes = workspace.data.attachments.reduce(
+    (total, attachment) => total + attachment.sizeBytes,
+    0,
+  );
+
+  if (itemCount > MAX_WORKSPACE_ITEMS || extractedBytes > MAX_WORKSPACE_EXTRACTED_BYTES) {
+    throw new Error("اندازه محتوای استخراج‌شده آرشیو بیشتر از حد مجاز است.");
   }
 
   if (manifest.data.app !== WORKSPACE_ARCHIVE_APP) {
@@ -141,6 +163,11 @@ export async function parseWorkspaceArchive(bytes: ArrayBuffer | Uint8Array) {
 
     if (bytes.byteLength !== attachment.sizeBytes) {
       throw new Error(`حجم فایل «${attachment.fileName}» با مقدار ثبت‌شده هم‌خوانی ندارد.`);
+    }
+
+    const detectedMimeType = detectUploadMimeType(bytes.slice(0, 16));
+    if (!detectedMimeType || detectedMimeType !== attachment.mimeType) {
+      throw new Error(`نوع واقعی فایل «${attachment.fileName}» معتبر نیست.`);
     }
 
     attachmentFiles.set(attachment.id, bytes);

@@ -3,6 +3,8 @@ node_modules
 .vercel
 dist
 coverage
+playwright-report
+test-results
 generated/prisma
 uploads
 .env
@@ -12,8 +14,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-.local/postgres-win/
-.local/postgres-win.win1252-backup-*/
+.local/
+.codex-temp/
+*.tsbuildinfo
+*.tgz
 dev-3000.log
 dev-3000.err.log
 dev-3001.log

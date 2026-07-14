@@ -1,4 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { env } from "@/lib/env";
@@ -27,12 +28,12 @@ async function ensureUploadRoot() {
   return uploadRoot;
 }
 
-export async function storeUpload(file: File) {
+export async function storeUpload(file: File, canonicalExtension?: string) {
   const uploadRoot = await ensureUploadRoot();
 
-  const extension = path.extname(file.name);
+  const extension = canonicalExtension ?? path.extname(file.name);
   const baseName = path.basename(file.name, extension);
-  const storageKey = `${Date.now()}-${slugifyFileName(baseName)}${extension}`;
+  const storageKey = `${randomUUID()}-${slugifyFileName(baseName)}${extension}`;
   const outputPath = path.join(uploadRoot, storageKey);
   const arrayBuffer = await file.arrayBuffer();
 

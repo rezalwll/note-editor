@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth";
+import {
+  extractFreeformPlainText,
+  extractPlainText,
+  parseFreeformDocument,
+  sanitizeNoteHtml,
+} from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
 import { writeUploadBuffer } from "@/lib/storage";
-import { parseWorkspaceArchive } from "@/lib/workspace-transfer";
+import {
+  MAX_WORKSPACE_ARCHIVE_BYTES,
+  parseWorkspaceArchive,
+} from "@/lib/workspace-transfer";
 
 export async function POST(request: Request) {
   const user = await requireUser();
@@ -14,6 +23,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "یک آرشیو برای درون‌ریزی انتخاب کنید." },
       { status: 400 },
+    );
+  }
+
+  if (archive.size > MAX_WORKSPACE_ARCHIVE_BYTES) {
+    return NextResponse.json(
+      { error: "حجم فایل آرشیو بیشتر از حد مجاز است." },
+      { status: 413 },
     );
   }
 
@@ -114,6 +130,13 @@ export async function POST(request: Request) {
       }
 
       for (const page of workspace.pages) {
+        const freeformDocument = parseFreeformDocument(page.bodyHtml);
+        const safeBodyHtml = freeformDocument
+          ? page.bodyHtml
+          : sanitizeNoteHtml(page.bodyHtml);
+        const safeBodyText = freeformDocument
+          ? extractFreeformPlainText(freeformDocument)
+          : extractPlainText(safeBodyHtml);
         const existing = await tx.page.findUnique({
           where: { id: page.id },
           select: { id: true, userId: true },
@@ -129,8 +152,8 @@ export async function POST(request: Request) {
             data: {
               notebookId: page.notebookId,
               title: page.title,
-              bodyHtml: page.bodyHtml,
-              bodyText: page.bodyText,
+              bodyHtml: safeBodyHtml,
+              bodyText: safeBodyText,
               archived: page.archived,
               createdAt: new Date(page.createdAt),
               updatedAt: new Date(page.updatedAt),
@@ -143,8 +166,8 @@ export async function POST(request: Request) {
               userId: user.id,
               notebookId: page.notebookId,
               title: page.title,
-              bodyHtml: page.bodyHtml,
-              bodyText: page.bodyText,
+              bodyHtml: safeBodyHtml,
+              bodyText: safeBodyText,
               archived: page.archived,
               createdAt: new Date(page.createdAt),
               updatedAt: new Date(page.updatedAt),
@@ -203,17 +226,17 @@ export async function POST(request: Request) {
           });
         }
       }
-    });
 
-    for (const attachment of workspace.attachments) {
-      const bytes = attachmentFiles.get(attachment.id);
+      for (const attachment of workspace.attachments) {
+        const bytes = attachmentFiles.get(attachment.id);
 
-      if (!bytes) {
-        throw new Error(`داده‌ی فایل «${attachment.fileName}» پیدا نشد.`);
+        if (!bytes) {
+          throw new Error(`داده‌ی فایل «${attachment.fileName}» پیدا نشد.`);
+        }
+
+        await writeUploadBuffer(attachment.storageKey, bytes);
       }
-
-      await writeUploadBuffer(attachment.storageKey, bytes);
-    }
+    }, { maxWait: 5_000, timeout: 120_000 });
   } catch (error) {
     return NextResponse.json(
       {
