@@ -843,6 +843,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 event.preventDefault();
                 handleGroupDrop(group.id);
               }}
+              onClick={() => {
+                if (!isEditing) {
+                  setManualGroupKey(group.id);
+                }
+              }}
               onContextMenu={(event) => {
                 if (isEditing) {
                   return;
@@ -943,7 +948,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setManualGroupKey(group.id)}
                   className={cn(
                     "inline-flex items-center gap-2",
                   )}
