@@ -1,6 +1,7 @@
 "use client";
 
 import { type Editor, Mark, mergeAttributes } from "@tiptap/core";
+import Highlight from "@tiptap/extension-highlight";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -56,6 +57,7 @@ export type RichTextBlockHandle = {
   getSelectedText: () => string;
   replaceSelection: (text: string) => void;
   setTextColor: (color: string) => void;
+  setHighlightColor: (color: string) => void;
   setFontSize: (fontSize: number) => void;
 };
 
@@ -75,6 +77,7 @@ type RichTextBlockEditorProps = {
   onUpdate: (text: string, html: string) => void;
   onSelectionStyleChange: (style: {
     textColor: string;
+    highlightColor: string;
     fontSize: number;
   }) => void;
   onContextMenu: (event: React.MouseEvent<HTMLDivElement>, selectedText: string) => void;
@@ -107,9 +110,12 @@ export const RichTextBlockEditor = forwardRef<
   const latestHtmlRef = useRef(html);
   const reportSelectionStyle = (currentEditor: Editor) => {
     const color = currentEditor.getAttributes("textColor").color;
+    const highlightColor = currentEditor.getAttributes("highlight").color;
     const fontSize = currentEditor.getAttributes("fontSize").fontSize;
     onSelectionStyleChange({
       textColor: typeof color === "string" ? color : defaultColor,
+      highlightColor:
+        typeof highlightColor === "string" ? highlightColor : "transparent",
       fontSize:
         typeof fontSize === "string"
           ? Number.parseInt(fontSize, 10) || defaultFontSize
@@ -118,7 +124,12 @@ export const RichTextBlockEditor = forwardRef<
   };
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit, TextColor, FontSize],
+    extensions: [
+      StarterKit,
+      TextColor,
+      FontSize,
+      Highlight.configure({ multicolor: true }),
+    ],
     content: html,
     editorProps: {
       attributes: {
@@ -189,6 +200,15 @@ export const RichTextBlockEditor = forwardRef<
           .focus(undefined, { scrollIntoView: false })
           .setMark("textColor", { color })
           .run();
+      },
+      setHighlightColor: (color) => {
+        const chain = editor?.chain().focus(undefined, { scrollIntoView: false });
+
+        if (color === "transparent") {
+          chain?.unsetHighlight().run();
+        } else {
+          chain?.setHighlight({ color }).run();
+        }
       },
       setFontSize: (fontSize) => {
         editor

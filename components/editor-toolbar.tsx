@@ -6,6 +6,7 @@ import {
   AlignRight,
   ChevronDown,
   Bold,
+  Highlighter,
   Italic,
   ImagePlus,
   List,
@@ -27,8 +28,129 @@ const defaultState: ToolbarState = {
   bold: false,
   italic: false,
   textColor: "#222222",
+  highlightColor: "transparent",
   fontSize: 15,
 };
+
+const THEME_COLOR_ROWS = [
+  ["#ffffff", "#000000", "#e7e6e6", "#44546a", "#4472c4", "#ed7d31", "#a5a5a5", "#ffc000", "#5b9bd5", "#70ad47"],
+  ["#f2f2f2", "#7f7f7f", "#d0cece", "#d6dce4", "#d9e2f3", "#fce4d6", "#ededed", "#fff2cc", "#ddebf7", "#e2f0d9"],
+  ["#d9d9d9", "#595959", "#aeaaaa", "#adb9ca", "#b4c6e7", "#f8cbad", "#d9d9d9", "#ffe699", "#bdd7ee", "#c6e0b4"],
+  ["#bfbfbf", "#3f3f3f", "#767171", "#8497b0", "#8eaadb", "#f4b183", "#bfbfbf", "#ffd966", "#9dc3e6", "#a9d18e"],
+  ["#a6a6a6", "#262626", "#3b3838", "#323f4f", "#2f5597", "#c65911", "#7f7f7f", "#bf9000", "#2e75b6", "#548235"],
+  ["#7f7f7f", "#0d0d0d", "#171717", "#222a35", "#203864", "#833c0c", "#525252", "#806000", "#1f4e79", "#375623"],
+] as const;
+
+const STANDARD_COLORS = [
+  "#c00000",
+  "#ff0000",
+  "#ffc000",
+  "#ffff00",
+  "#92d050",
+  "#00b050",
+  "#00b0f0",
+  "#0070c0",
+  "#002060",
+  "#7030a0",
+] as const;
+
+type ColorMenuKind = "text" | "highlight";
+
+function ColorSwatch({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="h-5 w-5 rounded-sm border border-black/15"
+      style={{
+        background:
+          color === "transparent"
+            ? "linear-gradient(135deg, #ffffff 43%, #dc2626 45%, #dc2626 55%, #ffffff 57%)"
+            : color,
+      }}
+    />
+  );
+}
+
+function ColorPalette({
+  kind,
+  currentColor,
+  onSelect,
+}: {
+  kind: ColorMenuKind;
+  currentColor: string;
+  onSelect: (color: string) => void;
+}) {
+  const defaultColor = kind === "text" ? "#000000" : "transparent";
+
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitemradio"
+        aria-checked={currentColor === defaultColor}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => onSelect(defaultColor)}
+        className="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right text-xs text-[#303858] hover:bg-[#f2f4ff]"
+      >
+        <ColorSwatch color={defaultColor} />
+        <span>{kind === "text" ? "خودکار" : "بدون هایلایت"}</span>
+      </button>
+
+      <div className="mb-1 px-1 text-[11px] font-semibold text-[#3f455f]">
+        رنگ‌های قالب
+      </div>
+      <div className="grid grid-cols-10 gap-1 px-1 pb-3">
+        {THEME_COLOR_ROWS.flat().map((color, index) => (
+          <button
+            key={`${color}-${index}`}
+            type="button"
+            role="menuitemradio"
+            aria-label={`رنگ ${color}`}
+            aria-checked={currentColor.toLowerCase() === color}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onSelect(color)}
+            className="h-[22px] w-[22px] rounded-sm border border-black/10 transition hover:scale-110 hover:ring-2 hover:ring-[#818cf8]"
+            style={{ backgroundColor: color }}
+          />
+        ))}
+      </div>
+
+      <div className="border-t border-[#e3e5ef] pt-2">
+        <div className="mb-1 px-1 text-[11px] font-semibold text-[#3f455f]">
+          رنگ‌های استاندارد
+        </div>
+        <div className="grid grid-cols-10 gap-1 px-1 pb-2">
+          {STANDARD_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              role="menuitemradio"
+              aria-label={`رنگ ${color}`}
+              aria-checked={currentColor.toLowerCase() === color}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect(color)}
+              className="h-[22px] w-[22px] rounded-sm border border-black/10 transition hover:scale-110 hover:ring-2 hover:ring-[#818cf8]"
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <label className="relative mt-1 flex items-center gap-2 rounded-lg border-t border-[#e3e5ef] px-2 pt-2 text-xs text-[#303858] hover:bg-[#f2f4ff]">
+        <span className="h-5 w-5 rounded-full bg-[conic-gradient(#ef4444,#f59e0b,#eab308,#22c55e,#0ea5e9,#6366f1,#a855f7,#ef4444)]" />
+        <span>رنگ‌های بیشتر...</span>
+        <input
+          type="color"
+          aria-label="رنگ‌های بیشتر"
+          value={currentColor === "transparent" ? "#fff2a8" : currentColor}
+          onMouseDown={(event) => event.preventDefault()}
+          onChange={(event) => onSelect(event.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </label>
+    </>
+  );
+}
 
 function ToolbarButton({
   children,
@@ -70,12 +192,20 @@ function ToolbarButton({
 export function EditorToolbar() {
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultState);
   const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
+  const [colorMenuKind, setColorMenuKind] = useState<ColorMenuKind | null>(null);
+  const [colorMenuPosition, setColorMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const [fontSizeMenuPosition, setFontSizeMenuPosition] = useState<{
     top: number;
     left: number;
   } | null>(null);
   const fontSizeButtonRef = useRef<HTMLButtonElement | null>(null);
   const fontSizeMenuRef = useRef<HTMLDivElement | null>(null);
+  const textColorButtonRef = useRef<HTMLButtonElement | null>(null);
+  const highlightButtonRef = useRef<HTMLButtonElement | null>(null);
+  const colorMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const listener = (event: Event) => {
@@ -89,11 +219,13 @@ export function EditorToolbar() {
         bold: Boolean(customEvent.detail?.bold),
         italic: Boolean(customEvent.detail?.italic),
         textColor: customEvent.detail?.textColor ?? "#222222",
+        highlightColor: customEvent.detail?.highlightColor ?? "transparent",
         fontSize: customEvent.detail?.fontSize ?? 15,
       });
 
       if (!hasActiveBlock) {
         setIsFontSizeMenuOpen(false);
+        setColorMenuKind(null);
       }
     };
 
@@ -141,6 +273,67 @@ export function EditorToolbar() {
       window.removeEventListener("scroll", handleViewportChange, true);
     };
   }, [isFontSizeMenuOpen]);
+
+  useEffect(() => {
+    if (!colorMenuKind) {
+      return;
+    }
+
+    const activeButtonRef =
+      colorMenuKind === "text" ? textColorButtonRef : highlightButtonRef;
+
+    const updateMenuPosition = () => {
+      const rect = activeButtonRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      const menuWidth = 282;
+      setColorMenuPosition({
+        top: rect.bottom + 8,
+        left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      });
+    };
+
+    updateMenuPosition();
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        !colorMenuRef.current?.contains(target) &&
+        !textColorButtonRef.current?.contains(target) &&
+        !highlightButtonRef.current?.contains(target)
+      ) {
+        setColorMenuKind(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [colorMenuKind]);
+
+  const toggleColorMenu = (kind: ColorMenuKind) => {
+    setIsFontSizeMenuOpen(false);
+    setColorMenuPosition(null);
+    setColorMenuKind((current) => (current === kind ? null : kind));
+  };
+
+  const selectPaletteColor = (color: string) => {
+    if (colorMenuKind === "text") {
+      dispatchEditorCommand("set-text-color", { textColor: color });
+    } else if (colorMenuKind === "highlight") {
+      dispatchEditorCommand("set-highlight-color", { highlightColor: color });
+    }
+
+    setColorMenuKind(null);
+    setColorMenuPosition(null);
+  };
 
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
@@ -252,42 +445,87 @@ export function EditorToolbar() {
       </ToolbarButton>
 
       <div className="mx-1 h-7 w-px bg-white/55" />
-      <label className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+      <button
+        ref={textColorButtonRef}
+        type="button"
+        aria-label="رنگ متن"
+        aria-expanded={colorMenuKind === "text"}
+        aria-haspopup="menu"
+        disabled={!toolbarState.hasActiveBlock}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => toggleColorMenu("text")}
+        className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)] outline-none disabled:cursor-not-allowed"
+      >
         <span>رنگ</span>
-        <input
-          type="color"
-          value={toolbarState.textColor}
-          disabled={!toolbarState.hasActiveBlock}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          onChange={(event) =>
-            dispatchEditorCommand("set-text-color", {
-              textColor: event.target.value,
-            })
-          }
-          className="h-6 w-6 cursor-pointer rounded border-none bg-transparent p-0"
-        />
-      </label>
-      <div className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)]">
+        <ColorSwatch color={toolbarState.textColor} />
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      <button
+        ref={highlightButtonRef}
+        type="button"
+        aria-label="highlight-color"
+        aria-expanded={colorMenuKind === "highlight"}
+        aria-haspopup="menu"
+        disabled={!toolbarState.hasActiveBlock}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => toggleColorMenu("highlight")}
+        className="flex items-center gap-1.5 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)] outline-none disabled:cursor-not-allowed"
+      >
+        <Highlighter className="h-4 w-4" />
+        <ColorSwatch color={toolbarState.highlightColor} />
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      <button
+        ref={fontSizeButtonRef}
+        type="button"
+        aria-label="font-size"
+        aria-expanded={isFontSizeMenuOpen}
+        aria-haspopup="menu"
+        disabled={!toolbarState.hasActiveBlock}
+        onMouseDown={(event) => {
+          event.preventDefault();
+        }}
+        onClick={() => {
+          setColorMenuKind(null);
+          setIsFontSizeMenuOpen((current) => !current);
+        }}
+        className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/82 px-2 py-1 text-xs text-[#3f4b7b] shadow-[0_8px_20px_rgba(116,125,255,0.14)] outline-none disabled:cursor-not-allowed"
+      >
         <span>سایز</span>
-        <button
-          ref={fontSizeButtonRef}
-          type="button"
-          aria-label="font-size"
-          aria-expanded={isFontSizeMenuOpen}
-          aria-haspopup="menu"
-          disabled={!toolbarState.hasActiveBlock}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          onClick={() => setIsFontSizeMenuOpen((current) => !current)}
-          className="inline-flex items-center gap-1 rounded-md bg-transparent text-xs outline-none"
-        >
+        <span className="inline-flex items-center gap-1">
           <span>{toolbarState.fontSize}</span>
           <ChevronDown className="h-3.5 w-3.5" />
-        </button>
-      </div>
+        </span>
+      </button>
+      {colorMenuKind && colorMenuPosition
+        ? createPortal(
+            <div
+              ref={colorMenuRef}
+              role="menu"
+              aria-label={
+                colorMenuKind === "text" ? "رنگ متن" : "رنگ هایلایت"
+              }
+              style={{
+                position: "fixed",
+                top: colorMenuPosition.top,
+                left: colorMenuPosition.left,
+                zIndex: 2000,
+              }}
+              className="w-[282px] rounded-xl border border-[#d7dae7] bg-white p-2 text-right shadow-[0_18px_44px_rgba(15,23,42,0.2)]"
+            >
+              <ColorPalette
+                kind={colorMenuKind}
+                currentColor={
+                  colorMenuKind === "text"
+                    ? toolbarState.textColor
+                    : toolbarState.highlightColor
+                }
+                onSelect={selectPaletteColor}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
       {isFontSizeMenuOpen && fontSizeMenuPosition
         ? createPortal(
             <div

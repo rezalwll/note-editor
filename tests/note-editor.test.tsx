@@ -618,7 +618,7 @@ describe("NoteEditor freeform placement", () => {
 
   it("applies text color and font size changes from the toolbar controls", async () => {
     const user = userEvent.setup();
-    const { container, getByDisplayValue } = renderEditor(
+    const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
         blocks: [{ id: "styled-toolbar", x: 48, y: 72, width: 240, text: "style me" }],
@@ -630,16 +630,23 @@ describe("NoteEditor freeform placement", () => {
     fireEvent.focus(textarea);
 
     await waitFor(() => {
-      expect(getByDisplayValue("#222222")).not.toBeNull();
+      expect(screen.getByRole("button", { name: "رنگ متن" })).toBeEnabled();
     });
 
-    const colorInput = getByDisplayValue("#222222");
+    const colorButton = screen.getByRole("button", { name: "رنگ متن" });
     const fontSizeButton = container.querySelector(
       'button[aria-label="font-size"]',
     ) as HTMLButtonElement;
 
-    fireEvent.mouseDown(colorInput);
-    fireEvent.change(colorInput, {
+    expect(colorButton).toHaveClass("px-2", "py-1");
+    expect(colorButton.querySelector("button")).toBeNull();
+    expect(fontSizeButton).toHaveClass("px-2", "py-1");
+    expect(fontSizeButton.querySelector("button")).toBeNull();
+
+    await user.click(colorButton);
+    expect(screen.getByText("رنگ‌های قالب")).toBeVisible();
+    expect(screen.getByText("رنگ‌های استاندارد")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("رنگ‌های بیشتر"), {
       target: { value: "#ff3366" },
     });
     await user.click(fontSizeButton);
@@ -655,7 +662,7 @@ describe("NoteEditor freeform placement", () => {
 
   it("applies text color and font size only to the selected text", async () => {
     const user = userEvent.setup();
-    const { container, getByDisplayValue } = renderEditor(
+    const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
         blocks: [
@@ -669,16 +676,23 @@ describe("NoteEditor freeform placement", () => {
     fireEvent.focus(textarea);
     textarea.setSelectionRange(0, 5);
     fireEvent.select(textarea);
-    fireEvent.change(getByDisplayValue("#222222"), {
-      target: { value: "#ff3366" },
-    });
+    await user.click(screen.getByRole("button", { name: "highlight-color" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "رنگ #ffff00" }));
 
     const richTextEditor = await waitFor(() => {
       const element = container.querySelector(
         '[data-rich-text-editor="true"]',
       ) as HTMLElement | null;
       expect(element).not.toBeNull();
+      expect(
+        element?.querySelector('mark[style*="background-color"]'),
+      ).toHaveTextContent("style");
       return element as HTMLElement;
+    });
+
+    await user.click(screen.getByRole("button", { name: "رنگ متن" }));
+    fireEvent.change(screen.getByLabelText("رنگ‌های بیشتر"), {
+      target: { value: "#ff3366" },
     });
 
     const fontSizeButton = container.querySelector(
@@ -694,12 +708,17 @@ describe("NoteEditor freeform placement", () => {
       const fontSizeSpan = richTextEditor.querySelector(
         'span[style*="font-size"]',
       ) as HTMLElement | null;
+      const highlightSpan = richTextEditor.querySelector(
+        'mark[style*="background-color"]',
+      ) as HTMLElement | null;
 
       expect(richTextEditor).toHaveTextContent("style me");
       expect(colorSpan).toHaveTextContent("style");
       expect(colorSpan).toHaveStyle({ color: "rgb(255, 51, 102)" });
       expect(fontSizeSpan).toHaveTextContent("style");
       expect(fontSizeSpan).toHaveStyle({ fontSize: "24px" });
+      expect(highlightSpan).toHaveTextContent("style");
+      expect(highlightSpan).toHaveStyle({ backgroundColor: "rgb(255, 255, 0)" });
     });
   });
 

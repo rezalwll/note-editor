@@ -13,6 +13,7 @@ export type EditorCommand =
   | "insert-image"
   | "delete-block"
   | "set-text-color"
+  | "set-highlight-color"
   | "set-font-size";
 
 export type ToolbarState = {
@@ -23,12 +24,13 @@ export type ToolbarState = {
   bold: boolean;
   italic: boolean;
   textColor: string;
+  highlightColor: string;
   fontSize: number;
 };
 
 export function dispatchEditorCommand(
   command: EditorCommand,
-  payload?: { textColor?: string; fontSize?: number },
+  payload?: { textColor?: string; highlightColor?: string; fontSize?: number },
 ) {
   window.dispatchEvent(
     new CustomEvent("note-editor-command", {

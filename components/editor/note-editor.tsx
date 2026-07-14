@@ -245,7 +245,7 @@ function createRichTextSelectionHtml(
   text: string,
   start: number,
   end: number,
-  style: { textColor?: string; fontSize?: number },
+  style: { textColor?: string; highlightColor?: string; fontSize?: number },
 ) {
   const styleValue = [
     style.textColor ? `color: ${style.textColor}` : "",
@@ -254,9 +254,13 @@ function createRichTextSelectionHtml(
     .filter(Boolean)
     .join("; ");
 
-  return `<p>${textToHtml(text.slice(0, start))}<span style="${styleValue}">${textToHtml(
-    text.slice(start, end),
-  )}</span>${textToHtml(text.slice(end))}</p>`;
+  const selectedText = textToHtml(text.slice(start, end));
+  const styledSelection =
+    style.highlightColor && style.highlightColor !== "transparent"
+      ? `<mark data-color="${style.highlightColor}" style="background-color: ${style.highlightColor}">${selectedText}</mark>`
+      : selectedText;
+
+  return `<p>${textToHtml(text.slice(0, start))}<span style="${styleValue}">${styledSelection}</span>${textToHtml(text.slice(end))}</p>`;
 }
 
 function getPersistableBlocks(blocks: FreeformBlock[]) {
@@ -381,6 +385,7 @@ export function NoteEditor({
   const [activeRichTextStyle, setActiveRichTextStyle] = useState<{
     blockId: string;
     textColor: string;
+    highlightColor: string;
     fontSize: number;
   } | null>(null);
   const [isDesktopViewport, setIsDesktopViewport] = useState(true);
@@ -1858,12 +1863,15 @@ export function NoteEditor({
 
   function applyInlineTextStyle(
     blockId: string,
-    style: { textColor?: string; fontSize?: number },
+    style: { textColor?: string; highlightColor?: string; fontSize?: number },
   ) {
     const richTextHandle = richTextBlockRefs.current[blockId];
     if (richTextHandle) {
       if (style.textColor) {
         richTextHandle.setTextColor(style.textColor);
+      }
+      if (style.highlightColor) {
+        richTextHandle.setHighlightColor(style.highlightColor);
       }
       if (style.fontSize) {
         richTextHandle.setFontSize(style.fontSize);
@@ -1896,6 +1904,7 @@ export function NoteEditor({
     command: EditorCommand,
     payload?: {
       textColor?: string;
+      highlightColor?: string;
       fontSize?: number;
       targetBlockIds?: string[];
       primaryBlockId?: string | null;
@@ -1993,6 +2002,22 @@ export function NoteEditor({
           textColor: payload?.textColor ?? "#222222",
         }));
         return;
+      case "set-highlight-color":
+        if (
+          primaryBlockId &&
+          applyInlineTextStyle(primaryBlockId, {
+            highlightColor: payload?.highlightColor ?? "#fff2a8",
+          })
+        ) {
+          return;
+        }
+        updateBlocksByIds(targetIds, (block) => ({
+          ...block,
+          richText: createRichTextSelectionHtml(block.text, 0, block.text.length, {
+            highlightColor: payload?.highlightColor ?? "#fff2a8",
+          }),
+        }));
+        return;
       case "set-font-size":
         if (
           primaryBlockId &&
@@ -2018,6 +2043,7 @@ export function NoteEditor({
       command: EditorCommand,
       payload?: {
         textColor?: string;
+        highlightColor?: string;
         fontSize?: number;
         targetBlockIds?: string[];
         primaryBlockId?: string | null;
@@ -2032,10 +2058,12 @@ export function NoteEditor({
       const customEvent = event as CustomEvent<{
         command: EditorCommand;
         textColor?: string;
+        highlightColor?: string;
         fontSize?: number;
       }>;
       handleEditorCommandEvent(customEvent.detail.command, {
         textColor: customEvent.detail.textColor,
+        highlightColor: customEvent.detail.highlightColor,
         fontSize: customEvent.detail.fontSize,
       });
     };
@@ -2059,6 +2087,10 @@ export function NoteEditor({
               activeRichTextStyle?.blockId === activeBlock?.id
                 ? activeRichTextStyle?.textColor ?? "#222222"
                 : activeBlock?.textColor ?? "#222222",
+            highlightColor:
+              activeRichTextStyle?.blockId === activeBlock?.id
+                ? activeRichTextStyle?.highlightColor ?? "transparent"
+                : "transparent",
             fontSize:
               activeRichTextStyle?.blockId === activeBlock?.id
                 ? activeRichTextStyle?.fontSize ?? 15
