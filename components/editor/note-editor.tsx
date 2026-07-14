@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowLeftRight, GripVertical, LoaderCircle, Trash2 } from "lucide-react";
+import { GripVertical, LoaderCircle, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -2666,18 +2666,6 @@ export function NoteEditor({
                     aria-label="جابجایی بلوک"
                   >
                     <GripVertical className="h-3.5 w-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid={`resize-block-${block.id}`}
-                    onPointerDown={(event) =>
-                      startResizingBlock(event, block, "left")
-                    }
-                    className="absolute -bottom-3 -left-3 z-10 inline-flex h-6 w-6 touch-none cursor-ew-resize items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#5f7688] opacity-0 shadow-sm transition hover:bg-[#f7fbff] hover:text-[#233746] group-hover:opacity-100 group-focus-within:opacity-100"
-                    aria-label="تغییر عرض بلوک"
-                  >
-                    <ArrowLeftRight className="h-3.5 w-3.5" />
                   </button>
 
                   {block.richText ? (

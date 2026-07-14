@@ -1236,15 +1236,10 @@ describe("NoteEditor freeform placement", () => {
       expect(element).not.toBeNull();
       return element as HTMLDivElement;
     });
-    const resizeButton = container.querySelector(
-      '[data-testid="resize-block-resizable"]',
-    ) as HTMLButtonElement;
-    expect(resizeButton).toHaveClass("-left-3");
-    expect(resizeButton).not.toHaveClass("-right-3");
-
     const resizeEdge = container.querySelector(
       '[data-testid="resize-edge-block-resizable"]',
     ) as HTMLDivElement;
+    expect(container.querySelector('[data-testid^="resize-block-"]')).toBeNull();
 
     fireEvent.pointerDown(resizeEdge, {
       button: 0,
@@ -1304,11 +1299,11 @@ describe("NoteEditor freeform placement", () => {
       expect(element).not.toBeNull();
       return element as HTMLDivElement;
     });
-    const resizeButton = container.querySelector(
-      '[data-testid="resize-block-min-width"]',
-    ) as HTMLButtonElement;
+    const resizeEdge = container.querySelector(
+      '[data-testid="resize-edge-block-min-width"]',
+    ) as HTMLDivElement;
 
-    fireEvent.pointerDown(resizeButton, {
+    fireEvent.pointerDown(resizeEdge, {
       button: 0,
       clientX: 240,
       pointerId: 22,
