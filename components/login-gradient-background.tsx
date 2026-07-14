@@ -26,7 +26,7 @@ const FRAGMENT_SHADER = `
 
   void main() {
     vec2 point = v_uv;
-    float time = u_time * 0.11;
+    float time = u_time * 0.35;
 
     point.x += sin(point.y * 5.2 - time * 0.8) * 0.035;
     point.y += sin(point.x * 4.4 + time) * 0.045;
@@ -45,20 +45,20 @@ const FRAGMENT_SHADER = `
     vec3 color = mix(light, dark, smoothstep(0.08, 0.96, point.y));
 
     vec2 purpleCenter = vec2(
-      0.10 + sin(time * 0.34) * 0.08,
-      0.48 + cos(time * 0.29) * 0.06
+      0.10 + sin(time * 0.68) * 0.08,
+      0.48 + cos(time * 0.58) * 0.06
     );
     vec2 violetCenter = vec2(
-      0.83 + cos(time * 0.27) * 0.07,
-      0.61 + sin(time * 0.31) * 0.07
+      0.83 + cos(time * 0.54) * 0.07,
+      0.61 + sin(time * 0.62) * 0.07
     );
     vec2 pinkCenter = vec2(
-      0.60 + sin(time * 0.24) * 0.10,
-      0.22 + cos(time * 0.22) * 0.05
+      0.60 + sin(time * 0.48) * 0.10,
+      0.22 + cos(time * 0.44) * 0.05
     );
     vec2 magentaCenter = vec2(
-      0.40 + cos(time * 0.20) * 0.08,
-      0.46 + sin(time * 0.26) * 0.08
+      0.40 + cos(time * 0.40) * 0.08,
+      0.46 + sin(time * 0.52) * 0.08
     );
 
     color = mix(color, purple, glow(point, purpleCenter, 2.2) * 0.82);
