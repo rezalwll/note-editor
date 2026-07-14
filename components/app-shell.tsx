@@ -8,6 +8,7 @@ import { PagesSidebar } from "@/components/pages-sidebar";
 import { SearchTrigger } from "@/components/search-trigger";
 import { SectionTabs } from "@/components/section-tabs";
 import { ShellContentLayout } from "@/components/shell-content-layout";
+import { WorkspaceHistoryProvider } from "@/components/workspace-history-provider";
 import { getSidebarData } from "@/lib/queries";
 import {
   TRASH_GROUP_SYSTEM_KEY,
@@ -69,7 +70,8 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
 
   return (
     <ContextMenuProvider>
-      <div className="min-h-screen h-[100dvh] overflow-hidden bg-[#f6f6f6] text-[#2b2b2b] xl:h-auto xl:overflow-visible">
+      <WorkspaceHistoryProvider>
+       <div className="min-h-screen h-[100dvh] overflow-hidden bg-[#f6f6f6] text-[#2b2b2b] xl:h-auto xl:overflow-visible">
         <MobileShell
           notebooks={shellNotebooks}
           groups={shellGroups}
@@ -120,7 +122,8 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
         <ShellContentLayout sidebar={<PagesSidebar notebooks={shellNotebooks} />}>
           {children}
         </ShellContentLayout>
-      </div>
+       </div>
+      </WorkspaceHistoryProvider>
     </ContextMenuProvider>
   );
 }

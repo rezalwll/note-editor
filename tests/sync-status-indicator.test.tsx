@@ -7,6 +7,14 @@ import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 vi.mock("@/app/actions", () => ({
   logoutAction: vi.fn(),
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+vi.mock("@/lib/offline-db/client", () => ({
+  listConflictRecords: vi.fn().mockResolvedValue([]),
+  resolveConflictWithLocal: vi.fn(),
+  resolveConflictWithRemote: vi.fn(),
+}));
 
 const SYNCED_LABEL = "همه تغییرات با سرور همگام شده‌اند";
 const SYNCING_LABEL = "در حال ذخیره و همگام‌سازی تغییرات...";
@@ -20,7 +28,7 @@ function dispatchSyncEvent(detail: Record<string, unknown>) {
 
 describe("SyncStatusIndicator", () => {
   it("shows the synced state by default", () => {
-    render(<SyncStatusIndicator />);
+    render(<SyncStatusIndicator userId="user-1" />);
 
     const indicator = screen.getByTestId("sync-status-indicator");
 
@@ -30,7 +38,7 @@ describe("SyncStatusIndicator", () => {
   });
 
   it("shows syncing while global sync is running", () => {
-    render(<SyncStatusIndicator />);
+    render(<SyncStatusIndicator userId="user-1" />);
 
     dispatchSyncEvent({ type: "global", phase: "start", syncStatus: "pending" });
 
@@ -41,7 +49,7 @@ describe("SyncStatusIndicator", () => {
   });
 
   it("returns to synced after global sync completes", () => {
-    render(<SyncStatusIndicator />);
+    render(<SyncStatusIndicator userId="user-1" />);
 
     dispatchSyncEvent({ type: "global", phase: "start", syncStatus: "pending" });
     dispatchSyncEvent({ type: "global", phase: "complete", syncStatus: "synced" });
@@ -52,8 +60,8 @@ describe("SyncStatusIndicator", () => {
     expect(indicator).toHaveAttribute("title", SYNCED_LABEL);
   });
 
-  it("shows the error state for failed and conflict events", () => {
-    render(<SyncStatusIndicator />);
+  it("distinguishes failed syncs from conflicts", () => {
+    render(<SyncStatusIndicator userId="user-1" />);
 
     dispatchSyncEvent({ type: "page", syncStatus: "failed" });
 
@@ -64,13 +72,13 @@ describe("SyncStatusIndicator", () => {
 
     dispatchSyncEvent({ type: "page", syncStatus: "conflict" });
 
-    expect(indicator).toHaveAttribute("data-sync-state", "error");
+    expect(indicator).toHaveAttribute("data-sync-state", "conflict");
   });
 
   it("renders next to the desktop profile menu", () => {
     render(
       <DesktopProfileMenu
-        currentUser={{ username: "owner", displayName: "Owner" }}
+        currentUser={{ id: "user-1", username: "owner", displayName: "Owner" }}
         userAccent="#12b886"
         userInitials="O"
       />,

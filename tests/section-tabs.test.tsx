@@ -44,6 +44,9 @@ vi.mock("@/app/actions", () => ({
   emptyTrashInlineAction: mocks.emptyTrash,
   renameNotebookGroupInlineAction: vi.fn(),
   renameNotebookInlineAction: vi.fn(),
+  restoreNotebookGroupInlineAction: vi.fn(),
+  reorderNotebookGroupsInlineAction: vi.fn(),
+  reorderNotebooksInlineAction: vi.fn(),
   updateNotebookGroupThemeInlineAction: vi.fn(),
   updateNotebookThemeInlineAction: vi.fn(),
 }));

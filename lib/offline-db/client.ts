@@ -456,3 +456,172 @@ export async function upsertConflictRecords(userId: string, conflicts: ConflictR
     conflicts.map((conflict) => ({ ...conflict, id: `${userId}:${conflict.id}` })),
   );
 }
+
+export async function listConflictRecords(userId: string) {
+  const conflicts = await offlineDb.conflicts.orderBy("createdAt").reverse().toArray();
+  return conflicts.filter((conflict) => conflict.id.startsWith(`${userId}:`));
+}
+
+function isRemotePagePayload(
+  payload: Record<string, unknown> | undefined,
+): payload is LocalPage {
+  return Boolean(
+    payload &&
+      typeof payload.id === "string" &&
+      typeof payload.userId === "string" &&
+      typeof payload.notebookId === "string" &&
+      typeof payload.title === "string" &&
+      typeof payload.bodyHtml === "string" &&
+      typeof payload.bodyText === "string" &&
+      typeof payload.updatedAt === "string",
+  );
+}
+
+function isRemoteNotebookPayload(
+  payload: Record<string, unknown> | undefined,
+): payload is LocalNotebook {
+  return Boolean(
+    payload &&
+      typeof payload.id === "string" &&
+      typeof payload.userId === "string" &&
+      typeof payload.groupId === "string" &&
+      typeof payload.name === "string" &&
+      typeof payload.updatedAt === "string",
+  );
+}
+
+async function deleteEntityConflictState(conflict: ConflictRecord) {
+  const [conflicts, queue] = await Promise.all([
+    offlineDb.conflicts.where("entityId").equals(conflict.entityId).toArray(),
+    offlineDb.queue
+      .where("entityId")
+      .equals(conflict.entityId)
+      .and((item) => item.entityType === conflict.entityType)
+      .toArray(),
+  ]);
+
+  await Promise.all([
+    ...conflicts.map((item) => offlineDb.conflicts.delete(item.id)),
+    ...queue.map((item) =>
+      item.id ? offlineDb.queue.delete(item.id) : Promise.resolve(),
+    ),
+  ]);
+}
+
+export async function resolveConflictWithRemote(userId: string, conflictId: string) {
+  const conflict = await offlineDb.conflicts.get(conflictId);
+  if (!conflict || !conflict.id.startsWith(`${userId}:`)) {
+    throw new Error("CONFLICT_NOT_FOUND");
+  }
+
+  await offlineDb.transaction(
+    "rw",
+    offlineDb.notebooks,
+    offlineDb.pages,
+    offlineDb.queue,
+    offlineDb.conflicts,
+    async () => {
+      if (conflict.entityType === "page") {
+        if (!isRemotePagePayload(conflict.remotePayload)) {
+          throw new Error("INVALID_REMOTE_CONFLICT_PAYLOAD");
+        }
+        await offlineDb.pages.put({
+          ...conflict.remotePayload,
+          syncStatus: "synced",
+          lastSyncedAt: conflict.remotePayload.updatedAt,
+        });
+      } else {
+        if (!isRemoteNotebookPayload(conflict.remotePayload)) {
+          throw new Error("INVALID_REMOTE_CONFLICT_PAYLOAD");
+        }
+        await offlineDb.notebooks.put({
+          ...conflict.remotePayload,
+          syncStatus: "synced",
+          lastSyncedAt: conflict.remotePayload.updatedAt,
+        });
+      }
+
+      await deleteEntityConflictState(conflict);
+    },
+  );
+
+  dispatchSyncEvent({
+    type: "conflict-resolved",
+    userId,
+    pageId: conflict.entityType === "page" ? conflict.entityId : undefined,
+    entityType: conflict.entityType,
+    entityId: conflict.entityId,
+    syncStatus: "synced",
+  });
+}
+
+export async function resolveConflictWithLocal(userId: string, conflictId: string) {
+  const conflict = await offlineDb.conflicts.get(conflictId);
+  if (!conflict || !conflict.id.startsWith(`${userId}:`)) {
+    throw new Error("CONFLICT_NOT_FOUND");
+  }
+
+  const remoteUpdatedAt =
+    typeof conflict.remotePayload?.updatedAt === "string"
+      ? conflict.remotePayload.updatedAt
+      : null;
+  if (!remoteUpdatedAt) {
+    throw new Error("INVALID_REMOTE_CONFLICT_PAYLOAD");
+  }
+
+  await offlineDb.transaction(
+    "rw",
+    offlineDb.notebooks,
+    offlineDb.pages,
+    offlineDb.queue,
+    offlineDb.conflicts,
+    async () => {
+      const local =
+        conflict.entityType === "page"
+          ? await offlineDb.pages.get(conflict.entityId)
+          : await offlineDb.notebooks.get(conflict.entityId);
+      if (!local || local.userId !== userId) {
+        throw new Error("LOCAL_CONFLICT_ENTITY_NOT_FOUND");
+      }
+
+      await deleteEntityConflictState(conflict);
+      if (conflict.entityType === "page") {
+        const page = { ...(local as LocalPage), syncStatus: "pending" as const };
+        await offlineDb.pages.put(page);
+        await offlineDb.queue.add({
+          entityType: "page",
+          entityId: page.id,
+          operation: "upsert",
+          payload: page,
+          baseUpdatedAt: remoteUpdatedAt,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        });
+      } else {
+        const notebook = {
+          ...(local as LocalNotebook),
+          syncStatus: "pending" as const,
+        };
+        await offlineDb.notebooks.put(notebook);
+        await offlineDb.queue.add({
+          entityType: "notebook",
+          entityId: notebook.id,
+          operation: "upsert",
+          payload: notebook,
+          baseUpdatedAt: remoteUpdatedAt,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        });
+      }
+    },
+  );
+
+  dispatchSyncEvent({
+    type: "conflict-resolved",
+    userId,
+    pageId: conflict.entityType === "page" ? conflict.entityId : undefined,
+    entityType: conflict.entityType,
+    entityId: conflict.entityId,
+    syncStatus: "pending",
+  });
+}

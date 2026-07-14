@@ -185,4 +185,61 @@ describe("GlobalSearchOverlay", () => {
       ),
     ).not.toBeInTheDocument();
   });
+
+  it("virtualizes a payload containing four thousand search results", async () => {
+    const pages = Array.from({ length: 2_000 }, (_, index) => ({
+      type: "page" as const,
+      id: `page-${index}`,
+      title: `Search page ${index}`,
+      subtitle: "Large notebook",
+      href: `/pages/page-${index}`,
+      matchedField: "title" as const,
+    }));
+    const attachments = Array.from({ length: 2_000 }, (_, index) => ({
+      type: "attachment" as const,
+      id: `attachment-${index}`,
+      title: `Search file ${index}`,
+      subtitle: "Large page",
+      href: `/pages/attachment-page-${index}`,
+      matchedField: "fileName" as const,
+    }));
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        query: "search",
+        results: {
+          page: pages,
+          notebook: [],
+          group: [],
+          attachment: attachments,
+        },
+      }),
+    });
+
+    const { container } = render(<GlobalSearchOverlay />);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    fireEvent.change(
+      screen.getByRole("textbox"),
+      { target: { value: "search" } },
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(275);
+      await Promise.resolve();
+    });
+
+    const resultList = container.querySelector(
+      '[data-search-results][data-virtualized="true"]',
+    ) as HTMLDivElement;
+    expect(resultList).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-search-result]").length).toBeLessThan(25);
+
+    fireEvent.scroll(resultList, { target: { scrollTop: 92_000 } });
+
+    expect(screen.getByText("Search page 1000")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-search-result]").length).toBeLessThan(25);
+  });
 });

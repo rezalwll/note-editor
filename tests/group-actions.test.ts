@@ -120,9 +120,18 @@ describe("group actions", () => {
     mocks.transaction.mockImplementation(async (input: unknown) => {
       if (typeof input === "function") {
         return input({
-          notebookGroup: { create: mocks.notebookGroupCreate },
-          notebook: { create: mocks.notebookCreate },
-          page: { create: mocks.pageCreate },
+          notebookGroup: {
+            create: mocks.notebookGroupCreate,
+            delete: mocks.notebookGroupDelete,
+          },
+          notebook: {
+            create: mocks.notebookCreate,
+            updateMany: mocks.notebookUpdateMany,
+          },
+          page: {
+            create: mocks.pageCreate,
+            updateMany: mocks.pageUpdateMany,
+          },
         });
       }
 
@@ -185,6 +194,8 @@ describe("group actions", () => {
     ).resolves.toEqual({
       success: true,
       trashGroupId: "cltrash000000000000000001",
+      notebookIds: ["cltrashnotebook000000001"],
+      wasEmpty: true,
     });
 
     expect(mocks.notebookCreate).toHaveBeenCalledWith({

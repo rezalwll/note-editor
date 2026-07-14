@@ -25,10 +25,12 @@ import {
   reorderNotebooksInlineAction,
   renameNotebookGroupInlineAction,
   renameNotebookInlineAction,
+  restoreNotebookGroupInlineAction,
   updateNotebookGroupThemeInlineAction,
   updateNotebookThemeInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
+import { useWorkspaceHistory } from "@/components/workspace-history-provider";
 import { getOverflowNotebookIds } from "@/lib/notebook-tabs";
 import {
   NOTEBOOK_THEMES,
@@ -98,6 +100,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { openMenu } = useContextMenu();
+  const { record, clear } = useWorkspaceHistory();
   const [selectedNotebookIds, setSelectedNotebookIds] = useState<string[]>([]);
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -410,17 +413,31 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   }
 
   function updateGroupTheme(groupId: string, themeKey: ThemeKey) {
+    const previousThemeKey = groupItems.find((group) => group.id === groupId)?.themeKey;
+    if (!previousThemeKey || previousThemeKey === themeKey) return;
     startTransition(async () => {
       updateGroups({ type: "theme", groupId, themeKey });
       await updateNotebookGroupThemeInlineAction(groupId, themeKey);
+      record({
+        label: "تغییر رنگ مجموعه",
+        undo: () => updateNotebookGroupThemeInlineAction(groupId, previousThemeKey),
+        redo: () => updateNotebookGroupThemeInlineAction(groupId, themeKey),
+      });
       router.refresh();
     });
   }
 
   function updateNotebookTheme(notebookId: string, themeKey: ThemeKey) {
+    const previousThemeKey = items.find((item) => item.id === notebookId)?.themeKey;
+    if (!previousThemeKey || previousThemeKey === themeKey) return;
     startTransition(async () => {
       updateNotebooks({ type: "theme", notebookId, themeKey });
       await updateNotebookThemeInlineAction(notebookId, themeKey);
+      record({
+        label: "تغییر رنگ زیرمجموعه",
+        undo: () => updateNotebookThemeInlineAction(notebookId, previousThemeKey),
+        redo: () => updateNotebookThemeInlineAction(notebookId, themeKey),
+      });
       router.refresh();
     });
   }
@@ -502,6 +519,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
     const targetNotebookId = editingNotebookId;
     const nextName = draftName.trim() || "زیر مجموعه بدون عنوان";
+    const previousName = items.find((item) => item.id === targetNotebookId)?.name;
 
     if (draftNotebook?.id === targetNotebookId) {
       if (createNotebookInFlightRef.current) {
@@ -544,6 +562,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           setEditingNotebookId(null);
           setDraftName("");
           setSelectedNotebookIds([result.id]);
+          record({
+            label: "ایجاد زیرمجموعه",
+            undo: () => archiveNotebookInlineAction(result.id),
+            redo: () => assignNotebookGroupInlineAction([result.id], notebookGroupId),
+          });
           router.push(`/pages/${result.pageId}`);
           router.refresh();
         } finally {
@@ -563,6 +586,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         name: nextName,
       });
       await renameNotebookInlineAction(targetNotebookId, nextName);
+      if (previousName && previousName !== nextName) {
+        record({
+          label: "تغییر نام زیرمجموعه",
+          undo: () => renameNotebookInlineAction(targetNotebookId, previousName),
+          redo: () => renameNotebookInlineAction(targetNotebookId, nextName),
+        });
+      }
     });
   }
 
@@ -612,6 +642,21 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           });
           setManualGroupKey(result.id);
           setSelectedNotebookIds([result.notebookId]);
+          const groupSortOrder = groupItems.filter(
+            (group) => group.systemKey !== TRASH_GROUP_KEY,
+          ).length;
+          record({
+            label: "ایجاد مجموعه",
+            undo: () => deleteNotebookGroupInlineAction(result.id),
+            redo: () =>
+              restoreNotebookGroupInlineAction({
+                id: result.id,
+                name: nextName,
+                themeKey: "themeKey" in result ? result.themeKey : null,
+                sortOrder: groupSortOrder,
+                notebookIds: [result.notebookId],
+              }),
+          });
           router.push(`/pages/${result.pageId}`);
           router.refresh();
         }
@@ -624,6 +669,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     }
 
     const targetGroupId = editingGroupId;
+    const previousName = groupItems.find((group) => group.id === targetGroupId)?.name;
     const notebookIdsInGroup = items
       .filter((notebook) => notebook.groupId === targetGroupId)
       .map((notebook) => notebook.id);
@@ -640,6 +686,13 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         groupName: nextName,
       });
       await renameNotebookGroupInlineAction(targetGroupId, nextName);
+      if (previousName && previousName !== nextName) {
+        record({
+          label: "تغییر نام مجموعه",
+          undo: () => renameNotebookGroupInlineAction(targetGroupId, previousName),
+          redo: () => renameNotebookGroupInlineAction(targetGroupId, nextName),
+        });
+      }
     });
   }
 
@@ -653,6 +706,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       setSelectedNotebookIds([]);
 
       if (permanently) {
+        clear();
         await Promise.all(
           notebookIds.map((notebookId) =>
             deleteNotebookPermanentlyInlineAction(notebookId),
@@ -664,6 +718,27 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             archiveNotebookInlineAction(notebookId),
           ),
         );
+        const previousGroups = new Map<string, string[]>();
+        for (const notebookId of notebookIds) {
+          const previousGroupId = items.find((item) => item.id === notebookId)?.groupId;
+          if (previousGroupId) {
+            previousGroups.set(previousGroupId, [
+              ...(previousGroups.get(previousGroupId) ?? []),
+              notebookId,
+            ]);
+          }
+        }
+        record({
+          label: notebookIds.length > 1 ? "حذف زیرمجموعه‌ها" : "حذف زیرمجموعه",
+          undo: async () => {
+            for (const [previousGroupId, ids] of previousGroups) {
+              await assignNotebookGroupInlineAction(ids, previousGroupId);
+            }
+          },
+          redo: async () => {
+            await Promise.all(notebookIds.map((id) => archiveNotebookInlineAction(id)));
+          },
+        });
       }
 
       if (shouldRedirect) {
@@ -680,6 +755,16 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
     const nextGroupName =
       groupItems.find((group) => group.id === groupId)?.name ?? null;
+    const previousGroups = new Map<string, string[]>();
+    for (const notebookId of notebookIds) {
+      const previousGroupId = items.find((item) => item.id === notebookId)?.groupId;
+      if (previousGroupId) {
+        previousGroups.set(previousGroupId, [
+          ...(previousGroups.get(previousGroupId) ?? []),
+          notebookId,
+        ]);
+      }
+    }
 
     setSelectedNotebookIds([]);
     setManualGroupKey(groupId);
@@ -692,12 +777,44 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         groupName: nextGroupName,
       });
       await assignNotebookGroupInlineAction(notebookIds, groupId);
+      record({
+        label: "انتقال زیرمجموعه",
+        undo: async () => {
+          for (const [previousGroupId, ids] of previousGroups) {
+            await assignNotebookGroupInlineAction(ids, previousGroupId);
+          }
+        },
+        redo: () => assignNotebookGroupInlineAction(notebookIds, groupId),
+      });
     });
   }
 
   function deleteGroup(groupId: string) {
+    const group = groupItems.find((item) => item.id === groupId);
+    if (!group) return;
     startTransition(async () => {
-      await deleteNotebookGroupInlineAction(groupId);
+      const result = await deleteNotebookGroupInlineAction(groupId);
+      if ("notebookIds" in result && result.notebookIds) {
+        const snapshot = {
+          id: group.id,
+          name: group.name,
+          themeKey: group.themeKey,
+          sortOrder: group.sortOrder ?? 0,
+          notebookIds: result.notebookIds,
+          discardPlaceholder: result.wasEmpty,
+        };
+        record({
+          label: "حذف مجموعه",
+          undo: () => restoreNotebookGroupInlineAction(snapshot),
+          redo: async () => {
+            const deleted = await deleteNotebookGroupInlineAction(groupId);
+            if ("notebookIds" in deleted && deleted.notebookIds) {
+              snapshot.notebookIds = deleted.notebookIds;
+              snapshot.discardPlaceholder = deleted.wasEmpty;
+            }
+          },
+        });
+      }
       router.refresh();
     });
   }
@@ -716,6 +833,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     setSelectedNotebookIds([]);
 
     startTransition(async () => {
+      clear();
       updateNotebooks({ type: "remove-many", notebookIds: trashNotebookIds });
       await emptyTrashInlineAction();
       router.push("/trash");
@@ -744,6 +862,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
     startTransition(async () => {
       updateGroups({ type: "reorder", groupIds: nextGroupIds });
       await reorderNotebookGroupsInlineAction(nextGroupIds);
+      record({
+        label: "مرتب‌سازی مجموعه‌ها",
+        undo: () => reorderNotebookGroupsInlineAction(movableGroupIds),
+        redo: () => reorderNotebookGroupsInlineAction(nextGroupIds),
+      });
       router.refresh();
     });
   }
@@ -754,8 +877,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       return;
     }
 
+    const previousNotebookIds = activeGroupNotebooks.map((notebook) => notebook.id);
     const nextNotebookIds = reorderIds(
-      activeGroupNotebooks.map((notebook) => notebook.id),
+      previousNotebookIds,
       draggedNotebookId,
       targetNotebookId,
     );
@@ -777,6 +901,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         notebookIds: nextNotebookIds,
       });
       await reorderNotebooksInlineAction(activeGroupKey, nextNotebookIds);
+      record({
+        label: "مرتب‌سازی زیرمجموعه‌ها",
+        undo: () => reorderNotebooksInlineAction(activeGroupKey, previousNotebookIds),
+        redo: () => reorderNotebooksInlineAction(activeGroupKey, nextNotebookIds),
+      });
       router.refresh();
     });
   }

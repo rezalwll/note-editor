@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyPullChanges,
   applySyncPushResult,
+  listConflictRecords,
+  resolveConflictWithLocal,
+  resolveConflictWithRemote,
 } from "@/lib/offline-db/client";
 import { offlineDb } from "@/lib/offline-db/db";
 import type { LocalPage } from "@/lib/offline-db/types";
@@ -55,6 +58,79 @@ describe("offline sync merge", () => {
       title: "Local draft",
       syncStatus: "pending",
     });
+  });
+
+  it("replaces the local page when the server version wins a conflict", async () => {
+    await offlineDb.pages.put({ ...localPendingPage, syncStatus: "conflict" });
+    await offlineDb.queue.add({
+      entityType: "page",
+      entityId: "page-1",
+      operation: "upsert",
+      payload: localPendingPage,
+      createdAt: localPendingPage.updatedAt,
+      status: "conflict",
+    });
+    const remotePage: LocalPage = {
+      ...localPendingPage,
+      title: "Remote draft",
+      bodyHtml: "remote",
+      bodyText: "remote",
+      updatedAt: "2026-07-14T10:05:00.000Z",
+      syncStatus: "synced",
+    };
+    await offlineDb.conflicts.put({
+      id: "user-1:page:page-1:remote",
+      entityType: "page",
+      entityId: "page-1",
+      createdAt: remotePage.updatedAt,
+      message: "conflict",
+      localPayload: localPendingPage,
+      remotePayload: remotePage,
+    });
+
+    await resolveConflictWithRemote("user-1", "user-1:page:page-1:remote");
+
+    expect(await offlineDb.pages.get("page-1")).toMatchObject({
+      title: "Remote draft",
+      syncStatus: "synced",
+      lastSyncedAt: remotePage.updatedAt,
+    });
+    expect(await offlineDb.queue.count()).toBe(0);
+    expect(await listConflictRecords("user-1")).toEqual([]);
+  });
+
+  it("requeues the local page against the remote timestamp when local wins", async () => {
+    await offlineDb.pages.put({ ...localPendingPage, syncStatus: "conflict" });
+    const remotePage: LocalPage = {
+      ...localPendingPage,
+      title: "Remote draft",
+      updatedAt: "2026-07-14T10:05:00.000Z",
+      syncStatus: "synced",
+    };
+    await offlineDb.conflicts.put({
+      id: "user-1:page:page-1:remote",
+      entityType: "page",
+      entityId: "page-1",
+      createdAt: remotePage.updatedAt,
+      message: "conflict",
+      localPayload: localPendingPage,
+      remotePayload: remotePage,
+    });
+
+    await resolveConflictWithLocal("user-1", "user-1:page:page-1:remote");
+
+    expect(await offlineDb.pages.get("page-1")).toMatchObject({
+      title: "Local draft",
+      syncStatus: "pending",
+    });
+    expect(await offlineDb.queue.toArray()).toEqual([
+      expect.objectContaining({
+        entityId: "page-1",
+        status: "pending",
+        baseUpdatedAt: remotePage.updatedAt,
+      }),
+    ]);
+    expect(await listConflictRecords("user-1")).toEqual([]);
   });
 
   it("keeps local content and marks its queue item when push conflicts", async () => {

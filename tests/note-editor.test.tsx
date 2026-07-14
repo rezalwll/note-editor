@@ -1509,4 +1509,63 @@ describe("NoteEditor freeform placement", () => {
       ).toBe("متن تازه ذخیره شده");
     });
   });
+  it("virtualizes two thousand blocks and keeps the focused block mounted", async () => {
+    const blocks = Array.from({ length: 2_000 }, (_, index) => ({
+      id: `large-${index}`,
+      x: 48,
+      y: 72 + index * 120,
+      width: 320,
+      text: `Large block ${index}`,
+    }));
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    const { canvasRectSpy } = mockEditorRects(canvas, page, 1_200);
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 240_120,
+      right: 1_200,
+      width: 1_200,
+      height: 240_000,
+      toJSON: () => ({}),
+    });
+    syncLayout();
+    await waitForHydration();
+
+    expect(canvas).toHaveAttribute("data-virtualized", "true");
+    expect(canvas).toHaveAttribute("data-total-block-count", "2000");
+    expect(container.querySelectorAll("[data-editor-block]").length).toBeLessThan(40);
+
+    const firstBlock = container.querySelector(
+      '[data-testid="note-block-large-0"] textarea',
+    ) as HTMLTextAreaElement;
+    fireEvent.focus(firstBlock);
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: -119_500,
+      top: -119_500,
+      left: 0,
+      bottom: 120_500,
+      right: 1_200,
+      width: 1_200,
+      height: 240_000,
+      toJSON: () => ({}),
+    });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="note-block-large-1000"]'),
+      ).toBeInTheDocument();
+      expect(
+        container.querySelector('[data-testid="note-block-large-0"]'),
+      ).toBeInTheDocument();
+      expect(container.querySelectorAll("[data-editor-block]").length).toBeLessThan(40);
+    });
+  });
 });

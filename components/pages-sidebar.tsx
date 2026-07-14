@@ -13,6 +13,7 @@ import {
   restorePageInlineAction,
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
+import { useWorkspaceHistory } from "@/components/workspace-history-provider";
 import {
   getNotebookRenamedEventName,
   getPageTitleUpdatedEventName,
@@ -21,6 +22,11 @@ import {
 } from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { formatDate } from "@/lib/utils";
+import { getFixedVirtualRange } from "@/lib/virtualization";
+
+const PAGE_ROW_HEIGHT = 66;
+const PAGE_LIST_VIRTUALIZATION_THRESHOLD = 80;
+const PAGE_LIST_OVERSCAN = 6;
 
 type NotebookSummary = {
   id: string;
@@ -64,6 +70,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { openMenu } = useContextMenu();
+  const { record, clear } = useWorkspaceHistory();
   const [isCreating, setIsCreating] = useState(false);
   const [notebookNameOverrides, setNotebookNameOverrides] = useState<Record<string, string>>({});
   const [pageOrderOverrides, setPageOrderOverrides] = useState<Record<string, number>>({});
@@ -73,8 +80,13 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [draftTitle, setDraftTitle] = useState("");
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [pageListViewport, setPageListViewport] = useState({
+    scrollTop: 0,
+    height: 640,
+  });
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pageListRef = useRef<HTMLDivElement | null>(null);
 
   const displayNotebooks = useMemo(
     () =>
@@ -128,6 +140,64 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         : [],
     [activeNotebook],
   );
+  const shouldVirtualizePages =
+    activePages.length >= PAGE_LIST_VIRTUALIZATION_THRESHOLD;
+  const pageVirtualRange = getFixedVirtualRange({
+    itemCount: activePages.length,
+    itemHeight: PAGE_ROW_HEIGHT,
+    scrollTop: shouldVirtualizePages ? pageListViewport.scrollTop : 0,
+    viewportHeight: shouldVirtualizePages
+      ? pageListViewport.height
+      : activePages.length * PAGE_ROW_HEIGHT,
+    overscan: shouldVirtualizePages ? PAGE_LIST_OVERSCAN : 0,
+  });
+  const renderedPages = shouldVirtualizePages
+    ? activePages.slice(
+        pageVirtualRange.startIndex,
+        pageVirtualRange.endIndex,
+      )
+    : activePages;
+
+  useEffect(() => {
+    if (!shouldVirtualizePages) {
+      return;
+    }
+
+    const activePageIndex = activePages.findIndex(
+      (page) => pathname === `/pages/${page.id}`,
+    );
+    const listElement = pageListRef.current;
+
+    if (activePageIndex < 0 || !listElement) {
+      return;
+    }
+
+    const itemTop = activePageIndex * PAGE_ROW_HEIGHT;
+    const itemBottom = itemTop + PAGE_ROW_HEIGHT;
+    const viewportBottom =
+      listElement.scrollTop + Math.max(1, listElement.clientHeight);
+
+    if (
+      itemTop >= listElement.scrollTop &&
+      itemBottom <= viewportBottom
+    ) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const nextScrollTop = Math.max(
+        0,
+        itemTop - Math.max(0, listElement.clientHeight - PAGE_ROW_HEIGHT) / 2,
+      );
+      listElement.scrollTop = nextScrollTop;
+      setPageListViewport({
+        scrollTop: nextScrollTop,
+        height: listElement.clientHeight || 640,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activePages, pathname, shouldVirtualizePages]);
 
   useEffect(() => {
     if (isCreating) {
@@ -203,6 +273,16 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       const result = await createPageInlineAction(activeNotebook.id, nextTitle);
 
       if ("id" in result && result.id) {
+        const pageId = result.id;
+        record({
+          label: "ایجاد صفحه",
+          undo: async () => {
+            await archivePageInlineAction(pageId);
+          },
+          redo: async () => {
+            await restorePageInlineAction(pageId);
+          },
+        });
         setIsCreating(false);
         setDraftTitle("");
         router.push(`/pages/${result.id}`);
@@ -221,6 +301,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
     startTransition(async () => {
       const result = await archivePageInlineAction(pageId);
+      record({
+        label: "حذف صفحه",
+        undo: async () => {
+          await restorePageInlineAction(pageId);
+        },
+        redo: async () => {
+          await archivePageInlineAction(pageId);
+        },
+      });
 
       if (isActivePage) {
         router.push(
@@ -248,6 +337,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     startTransition(async () => {
       setSelectedPageIds([]);
       await Promise.all(pageIds.map((pageId) => archivePageInlineAction(pageId)));
+      record({
+        label: pageIds.length > 1 ? "حذف صفحه‌ها" : "حذف صفحه",
+        undo: async () => {
+          await Promise.all(pageIds.map((pageId) => restorePageInlineAction(pageId)));
+        },
+        redo: async () => {
+          await Promise.all(pageIds.map((pageId) => archivePageInlineAction(pageId)));
+        },
+      });
 
       if (shouldRedirect) {
         router.push(
@@ -269,6 +367,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
       const results = await Promise.all(
         pageIds.map((pageId) => restorePageInlineAction(pageId)),
       );
+      record({
+        label: pageIds.length > 1 ? "بازیابی صفحه‌ها" : "بازیابی صفحه",
+        undo: async () => {
+          await Promise.all(pageIds.map((pageId) => archivePageInlineAction(pageId)));
+        },
+        redo: async () => {
+          await Promise.all(pageIds.map((pageId) => restorePageInlineAction(pageId)));
+        },
+      });
       const restored = results.find(
         (result) => "notebookId" in result && Boolean(result.notebookId),
       );
@@ -293,6 +400,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     const shouldRedirect = activePageId ? pageIds.includes(activePageId) : false;
 
     startTransition(async () => {
+      clear();
       setSelectedPageIds([]);
       await Promise.all(
         pageIds.map((pageId) => deletePagePermanentlyInlineAction(pageId)),
@@ -344,6 +452,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
     startTransition(async () => {
       await reorderPagesInlineAction(activeNotebook.id, nextPageIds);
+      record({
+        label: "مرتب‌سازی صفحه‌ها",
+        undo: async () => {
+          await reorderPagesInlineAction(activeNotebook.id, currentPageIds);
+        },
+        redo: async () => {
+          await reorderPagesInlineAction(activeNotebook.id, nextPageIds);
+        },
+      });
       router.refresh();
     });
   }
@@ -469,8 +586,40 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
           </div>
         ) : null}
 
-        <div className="overflow-y-auto text-right" style={{ height: sidebarListHeight }}>
-          {activePages.map((page) => {
+        <div
+          ref={pageListRef}
+          className="overflow-y-auto text-right"
+          style={{ height: sidebarListHeight }}
+          data-virtualized={shouldVirtualizePages ? "true" : "false"}
+          data-rendered-count={renderedPages.length}
+          onScroll={(event) => {
+            if (!shouldVirtualizePages) {
+              return;
+            }
+
+            setPageListViewport({
+              scrollTop: event.currentTarget.scrollTop,
+              height: event.currentTarget.clientHeight || 640,
+            });
+          }}
+        >
+          <div
+            className={shouldVirtualizePages ? "relative" : undefined}
+            style={
+              shouldVirtualizePages
+                ? { height: `${pageVirtualRange.totalHeight}px` }
+                : undefined
+            }
+          >
+            <div
+              className={shouldVirtualizePages ? "absolute inset-x-0 top-0" : undefined}
+              style={
+                shouldVirtualizePages
+                  ? { transform: `translateY(${pageVirtualRange.offsetTop}px)` }
+                  : undefined
+              }
+            >
+          {renderedPages.map((page) => {
             const isActive = pathname === `/pages/${page.id}`;
             const isSelected = selectedPageIds.includes(page.id);
 
@@ -568,6 +717,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                 }}
                 className="group relative border-b transition"
                 style={{
+                  height: shouldVirtualizePages ? `${PAGE_ROW_HEIGHT}px` : undefined,
                   borderColor: activeTheme?.sidebarBorder,
                   backgroundColor: isActive
                     ? activeTheme?.sidebarActive
@@ -615,6 +765,8 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               </div>
             );
           })}
+            </div>
+          </div>
           {activePages.length === 0 ? (
             <div className="px-3 py-5 text-right">
               <div className="text-xs" style={{ color: activeTheme?.sidebarMuted }}>

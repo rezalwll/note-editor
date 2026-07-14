@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   archiveNotebookInlineAction,
+  assignNotebookGroupInlineAction,
   archivePageInlineAction,
   createNotebookGroupInlineAction,
   createPageInlineAction,
@@ -27,12 +28,14 @@ import {
   deletePagePermanentlyInlineAction,
   renameNotebookGroupInlineAction,
   renameNotebookInlineAction,
+  restoreNotebookGroupInlineAction,
   restorePageInlineAction,
 } from "@/app/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { SearchTrigger } from "@/components/search-trigger";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { useWorkspaceHistory } from "@/components/workspace-history-provider";
 import {
   dispatchGroupRenamed,
   dispatchNotebookRenamed,
@@ -68,6 +71,7 @@ type MobileGroup = {
   name: string;
   notebookCount: number;
   themeKey?: string | null;
+  sortOrder?: number;
   systemKey: string | null;
 };
 
@@ -75,6 +79,7 @@ type MobileShellProps = {
   notebooks: MobileNotebook[];
   groups: MobileGroup[];
   currentUser: {
+    id: string;
     username: string;
     displayName: string;
   };
@@ -89,6 +94,8 @@ type MobileGroupSection = {
   name: string;
   notebookCount: number;
   systemKey: string | null;
+  themeKey?: string | null;
+  sortOrder?: number;
   notebooks: MobileNotebook[];
 };
 
@@ -116,6 +123,7 @@ function getTrashItemCount(notebooks: MobileNotebook[]) {
 export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { record, clear } = useWorkspaceHistory();
   const [groupNameOverrides, setGroupNameOverrides] = useState<Record<string, string>>({});
   const [notebookNameOverrides, setNotebookNameOverrides] = useState<Record<string, string>>({});
   const [pageTitleOverrides, setPageTitleOverrides] = useState<
@@ -356,6 +364,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               ? getTrashItemCount(groupNotebooks)
               : group.notebookCount,
           systemKey: group.systemKey,
+          themeKey: group.themeKey,
+          sortOrder: group.sortOrder,
           notebooks: groupNotebooks,
         };
       }),
@@ -364,6 +374,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         name: "بدون مجموعه",
         notebookCount: displayNotebooks.filter((notebook) => notebook.groupId === null).length,
         systemKey: null,
+        themeKey: null,
+        sortOrder: 0,
         notebooks: displayNotebooks.filter((notebook) => notebook.groupId === null),
       },
     ],
@@ -436,6 +448,12 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       const result = await createPageInlineAction(activeNotebook.id, nextTitle);
 
       if ("id" in result && result.id) {
+        const pageId = result.id;
+        record({
+          label: "ایجاد صفحه",
+          undo: () => archivePageInlineAction(pageId),
+          redo: () => restorePageInlineAction(pageId),
+        });
         setDraftTitle("");
         setIsCreating(false);
         setPagesOpen(false);
@@ -458,12 +476,20 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     const nextName = draftGroupName.trim() || "مجموعه بدون عنوان";
     const targetGroupId = editingGroupId;
+    const previousName = groupedNotebooks.find((group) => group.id === targetGroupId)?.name;
 
     setEditingGroupId(null);
     setDraftGroupName("");
 
     startTransition(async () => {
       await renameNotebookGroupInlineAction(targetGroupId, nextName);
+      if (previousName && previousName !== nextName) {
+        record({
+          label: "تغییر نام مجموعه",
+          undo: () => renameNotebookGroupInlineAction(targetGroupId, previousName),
+          redo: () => renameNotebookGroupInlineAction(targetGroupId, nextName),
+        });
+      }
       dispatchGroupRenamed({ groupId: targetGroupId, name: nextName });
       router.refresh();
     });
@@ -482,12 +508,22 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     const nextName = draftNotebookName.trim() || "زیر مجموعه بدون عنوان";
     const targetNotebookId = editingNotebookId;
+    const previousName = displayNotebooks.find(
+      (notebook) => notebook.id === targetNotebookId,
+    )?.name;
 
     setEditingNotebookId(null);
     setDraftNotebookName("");
 
     startTransition(async () => {
       await renameNotebookInlineAction(targetNotebookId, nextName);
+      if (previousName && previousName !== nextName) {
+        record({
+          label: "تغییر نام زیرمجموعه",
+          undo: () => renameNotebookInlineAction(targetNotebookId, previousName),
+          redo: () => renameNotebookInlineAction(targetNotebookId, nextName),
+        });
+      }
       dispatchNotebookRenamed({ notebookId: targetNotebookId, name: nextName });
       router.refresh();
     });
@@ -561,6 +597,18 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       setSelectedNotebookId(result.notebookId);
       setDraftGroupName("");
       setIsCreatingGroup(false);
+      record({
+        label: "ایجاد مجموعه",
+        undo: () => deleteNotebookGroupInlineAction(result.id),
+        redo: () =>
+          restoreNotebookGroupInlineAction({
+            id: result.id,
+            name: nextName,
+            themeKey: "themeKey" in result ? result.themeKey : null,
+            sortOrder: mergedGroups.filter((group) => group.systemKey !== TRASH_GROUP_KEY).length,
+            notebookIds: [result.notebookId],
+          }),
+      });
       closeAll();
       router.push(`/pages/${result.pageId}`);
       router.refresh();
@@ -568,10 +616,33 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function deleteGroup(groupId: string) {
+    const group = groupedNotebooks.find((item) => item.id === groupId);
+    if (!group) return;
     closeActionSheet();
 
     startTransition(async () => {
-      await deleteNotebookGroupInlineAction(groupId);
+      const result = await deleteNotebookGroupInlineAction(groupId);
+      if ("notebookIds" in result && result.notebookIds) {
+        const snapshot = {
+          id: group.id,
+          name: group.name,
+          themeKey: group.themeKey,
+          sortOrder: group.sortOrder ?? 0,
+          notebookIds: result.notebookIds,
+          discardPlaceholder: result.wasEmpty,
+        };
+        record({
+          label: "حذف مجموعه",
+          undo: () => restoreNotebookGroupInlineAction(snapshot),
+          redo: async () => {
+            const deleted = await deleteNotebookGroupInlineAction(groupId);
+            if ("notebookIds" in deleted && deleted.notebookIds) {
+              snapshot.notebookIds = deleted.notebookIds;
+              snapshot.discardPlaceholder = deleted.wasEmpty;
+            }
+          },
+        });
+      }
       if (activeGroupId === groupId) {
         setSelectedNotebookId(null);
       }
@@ -584,9 +655,17 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     startTransition(async () => {
       if (notebook.deletedAt) {
+        clear();
         await deleteNotebookPermanentlyInlineAction(notebook.id);
       } else {
         await archiveNotebookInlineAction(notebook.id);
+        if (notebook.groupId) {
+          record({
+            label: "حذف زیرمجموعه",
+            undo: () => assignNotebookGroupInlineAction([notebook.id], notebook.groupId!),
+            redo: () => archiveNotebookInlineAction(notebook.id),
+          });
+        }
       }
 
       if (routeNotebook?.id === notebook.id || activePageId) {
@@ -606,6 +685,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     startTransition(async () => {
       const result = await archivePageInlineAction(pageId);
+      record({
+        label: "حذف صفحه",
+        undo: () => restorePageInlineAction(pageId),
+        redo: () => archivePageInlineAction(pageId),
+      });
       if ("notebookId" in result && result.notebookId && activePageId === pageId) {
         router.push(`/notebooks/${result.notebookId}`);
       }
@@ -618,6 +702,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     startTransition(async () => {
       await restorePageInlineAction(pageId);
+      record({
+        label: "بازیابی صفحه",
+        undo: () => archivePageInlineAction(pageId),
+        redo: () => restorePageInlineAction(pageId),
+      });
       if (activePageId === pageId) {
         router.push(`/pages/${pageId}`);
       }
@@ -629,6 +718,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     closeActionSheet();
 
     startTransition(async () => {
+      clear();
       await deletePagePermanentlyInlineAction(pageId);
       if (activePageId === pageId) {
         router.push(activeNotebook ? `/notebooks/${activeNotebook.id}` : "/");
@@ -666,7 +756,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
           <BrandLogo frameClassName="h-7 w-[100px]" showWordmark={false} />
 
           <div className="flex items-center gap-2">
-            <SyncStatusIndicator />
+            <SyncStatusIndicator userId={currentUser.id} />
             <button
               ref={profileTriggerRef}
               type="button"

@@ -118,6 +118,36 @@ export function getImageBlockHeight(block: FreeformBlock, width: number) {
   return width / (block.aspectRatio ?? IMAGE_DEFAULT_ASPECT_RATIO);
 }
 
+export function estimateTextBlockHeight(block: FreeformBlock, width: number) {
+  const fontSize = block.fontSize ?? 15;
+  const usableWidth = Math.max(80, width - 16);
+  const averageCharacterWidth = fontSize * 0.58;
+  const charactersPerLine = Math.max(
+    1,
+    Math.floor(usableWidth / averageCharacterWidth),
+  );
+  const lineCount = Math.max(
+    1,
+    block.text.split("\n").reduce(
+      (total, line) =>
+        total + Math.max(1, Math.ceil(line.length / charactersPerLine)),
+      0,
+    ),
+  );
+
+  return Math.max(28, Math.ceil(lineCount * fontSize * 1.85));
+}
+
+export function estimateBlockHeight(
+  block: FreeformBlock,
+  canvasWidth: number,
+) {
+  const width = getRenderedBlockWidth(block, canvasWidth);
+  return isImageBlock(block)
+    ? getImageBlockHeight(block, width)
+    : estimateTextBlockHeight(block, width);
+}
+
 export function isEmptyTextBlock(block: FreeformBlock) {
   return block.type !== "image" && !block.text.trim();
 }

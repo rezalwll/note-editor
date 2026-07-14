@@ -11,6 +11,7 @@ import { clearPrivateClientData } from "@/lib/clear-client-data";
 
 type DesktopProfileMenuProps = {
   currentUser: {
+    id: string;
     username: string;
     displayName: string;
   };
@@ -88,7 +89,7 @@ export function DesktopProfileMenu({
 
   return (
     <div className="relative flex items-center gap-2">
-      <SyncStatusIndicator />
+      <SyncStatusIndicator userId={currentUser.id} />
 
       <button
         ref={triggerRef}

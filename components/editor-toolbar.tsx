@@ -193,6 +193,11 @@ function ToolbarButton({
 
 export function EditorToolbar() {
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultState);
+  const [workspaceHistory, setWorkspaceHistory] = useState({
+    canUndo: false,
+    canRedo: false,
+    isApplying: false,
+  });
   const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
   const [colorMenuKind, setColorMenuKind] = useState<ColorMenuKind | null>(null);
   const [colorMenuPosition, setColorMenuPosition] = useState<{
@@ -236,6 +241,39 @@ export function EditorToolbar() {
     window.addEventListener("note-editor-state", listener);
     return () => window.removeEventListener("note-editor-state", listener);
   }, []);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        canUndo?: boolean;
+        canRedo?: boolean;
+        isApplying?: boolean;
+      }>).detail;
+      setWorkspaceHistory({
+        canUndo: Boolean(detail?.canUndo),
+        canRedo: Boolean(detail?.canRedo),
+        isApplying: Boolean(detail?.isApplying),
+      });
+    };
+
+    window.addEventListener("notava-workspace-history-state", listener);
+    return () => window.removeEventListener("notava-workspace-history-state", listener);
+  }, []);
+
+  function runHistoryCommand(command: "undo" | "redo") {
+    const canUseEditor =
+      command === "undo" ? toolbarState.canUndo : toolbarState.canRedo;
+    if (canUseEditor) {
+      dispatchEditorCommand(command);
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("notava-workspace-history-command", {
+        detail: { command },
+      }),
+    );
+  }
 
   useEffect(() => {
     if (!isFontSizeMenuOpen) {
@@ -343,15 +381,21 @@ export function EditorToolbar() {
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">
       <ToolbarButton
         label="واگرد"
-        disabled={!toolbarState.canUndo}
-        onClick={() => dispatchEditorCommand("undo")}
+        disabled={
+          workspaceHistory.isApplying ||
+          (!toolbarState.canUndo && !workspaceHistory.canUndo)
+        }
+        onClick={() => runHistoryCommand("undo")}
       >
         <Undo2 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
         label="انجام دوباره"
-        disabled={!toolbarState.canRedo}
-        onClick={() => dispatchEditorCommand("redo")}
+        disabled={
+          workspaceHistory.isApplying ||
+          (!toolbarState.canRedo && !workspaceHistory.canRedo)
+        }
+        onClick={() => runHistoryCommand("redo")}
       >
         <Redo2 className="h-4 w-4" />
       </ToolbarButton>

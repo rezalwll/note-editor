@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { GripVertical, LoaderCircle, Trash2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -13,10 +12,10 @@ import {
 import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
-import {
-  RichTextBlockEditor,
-  type RichTextBlockHandle,
-} from "@/components/editor/rich-text-block-editor";
+import { NoteEditorBlock } from "@/components/editor/note-editor-block";
+import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
+import { useNoteEditorClipboard } from "@/components/editor/use-note-editor-clipboard";
+import { useNoteEditorPersistence } from "@/components/editor/use-note-editor-persistence";
 import {
   dispatchEditorCommand,
   type EditorCommand,
@@ -29,14 +28,13 @@ import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_VIEWPORT_HEIGHT,
   type EditorDocumentSnapshot,
-  IMAGE_DEFAULT_ASPECT_RATIO,
-  IMAGE_DEFAULT_WIDTH,
   IMAGE_MIN_WIDTH,
   PAGE_SIDE_PADDING_DESKTOP,
   PAGE_SIDE_PADDING_MOBILE,
   cloneDocumentSnapshot,
   createBlockId,
   createRichTextSelectionHtml,
+  estimateBlockHeight,
   getBlockMaxWidth,
   getBlockRightGutter,
   getCanvasInset,
@@ -49,34 +47,21 @@ import {
   isImageBlock,
   measureBlockWidth,
 } from "@/lib/editor-document";
-import { looksLikeMarkdown, markdownToHtml } from "@/lib/markdown";
-import {
-  enqueuePageUpsert,
-  getLocalPage,
-  upsertLocalPage,
-} from "@/lib/offline-db/client";
-import type { LocalPage, SyncStatus } from "@/lib/offline-db/types";
 import {
   type FreeformBlock,
   extractFreeformPlainText,
   parseFreeformDocument,
   serializeFreeformDocument,
 } from "@/lib/notes";
-import { dispatchPageTitleUpdated } from "@/lib/page-events";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { getPageDocumentTitle } from "@/lib/page-title";
-import { processSyncQueue } from "@/lib/sync/client";
+import { getVisibleSpatialItems } from "@/lib/virtualization";
 
 type Attachment = {
   id: string;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-};
-
-type AttachmentUploadResponse = {
-  attachment: Attachment;
-  url: string;
 };
 
 type NoteEditorProps = {
@@ -96,16 +81,11 @@ type CanvasCoordinates = {
   width: number;
 };
 
-const AUTOSAVE_DEBOUNCE_MS = 150;
-const CLIPBOARD_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
+const BLOCK_VIRTUALIZATION_THRESHOLD = 120;
+const BLOCK_VIRTUALIZATION_OVERSCAN = 800;
 export function NoteEditor({
   userId,
   notebookId,
@@ -141,12 +121,6 @@ export function NoteEditor({
   const [blocks, setBlocks] = useState<FreeformBlock[]>(() =>
     getInitialBlocks(initialHtml),
   );
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
-  const [isSavingLocally, setIsSavingLocally] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [richTextInitialSelections, setRichTextInitialSelections] = useState<
@@ -162,9 +136,10 @@ export function NoteEditor({
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [lowestBlockBottom, setLowestBlockBottom] = useState(0);
-  const [pendingImageUploads, setPendingImageUploads] = useState(0);
-  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
-
+  const [blockViewport, setBlockViewport] = useState({
+    top: 0,
+    bottom: DEFAULT_VIEWPORT_HEIGHT,
+  });
   const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -197,12 +172,6 @@ export function NoteEditor({
     activeBlockId,
     selectedBlockIds,
   });
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedSnapshotRef = useRef("");
-  const lastSyncedAtRef = useRef(initialUpdatedAt);
-  const latestSnapshotRef = useRef("");
-  const isMountedRef = useRef(true);
-  const userEditedBeforeHydrationRef = useRef(false);
   const selectionRestoreRef = useRef<{
     id: string;
     start: number;
@@ -234,16 +203,93 @@ export function NoteEditor({
   const desktopCanvasMinHeight = Math.max(viewportHeight - 240, lowestBlockBottom + 360);
 
   const snapshot = `${title}::${serializedDocument}`;
+  const resetDocumentHistory = useCallback(() => {
+    historyRef.current = { past: [], future: [] };
+    lastHistoryActionRef.current = null;
+  }, []);
+  const {
+    flushPendingSave,
+    isEditorMounted,
+    isHydrated,
+    markEditorInteraction,
+  } = useNoteEditorPersistence({
+    userId,
+    notebookId,
+    pageId,
+    initialTitle,
+    initialHtml,
+    initialUpdatedAt,
+    title,
+    bodyText,
+    serializedDocument,
+    snapshot,
+    setTitle,
+    setBlocks,
+    getInitialBlocks,
+    resetDocumentHistory,
+  });
+  const {
+    copyImageToClipboard,
+    copyTextToClipboard,
+    getSelectedBlocksText,
+    handleEditorPaste,
+    handleImageFileSelection,
+    imageUploadError,
+    pasteFromClipboard,
+    pendingImageUploads,
+  } = useNoteEditorClipboard({
+    pageId,
+    canvasWidth,
+    blocks,
+    activeBlockId,
+    title,
+    getCanvasRect,
+    getTextBlockElement,
+    getCanvasBoundedX,
+    getCurrentBlocks: () => currentDocumentStateRef.current.blocks,
+    getRichTextHandle: (blockId) => richTextBlockRefs.current[blockId] ?? null,
+    focusTitleAt,
+    restoreTextSelection,
+    isEditorMounted,
+    markEditorInteraction,
+    recordDocumentHistory,
+    setTitle,
+    setBlocks,
+    setActiveBlockId,
+    setSelectedBlockIds,
+    updateBlockText,
+    addBlockAt,
+  });
   const activeBlock =
     blocks.find(
       (block) => block.id === activeBlockId && !isImageBlock(block),
     ) ?? null;
-
-  function markEditorInteraction() {
-    if (!isHydrated) {
-      userEditedBeforeHydrationRef.current = true;
-    }
-  }
+  const shouldVirtualizeBlocks =
+    blocks.length >= BLOCK_VIRTUALIZATION_THRESHOLD;
+  const renderedBlocks = useMemo(
+    () =>
+      shouldVirtualizeBlocks
+        ? getVisibleSpatialItems(
+            blocks,
+            {
+              ...blockViewport,
+              overscan: BLOCK_VIRTUALIZATION_OVERSCAN,
+            },
+            (block) => ({
+              top: block.y,
+              height: estimateBlockHeight(block, canvasWidth),
+            }),
+            (block) => block.id === activeBlockId,
+          )
+        : blocks,
+    [
+      activeBlockId,
+      blockViewport,
+      blocks,
+      canvasWidth,
+      shouldVirtualizeBlocks,
+    ],
+  );
 
   function getTextBlockElement(blockId: string) {
     return (
@@ -253,9 +299,81 @@ export function NoteEditor({
     );
   }
 
+  function getCanvasRect() {
+    return canvasRef.current?.getBoundingClientRect() ?? null;
+  }
+
+  const updateBlockViewport = useCallback(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const nextTop = Math.max(0, -rect.top);
+    const nextBottom = Math.max(
+      nextTop,
+      Math.min(rect.height || Number.POSITIVE_INFINITY, window.innerHeight - rect.top),
+    );
+
+    setBlockViewport((current) =>
+      Math.abs(current.top - nextTop) < 1 &&
+      Math.abs(current.bottom - nextBottom) < 1
+        ? current
+        : { top: nextTop, bottom: nextBottom },
+    );
+  }, []);
+
   useEffect(() => {
-    latestSnapshotRef.current = snapshot;
-  }, [snapshot]);
+    if (!shouldVirtualizeBlocks) {
+      return;
+    }
+
+    let frameId: number | null = null;
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        updateBlockViewport();
+      });
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, true);
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [shouldVirtualizeBlocks, updateBlockViewport]);
+
+  function focusTitleAt(caretPosition: number) {
+    titleInputRef.current?.focus();
+    titleInputRef.current?.setSelectionRange(caretPosition, caretPosition);
+  }
+
+  function restoreTextSelection(blockId: string, start: number, end: number) {
+    selectionRestoreRef.current = { id: blockId, start, end };
+  }
+
+  function setBlockRef(blockId: string, element: HTMLTextAreaElement | null) {
+    blockRefs.current[blockId] = element;
+  }
+
+  function setRichTextBlockRef(
+    blockId: string,
+    handle: RichTextBlockHandle | null,
+  ) {
+    richTextBlockRefs.current[blockId] = handle;
+  }
 
   useEffect(() => {
     currentDocumentStateRef.current = {
@@ -317,106 +435,8 @@ export function NoteEditor({
   }
 
   useEffect(() => {
-    isMountedRef.current = true;
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleConnectionChange = () => {
-      setIsOnline(navigator.onLine);
-    };
-
-    window.addEventListener("online", handleConnectionChange);
-    window.addEventListener("offline", handleConnectionChange);
-
-    return () => {
-      window.removeEventListener("online", handleConnectionChange);
-      window.removeEventListener("offline", handleConnectionChange);
-    };
-  }, []);
-
-  useEffect(() => {
     document.title = getPageDocumentTitle(title);
   }, [title]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function hydrateFromOfflineStore() {
-      const localPage = await getLocalPage(userId, pageId);
-      const serverUpdatedAt = new Date(initialUpdatedAt).getTime();
-      const localUpdatedAt = localPage ? new Date(localPage.updatedAt).getTime() : 0;
-      const userEditedBeforeHydration = userEditedBeforeHydrationRef.current;
-      const shouldPreferLocal =
-        Boolean(localPage) &&
-        ((localPage?.syncStatus ?? "synced") !== "synced" ||
-          localUpdatedAt >= serverUpdatedAt);
-
-      const serverPage: LocalPage = {
-        id: pageId,
-        userId,
-        notebookId,
-        title: initialTitle,
-        bodyHtml: initialHtml,
-        bodyText:
-          parseFreeformDocument(initialHtml)?.blocks
-            .map((block) => block.text.trim())
-            .filter(Boolean)
-            .join(" ") ?? "",
-        archived: false,
-        updatedAt: initialUpdatedAt,
-        lastSyncedAt: initialUpdatedAt,
-        deletedAt: null,
-        syncStatus: "synced",
-      };
-
-      if (shouldPreferLocal && localPage && !isCancelled && !userEditedBeforeHydration) {
-        setTitle(localPage.title);
-        setBlocks(getInitialBlocks(localPage.bodyHtml));
-        setSyncStatus(localPage.syncStatus);
-        lastSyncedAtRef.current =
-          localPage.lastSyncedAt ?? localPage.updatedAt ?? initialUpdatedAt;
-        lastSavedSnapshotRef.current = `${localPage.title}::${localPage.bodyHtml}`;
-      } else if (userEditedBeforeHydration) {
-        if (!isCancelled) {
-          lastSyncedAtRef.current =
-            localPage?.lastSyncedAt ?? localPage?.updatedAt ?? initialUpdatedAt;
-          setSyncStatus(localPage?.syncStatus === "failed" ? "failed" : "pending");
-        }
-      } else {
-        try {
-          await upsertLocalPage(serverPage);
-
-          if (!isCancelled) {
-            setSyncStatus("synced");
-            lastSyncedAtRef.current = initialUpdatedAt;
-            lastSavedSnapshotRef.current = `${initialTitle}::${initialHtml}`;
-          }
-        } catch (error) {
-          console.error("Failed to seed local page state during hydration.", error);
-
-          if (!isCancelled && isMountedRef.current) {
-            setSyncStatus("failed");
-          }
-        }
-      }
-
-      if (!isCancelled) {
-        historyRef.current = { past: [], future: [] };
-        lastHistoryActionRef.current = null;
-        setIsHydrated(true);
-      }
-    }
-
-    void hydrateFromOfflineStore();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [initialHtml, initialTitle, initialUpdatedAt, notebookId, pageId, userId]);
 
   useEffect(() => {
     if (!isHydrated || !activeBlockId) {
@@ -459,6 +479,7 @@ export function NoteEditor({
           : Math.max(
               element?.scrollHeight ?? 28,
               element?.offsetHeight ?? 28,
+              estimateBlockHeight(block, canvasWidth),
               28,
             );
         return Math.max(max, block.y + blockHeight);
@@ -487,6 +508,7 @@ export function NoteEditor({
         : Math.max(
             blockElement?.scrollHeight ?? 28,
             blockElement?.offsetHeight ?? 28,
+            estimateBlockHeight(block, canvasWidth),
             28,
           );
       return Math.max(max, block.y + blockHeight);
@@ -542,223 +564,6 @@ export function NoteEditor({
       visualViewport?.removeEventListener("resize", scheduleNormalizeBlockLayout);
     };
   }, []);
-
-  const persistLocalDraft = useCallback(async (reason: string) => {
-    if (!isHydrated) {
-      return false;
-    }
-
-    const pendingSnapshot = snapshot;
-
-    if (pendingSnapshot === lastSavedSnapshotRef.current) {
-      if (isMountedRef.current) {
-        setIsSavingLocally(false);
-      }
-
-      return true;
-    }
-
-    try {
-      const updatedAt = new Date().toISOString();
-      const localPage: LocalPage = {
-        id: pageId,
-        userId,
-        notebookId,
-        title,
-        bodyHtml: serializedDocument,
-        bodyText,
-        archived: false,
-        updatedAt,
-        lastSyncedAt: lastSyncedAtRef.current ?? initialUpdatedAt,
-        deletedAt: null,
-        syncStatus: "pending",
-      };
-
-      await upsertLocalPage(localPage);
-      await enqueuePageUpsert(localPage, lastSyncedAtRef.current ?? initialUpdatedAt);
-
-      const isCurrentSnapshot = latestSnapshotRef.current === pendingSnapshot;
-
-      if (isCurrentSnapshot) {
-        lastSavedSnapshotRef.current = pendingSnapshot;
-      }
-
-      if (isMountedRef.current) {
-        setSyncStatus("pending");
-        setIsSavingLocally(!isCurrentSnapshot);
-      }
-
-      dispatchPageTitleUpdated({
-        notebookId,
-        pageId,
-        title,
-        updatedAt,
-      });
-
-      return true;
-    } catch (error) {
-      console.error(`Failed to persist page draft locally during ${reason}.`, error);
-
-      if (isMountedRef.current && latestSnapshotRef.current === pendingSnapshot) {
-        setIsSavingLocally(false);
-        setSyncStatus("failed");
-      }
-
-      return false;
-    }
-  }, [
-    bodyText,
-    initialUpdatedAt,
-    isHydrated,
-    notebookId,
-    pageId,
-    serializedDocument,
-    snapshot,
-    title,
-    userId,
-  ]);
-
-  const flushRemoteSync = useCallback(async (reason: string) => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      return;
-    }
-
-    try {
-      await processSyncQueue(userId);
-      const refreshed = await getLocalPage(userId, pageId);
-
-      if (refreshed?.lastSyncedAt) {
-        lastSyncedAtRef.current = refreshed.lastSyncedAt;
-      }
-
-      if (refreshed?.syncStatus && isMountedRef.current) {
-        setSyncStatus(refreshed.syncStatus);
-      }
-    } catch (error) {
-      console.error(`Failed to sync page draft during ${reason}.`, error);
-
-      if (isMountedRef.current) {
-        setSyncStatus((current) => (current === "failed" ? current : "pending"));
-        setIsSavingLocally(false);
-      }
-    }
-  }, [pageId, userId]);
-
-  const persistDraftAndSync = useCallback(async (reason: string) => {
-    const persisted = await persistLocalDraft(reason);
-
-    if (persisted) {
-      await flushRemoteSync(reason);
-    }
-  }, [flushRemoteSync, persistLocalDraft]);
-
-  const flushPendingSave = useCallback((reason: string) => {
-    if (!isHydrated) {
-      return;
-    }
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-
-    if (snapshot === lastSavedSnapshotRef.current) {
-      if (isMountedRef.current) {
-        setIsSavingLocally(false);
-      }
-
-      return;
-    }
-
-    if (isMountedRef.current) {
-      setIsSavingLocally(true);
-    }
-
-    void persistDraftAndSync(reason);
-  }, [isHydrated, persistDraftAndSync, snapshot]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    if (snapshot === lastSavedSnapshotRef.current) {
-      return;
-    }
-
-    setIsSavingLocally(true);
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = setTimeout(() => {
-      void persistDraftAndSync("autosave");
-    }, AUTOSAVE_DEBOUNCE_MS);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-      }
-    };
-  }, [isHydrated, persistDraftAndSync, snapshot]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    const handlePageHide = () => {
-      flushPendingSave("pagehide");
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        flushPendingSave("visibilitychange");
-      }
-    };
-    const handleBeforeUnload = () => {
-      flushPendingSave("beforeunload");
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      flushPendingSave("unmount");
-    };
-  }, [flushPendingSave, isHydrated]);
-
-  useEffect(() => {
-    const listener = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        type?: string;
-        userId?: string;
-        pageId?: string;
-        syncStatus?: SyncStatus;
-        lastSyncedAt?: string | null;
-      }>;
-
-      if (
-        customEvent.detail?.userId !== userId ||
-        customEvent.detail?.pageId !== pageId ||
-        !customEvent.detail.syncStatus
-      ) {
-        return;
-      }
-
-      setSyncStatus(customEvent.detail.syncStatus);
-      if (customEvent.detail.lastSyncedAt) {
-        lastSyncedAtRef.current = customEvent.detail.lastSyncedAt;
-      }
-    };
-
-    window.addEventListener("notava-sync", listener);
-    return () => window.removeEventListener("notava-sync", listener);
-  }, [pageId, userId]);
 
   function focusBlockElement(blockId: string, caretPosition = 0) {
     const richTextHandle = richTextBlockRefs.current[blockId];
@@ -825,438 +630,6 @@ export function NoteEditor({
     }
 
     addBlock();
-  }
-
-  function getPastedImageCoordinates() {
-    const targetCanvasWidth =
-      canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
-    const width = Math.min(
-      IMAGE_DEFAULT_WIDTH,
-      getBlockMaxWidth(targetCanvasWidth),
-    );
-    const selectedBlock = blocks.find((block) => block.id === activeBlockId);
-
-    if (selectedBlock) {
-      const selectedWidth = getRenderedBlockWidth(
-        selectedBlock,
-        targetCanvasWidth,
-      );
-      const selectedElement = getTextBlockElement(selectedBlock.id);
-      const selectedHeight = isImageBlock(selectedBlock)
-        ? getImageBlockHeight(selectedBlock, selectedWidth)
-        : Math.max(
-            selectedElement?.scrollHeight ?? 28,
-            selectedElement?.offsetHeight ?? 28,
-            28,
-          );
-
-      return {
-        x: getCanvasBoundedX(targetCanvasWidth, selectedBlock.x, width),
-        y: selectedBlock.y + selectedHeight + 24,
-        width,
-      };
-    }
-
-    const canvasRect = canvasRef.current?.getBoundingClientRect();
-    const visibleCanvasTop = canvasRect ? Math.max(24, 72 - canvasRect.top) : 72;
-
-    return {
-      x: getCanvasBoundedX(
-        targetCanvasWidth,
-        targetCanvasWidth - width - getBlockRightGutter(targetCanvasWidth),
-        width,
-      ),
-      y: visibleCanvasTop,
-      width,
-    };
-  }
-
-  async function uploadImage(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch(`/api/pages/${pageId}/attachments`, {
-      method: "POST",
-      body: formData,
-    });
-    const payload = (await response.json().catch(() => null)) as
-      | AttachmentUploadResponse
-      | { error?: string }
-      | null;
-
-    if (
-      !response.ok ||
-      !payload ||
-      !("attachment" in payload) ||
-      !payload.attachment?.id
-    ) {
-      const message =
-        payload && "error" in payload && payload.error
-          ? payload.error
-          : "بارگذاری تصویر انجام نشد.";
-      throw new Error(message);
-    }
-
-    return payload;
-  }
-
-  async function insertImageFiles(
-    imageFiles: File[],
-    placementOverride?: CanvasCoordinates,
-  ) {
-    if (imageFiles.length === 0) {
-      return;
-    }
-
-    const placement = placementOverride ?? getPastedImageCoordinates();
-    let nextY = placement.y;
-    setImageUploadError(null);
-
-    for (const file of imageFiles) {
-      setPendingImageUploads((current) => current + 1);
-
-      try {
-        const uploaded = await uploadImage(file);
-
-        if (!isMountedRef.current) {
-          continue;
-        }
-
-        const block: FreeformBlock = {
-          id: createBlockId(),
-          type: "image",
-          attachmentId: uploaded.attachment.id,
-          fileName: uploaded.attachment.fileName,
-          x: placement.x,
-          y: nextY,
-          width: placement.width,
-          text: "",
-          aspectRatio: IMAGE_DEFAULT_ASPECT_RATIO,
-        };
-
-        markEditorInteraction();
-        recordDocumentHistory();
-        setBlocks((current) => [...current, block]);
-        setActiveBlockId(block.id);
-        setSelectedBlockIds([block.id]);
-        nextY += getImageBlockHeight(block, placement.width) + 24;
-      } catch (error) {
-        console.error("Failed to upload a pasted image.", error);
-
-        if (isMountedRef.current) {
-          setImageUploadError(
-            error instanceof Error ? error.message : "بارگذاری تصویر انجام نشد.",
-          );
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setPendingImageUploads((current) => Math.max(0, current - 1));
-        }
-      }
-    }
-  }
-
-  function handleEditorPaste(event: React.ClipboardEvent<HTMLDivElement>) {
-    const itemFiles = Array.from(event.clipboardData.items)
-      .filter(
-        (item) => item.kind === "file" && item.type.startsWith("image/"),
-      )
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => Boolean(file));
-    const imageFiles =
-      itemFiles.length > 0
-        ? itemFiles
-        : Array.from(event.clipboardData.files).filter((file) =>
-            file.type.startsWith("image/"),
-          );
-
-    if (imageFiles.length === 0) {
-      const pastedText = event.clipboardData.getData("text/plain");
-      const target = event.target as HTMLElement;
-      const blockElement = target.closest<HTMLElement>("[data-block-id]");
-      const blockId = blockElement?.dataset.blockId;
-      const textarea = target.closest("textarea");
-
-      if (!pastedText || !blockId || !textarea || !looksLikeMarkdown(pastedText)) {
-        return;
-      }
-
-      const targetBlock = blocks.find(
-        (block) => block.id === blockId && !isImageBlock(block),
-      );
-      if (!targetBlock) {
-        return;
-      }
-
-      event.preventDefault();
-      const selectionStart = textarea.selectionStart ?? targetBlock.text.length;
-      const selectionEnd = textarea.selectionEnd ?? selectionStart;
-      const nextText =
-        targetBlock.text.slice(0, selectionStart) +
-        pastedText +
-        targetBlock.text.slice(selectionEnd);
-      updateBlockText(blockId, nextText, markdownToHtml(nextText));
-      return;
-    }
-
-    event.preventDefault();
-    void insertImageFiles(imageFiles);
-  }
-
-  function handleImageFileSelection(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const input = event.currentTarget;
-    const imageFiles = Array.from(input.files ?? []).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-    input.value = "";
-    void insertImageFiles(imageFiles);
-  }
-
-  async function readClipboardContent() {
-    const clipboard = navigator.clipboard;
-
-    if (!clipboard) {
-      throw new Error("دسترسی به کلیپ‌بورد در این مرورگر فعال نیست.");
-    }
-
-    if (typeof clipboard.read === "function") {
-      try {
-        const clipboardItems = await clipboard.read();
-        const imageFiles: File[] = [];
-
-        for (const item of clipboardItems) {
-          for (const type of item.types.filter((itemType) =>
-            CLIPBOARD_IMAGE_TYPES.has(itemType),
-          )) {
-            const blob = await item.getType(type);
-            const extension =
-              type === "image/jpeg"
-                ? "jpg"
-                : type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-            imageFiles.push(
-              new File(
-                [blob],
-                `clipboard-image-${imageFiles.length + 1}.${extension}`,
-                { type },
-              ),
-            );
-          }
-        }
-
-        if (imageFiles.length > 0) {
-          return { imageFiles, text: "" };
-        }
-
-        for (const item of clipboardItems) {
-          if (item.types.includes("text/plain")) {
-            const textBlob = await item.getType("text/plain");
-            return { imageFiles: [], text: await textBlob.text() };
-          }
-        }
-      } catch (error) {
-        if (typeof clipboard.readText !== "function") {
-          throw error;
-        }
-      }
-    }
-
-    if (typeof clipboard.readText === "function") {
-      return { imageFiles: [], text: await clipboard.readText() };
-    }
-
-    throw new Error("خواندن از کلیپ‌بورد در این مرورگر پشتیبانی نمی‌شود.");
-  }
-
-  async function copyTextToClipboard(text: string) {
-    if (!text) {
-      return;
-    }
-
-    try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("نوشتن در کلیپ‌بورد پشتیبانی نمی‌شود.");
-      }
-
-      await navigator.clipboard.writeText(text);
-      setImageUploadError(null);
-    } catch (error) {
-      console.error("Failed to copy editor text.", error);
-      setImageUploadError(
-        error instanceof Error
-          ? error.message
-          : "کپی‌کردن متن انجام نشد.",
-      );
-    }
-  }
-
-  async function copyImageToClipboard(block: FreeformBlock) {
-    if (!block.attachmentId) {
-      return;
-    }
-
-    try {
-      if (
-        !navigator.clipboard?.write ||
-        typeof ClipboardItem === "undefined"
-      ) {
-        throw new Error("کپی تصویر در این مرورگر پشتیبانی نمی‌شود.");
-      }
-
-      const response = await fetch(`/api/attachments/${block.attachmentId}`);
-      if (!response.ok) {
-        throw new Error("دریافت تصویر برای کپی انجام نشد.");
-      }
-
-      const blob = await response.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ]);
-      setImageUploadError(null);
-    } catch (error) {
-      console.error("Failed to copy an editor image.", error);
-      setImageUploadError(
-        error instanceof Error
-          ? error.message
-          : "کپی‌کردن تصویر انجام نشد.",
-      );
-    }
-  }
-
-  function getSelectedBlocksText(ids: string[]) {
-    return blocks
-      .filter((block) => ids.includes(block.id) && !isImageBlock(block))
-      .map((block) => block.text)
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  async function pasteFromClipboard({
-    placement,
-    targetTitle = false,
-    targetBlockId,
-    selectionStart = 0,
-    selectionEnd = selectionStart,
-  }: {
-    placement?: CanvasCoordinates;
-    targetTitle?: boolean;
-    targetBlockId?: string;
-    selectionStart?: number;
-    selectionEnd?: number;
-  }) {
-    try {
-      setImageUploadError(null);
-      const clipboardContent = await readClipboardContent();
-
-      if (clipboardContent.imageFiles.length > 0) {
-        await insertImageFiles(clipboardContent.imageFiles, placement);
-        return;
-      }
-
-      if (!clipboardContent.text) {
-        return;
-      }
-
-      if (targetTitle) {
-        const nextTitle =
-          title.slice(0, selectionStart) +
-          clipboardContent.text +
-          title.slice(selectionEnd);
-        const nextCaretPosition =
-          selectionStart + clipboardContent.text.length;
-
-        markEditorInteraction();
-        recordDocumentHistory();
-        setTitle(nextTitle);
-        requestAnimationFrame(() => {
-          titleInputRef.current?.focus();
-          titleInputRef.current?.setSelectionRange(
-            nextCaretPosition,
-            nextCaretPosition,
-          );
-        });
-        return;
-      }
-
-      if (targetBlockId) {
-        const currentBlocks = currentDocumentStateRef.current.blocks;
-        const targetBlock =
-          currentBlocks.find(
-            (block) => block.id === targetBlockId && !isImageBlock(block),
-          ) ??
-          blocks.find(
-            (block) => block.id === targetBlockId && !isImageBlock(block),
-          );
-
-        if (!targetBlock) {
-          return;
-        }
-
-        if (!currentBlocks.some((block) => block.id === targetBlockId)) {
-          flushSync(() => {
-            setBlocks((current) =>
-              current.some((block) => block.id === targetBlockId)
-                ? current
-                : [...current, targetBlock],
-            );
-            setActiveBlockId(targetBlockId);
-            setSelectedBlockIds([targetBlockId]);
-          });
-        }
-
-        const richTextHandle = richTextBlockRefs.current[targetBlockId];
-        if (richTextHandle) {
-          richTextHandle.replaceSelection(
-            clipboardContent.text,
-            looksLikeMarkdown(clipboardContent.text)
-              ? markdownToHtml(clipboardContent.text)
-              : undefined,
-          );
-          return;
-        }
-
-        const nextText =
-          targetBlock.text.slice(0, selectionStart) +
-          clipboardContent.text +
-          targetBlock.text.slice(selectionEnd);
-        const nextCaretPosition =
-          selectionStart + clipboardContent.text.length;
-
-        selectionRestoreRef.current = {
-          id: targetBlockId,
-          start: nextCaretPosition,
-          end: nextCaretPosition,
-        };
-        updateBlockText(
-          targetBlockId,
-          nextText,
-          targetBlock.richText ? markdownToHtml(nextText) : undefined,
-        );
-        return;
-      }
-
-      if (placement) {
-        const richText = looksLikeMarkdown(clipboardContent.text)
-          ? markdownToHtml(clipboardContent.text)
-          : undefined;
-        addBlockAt(
-          placement.x,
-          placement.y,
-          true,
-          placement.width,
-          clipboardContent.text,
-          richText,
-        );
-      }
-    } catch (error) {
-      console.error("Failed to paste clipboard content into the editor.", error);
-      setImageUploadError(
-        error instanceof Error
-          ? error.message
-          : "پیست‌کردن محتوا انجام نشد.",
-      );
-    }
   }
 
   function getCanvasCoordinates(
@@ -1751,6 +1124,18 @@ export function NoteEditor({
       return;
     }
 
+    const target = event.target;
+    if (!(target instanceof Node) || !pageRef.current?.contains(target)) {
+      return;
+    }
+
+    const canApply = isRedo
+      ? historyRef.current.future.length > 0
+      : historyRef.current.past.length > 0;
+    if (!canApply) {
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
 
@@ -2171,6 +1556,9 @@ export function NoteEditor({
           <div
             ref={canvasRef}
             data-layout-mode="freeform"
+            data-virtualized={shouldVirtualizeBlocks ? "true" : "false"}
+            data-rendered-block-count={renderedBlocks.length}
+            data-total-block-count={blocks.length}
             className="freeform-canvas relative flex-1 bg-white"
             style={{
               minHeight: `${
@@ -2277,512 +1665,39 @@ export function NoteEditor({
               ) : null}
             </div>
 
-            {blocks.map((block) => {
-              const blockWidth = getRenderedBlockWidth(block, canvasWidth);
-              const blockX = getCanvasBoundedX(canvasWidth, block.x, blockWidth);
-              const isSelected = selectedBlockIds.includes(block.id);
-
-              if (isImageBlock(block) && block.attachmentId) {
-                const imageHeight = getImageBlockHeight(block, blockWidth);
-                const pasteWidth = Math.min(
-                  IMAGE_DEFAULT_WIDTH,
-                  getBlockMaxWidth(canvasWidth),
-                );
-                const pasteCoordinates = {
-                  x: getCanvasBoundedX(canvasWidth, block.x, pasteWidth),
-                  y: block.y + imageHeight + 24,
-                  width: pasteWidth,
-                };
-
-                return (
-                  <div
-                    key={block.id}
-                    data-testid={`image-block-${block.id}`}
-                    data-editor-block
-                    data-layout="freeform"
-                    style={{
-                      left: `${blockX}px`,
-                      top: `${block.y}px`,
-                      width: `${blockWidth}px`,
-                    }}
-                    className="group absolute"
-                    onPointerDown={() => selectSingleBlock(block.id)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      selectSingleBlock(block.id);
-                      openMenu(event, {
-                        title: "تصویر",
-                        items: [
-                          {
-                            id: "copy-image",
-                            label: "کپی",
-                            onSelect: () => copyImageToClipboard(block),
-                          },
-                          {
-                            id: "paste-after-image",
-                            label: "پیست",
-                            onSelect: () =>
-                              pasteFromClipboard({
-                                placement: pasteCoordinates,
-                              }),
-                          },
-                          { id: "separator-clipboard", separator: true },
-                          {
-                            id: "delete-image",
-                            label: "حذف تصویر از یادداشت",
-                            danger: true,
-                            onSelect: () => deleteBlock(block.id),
-                          },
-                        ],
-                      });
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onPointerDown={(event) =>
-                        startDraggingBlock(event, block)
-                      }
-                      className="absolute -right-8 top-1 z-10 inline-flex h-7 w-7 touch-none items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] opacity-100 shadow-sm transition hover:bg-[#f0f8f4] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-                      aria-label="جابه‌جایی تصویر"
-                    >
-                      <GripVertical className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        deleteBlock(block.id);
-                      }}
-                      className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#a94444] opacity-100 shadow-sm transition hover:bg-[#fff0f0] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-                      aria-label="حذف تصویر"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <div
-                      className="overflow-hidden rounded-xl border bg-[#f5f7f6]"
-                      style={{
-                        borderColor: isSelected
-                          ? notebookTheme.accent
-                          : "#dce5df",
-                        boxShadow: isSelected
-                          ? `0 0 0 2px ${notebookTheme.accent}`
-                          : "0 8px 24px rgba(49, 72, 59, 0.12)",
-                      }}
-                    >
-                      <Image
-                        src={`/api/attachments/${block.attachmentId}`}
-                        alt={block.fileName ?? "تصویر یادداشت"}
-                        width={Math.max(1, Math.round(blockWidth))}
-                        height={Math.max(1, Math.round(imageHeight))}
-                        unoptimized
-                        draggable={false}
-                        className="block h-auto w-full select-none object-contain"
-                        onLoad={(event) => {
-                          const { naturalWidth, naturalHeight } =
-                            event.currentTarget;
-
-                          if (naturalWidth > 0 && naturalHeight > 0) {
-                            const nextAspectRatio =
-                              naturalWidth / naturalHeight;
-
-                            if (
-                              Math.abs(
-                                nextAspectRatio -
-                                  (block.aspectRatio ??
-                                    IMAGE_DEFAULT_ASPECT_RATIO),
-                              ) > 0.01
-                            ) {
-                              updateBlock(
-                                block.id,
-                                (current) => ({
-                                  ...current,
-                                  aspectRatio: nextAspectRatio,
-                                }),
-                                false,
-                              );
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onPointerDown={(event) =>
-                        startResizingBlock(event, block)
-                      }
-                      className="absolute -bottom-2 -right-2 z-10 h-5 w-5 touch-none cursor-se-resize rounded-full border-2 border-white bg-[#4f9b6c] opacity-100 shadow transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-                      aria-label="تغییر اندازه تصویر"
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={block.id}
-                  data-testid={`note-block-${block.id}`}
-                  data-editor-block
-                  data-block-id={block.id}
-                  data-layout="freeform"
-                  style={{
-                    left: `${blockX}px`,
-                    top: `${block.y}px`,
-                    width: `${blockWidth}px`,
-                  }}
-                  className="group absolute rounded-md"
-                >
-                  <div
-                    role="separator"
-                    aria-label="تغییر عرض بلوک از مرز چپ"
-                    aria-orientation="vertical"
-                    data-testid={`resize-edge-block-${block.id}`}
-                    onPointerDown={(event) =>
-                      startResizingBlock(event, block, "left")
-                    }
-                    className="absolute -left-1 top-0 z-10 h-full w-2 touch-none cursor-ew-resize"
-                  />
-
-                  <button
-                    type="button"
-                    onPointerDown={(event) => startDraggingBlock(event, block)}
-                    className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
-                    aria-label="جابجایی بلوک"
-                  >
-                    <GripVertical className="h-3.5 w-3.5" />
-                  </button>
-
-                  {block.richText ? (
-                    <RichTextBlockEditor
-                      ref={(handle) => {
-                        richTextBlockRefs.current[block.id] = handle;
-                      }}
-                      html={block.richText}
-                      direction={block.direction ?? "rtl"}
-                      textAlign={block.align ?? "right"}
-                      defaultColor={block.textColor ?? "#222222"}
-                      defaultFontSize={block.fontSize ?? 15}
-                      bold={block.bold ?? false}
-                      italic={block.italic ?? false}
-                      isSelected={isSelected}
-                      selectionColor={notebookTheme.accent}
-                      initialSelection={richTextInitialSelections[block.id]}
-                      onFocus={() => selectSingleBlock(block.id)}
-                      onBlur={() => {
-                        finishHistoryGroup();
-                        removeBlockIfEmpty(block.id);
-                        flushPendingSave("block-blur");
-                      }}
-                      onUpdate={(text, richText) =>
-                        updateBlockText(block.id, text, richText)
-                      }
-                      onSelectionStyleChange={(style) =>
-                        setActiveRichTextStyle({ blockId: block.id, ...style })
-                      }
-                      onContextMenu={(event, selectedText) => {
-                        selectSingleBlock(block.id);
-                        openMenu(event, {
-                          title: "Ø¨Ù„ÙˆÚ© Ù…ØªÙ†",
-                          items: [
-                            {
-                              id: "copy-text",
-                              label: "Ú©Ù¾ÛŒ",
-                              disabled: !selectedText,
-                              onSelect: () => copyTextToClipboard(selectedText),
-                            },
-                            {
-                              id: "paste-text",
-                              label: "Ù¾ÛŒØ³Øª",
-                              onSelect: () =>
-                                pasteFromClipboard({ targetBlockId: block.id }),
-                            },
-                            { id: "separator-clipboard", separator: true },
-                            {
-                              id: "delete-block",
-                              label: "Ø­Ø°Ù Ø¨Ù„ÙˆÚ©",
-                              danger: true,
-                              onSelect: () => deleteBlock(block.id),
-                            },
-                          ],
-                        });
-                      }}
-                    />
-                  ) : (
-                  <textarea
-                    ref={(element) => {
-                      blockRefs.current[block.id] = element;
-                    }}
-                    value={block.text}
-                    onChange={(event) => updateBlockText(block.id, event.target.value)}
-                    onKeyDown={(event) => handleBlockKeyDown(event, block)}
-                    onFocus={() => selectSingleBlock(block.id)}
-                    onSelect={(event) => {
-                      textSelectionRef.current[block.id] = {
-                        start: event.currentTarget.selectionStart ?? 0,
-                        end:
-                          event.currentTarget.selectionEnd ??
-                          event.currentTarget.selectionStart ??
-                          0,
-                      };
-                    }}
-                    onBlur={() => {
-                      finishHistoryGroup();
-                      removeBlockIfEmpty(block.id);
-                      flushPendingSave("block-blur");
-                    }}
-                    onMouseDown={(event) => {
-                      if (event.ctrlKey || event.metaKey) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        toggleBlockSelection(block.id);
-                      }
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-
-                      if (event.ctrlKey || event.metaKey) {
-                        return;
-                      }
-
-                      selectSingleBlock(block.id);
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (!selectedBlockIds.includes(block.id)) {
-                        selectSingleBlock(block.id);
-                      }
-
-                      const selectedIds =
-                        selectedBlockIds.includes(block.id) &&
-                        selectedBlockIds.length > 1
-                          ? selectedBlockIds
-                          : [block.id];
-                      const selectionStart =
-                        event.currentTarget.selectionStart ?? 0;
-                      const selectionEnd =
-                        event.currentTarget.selectionEnd ?? selectionStart;
-                      const selectedText =
-                        selectionStart !== selectionEnd
-                          ? block.text.slice(selectionStart, selectionEnd)
-                          : getSelectedBlocksText(selectedIds);
-                      const clipboardItems = [
-                        {
-                          id: "copy-text",
-                          label: "کپی",
-                          disabled: !selectedText,
-                          onSelect: () =>
-                            copyTextToClipboard(selectedText),
-                        },
-                        {
-                          id: "paste-text",
-                          label: "پیست",
-                          onSelect: () =>
-                            pasteFromClipboard({
-                              targetBlockId: block.id,
-                              selectionStart,
-                              selectionEnd,
-                            }),
-                        },
-                        {
-                          id: "separator-clipboard",
-                          separator: true as const,
-                        },
-                      ];
-
-                      openMenu(event, {
-                        title:
-                          selectedIds.length > 1
-                            ? `${selectedIds.length} بلوک انتخاب شده`
-                            : "بلوک متن",
-                        items:
-                          selectedIds.length > 1
-                            ? [
-                                ...clipboardItems,
-                                {
-                                  id: "align-right",
-                                  label: "تراز راست",
-                                  onSelect: () =>
-                                    runEditorCommand("align-right", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "align-center",
-                                  label: "تراز وسط",
-                                  onSelect: () =>
-                                    runEditorCommand("align-center", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "align-justify",
-                                  label: "تراز کامل",
-                                  onSelect: () =>
-                                    runEditorCommand("align-justify", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-1", separator: true },
-                                {
-                                  id: "italic",
-                                  label: "مورب کردن انتخاب",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-italic", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "bold",
-                                  label: "پررنگ کردن انتخاب",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-bold", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-2", separator: true },
-                                {
-                                  id: "delete-selected",
-                                  label: "حذف بلوک‌های انتخاب‌شده",
-                                  danger: true,
-                                  onSelect: () =>
-                                    runEditorCommand("delete-block", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "clear-selection",
-                                  label: "پاک کردن انتخاب",
-                                  onSelect: () => setSelectedBlockIds([]),
-                                },
-                              ]
-                            : [
-                                ...clipboardItems,
-                                {
-                                  id: "undo",
-                                  label: "واگرد",
-                                  onSelect: () =>
-                                    runEditorCommand("undo", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "redo",
-                                  label: "انجام دوباره",
-                                  onSelect: () =>
-                                    runEditorCommand("redo", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-1", separator: true },
-                                {
-                                  id: "align-right",
-                                  label: "تراز راست",
-                                  onSelect: () =>
-                                    runEditorCommand("align-right", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "align-center",
-                                  label: "تراز وسط",
-                                  onSelect: () =>
-                                    runEditorCommand("align-center", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "align-justify",
-                                  label: "تراز کامل",
-                                  onSelect: () =>
-                                    runEditorCommand("align-justify", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-2", separator: true },
-                                {
-                                  id: "italic",
-                                  label: block.italic ? "برداشتن حالت مورب" : "مورب",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-italic", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "bold",
-                                  label: block.bold ? "برداشتن حالت پررنگ" : "پررنگ",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-bold", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-3", separator: true },
-                                {
-                                  id: "bullet-list",
-                                  label: "تبدیل به فهرست نشانه‌دار",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-bullet-list", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                {
-                                  id: "todo-list",
-                                  label: "تبدیل به فهرست کارها",
-                                  onSelect: () =>
-                                    runEditorCommand("toggle-todo-list", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                                { id: "separator-4", separator: true },
-                                {
-                                  id: "delete-block",
-                                  label: "حذف بلوک",
-                                  danger: true,
-                                  onSelect: () =>
-                                    runEditorCommand("delete-block", {
-                                      targetBlockIds: selectedIds,
-                                      primaryBlockId: block.id,
-                                    }),
-                                },
-                              ],
-                      });
-                    }}
-                    style={{
-                      textAlign: block.align ?? "right",
-                      fontWeight: block.bold ? 700 : 400,
-                      fontStyle: block.italic ? "italic" : "normal",
-                      color: block.textColor ?? "#222222",
-                      fontSize: `${block.fontSize ?? 15}px`,
-                      boxShadow: isSelected
-                        ? `0 0 0 2px ${notebookTheme.accent}`
-                        : "none",
-                      borderRadius: "6px",
-                    }}
-                    className="freeform-note min-h-7 w-full resize-none overflow-hidden border-none bg-transparent px-1 py-0 text-right text-[15px] leading-7 text-[#222] outline-none"
-                    dir={block.direction ?? "rtl"}
-                  />
-                  )}
-                </div>
-                );
-              })}
+{renderedBlocks.map((block) => (
+              <NoteEditorBlock
+                key={block.id}
+                block={block}
+                canvasWidth={canvasWidth}
+                selectedBlockIds={selectedBlockIds}
+                notebookTheme={notebookTheme}
+                richTextInitialSelections={richTextInitialSelections}
+                setBlockRef={setBlockRef}
+                setRichTextBlockRef={setRichTextBlockRef}
+                textSelectionRef={textSelectionRef}
+                getCanvasBoundedX={getCanvasBoundedX}
+                selectSingleBlock={selectSingleBlock}
+                startDraggingBlock={startDraggingBlock}
+                startResizingBlock={startResizingBlock}
+                copyImageToClipboard={copyImageToClipboard}
+                pasteFromClipboard={pasteFromClipboard}
+                deleteBlock={deleteBlock}
+                updateBlock={updateBlock}
+                finishHistoryGroup={finishHistoryGroup}
+                removeBlockIfEmpty={removeBlockIfEmpty}
+                flushPendingSave={flushPendingSave}
+                updateBlockText={updateBlockText}
+                setActiveRichTextStyle={setActiveRichTextStyle}
+                openMenu={openMenu}
+                copyTextToClipboard={copyTextToClipboard}
+                handleBlockKeyDown={handleBlockKeyDown}
+                toggleBlockSelection={toggleBlockSelection}
+                getSelectedBlocksText={getSelectedBlocksText}
+                runEditorCommand={runEditorCommand}
+                setSelectedBlockIds={setSelectedBlockIds}
+              />
+            ))}
 
             {blocks.length === 0 ? (
               <div className="px-4 py-8 text-right text-sm text-[#8b8b8b] md:px-[48px]">

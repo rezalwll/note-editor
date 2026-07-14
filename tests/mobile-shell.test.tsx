@@ -39,6 +39,7 @@ vi.mock("@/components/editor-toolbar", () => ({
 vi.mock("@/app/actions", () => ({
   archiveNotebookInlineAction: vi.fn(),
   archivePageInlineAction: vi.fn(),
+  assignNotebookGroupInlineAction: vi.fn(),
   createNotebookGroupInlineAction: vi.fn(),
   createPageInlineAction: vi.fn(),
   deleteNotebookGroupInlineAction: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("@/app/actions", () => ({
   deletePagePermanentlyInlineAction: vi.fn(),
   renameNotebookGroupInlineAction: vi.fn(),
   renameNotebookInlineAction: vi.fn(),
+  restoreNotebookGroupInlineAction: vi.fn(),
   restorePageInlineAction: vi.fn(),
 }));
 
@@ -86,6 +88,7 @@ describe("MobileShell", () => {
           },
         ]}
         currentUser={{
+          id: "user-1",
           username: "user1",
           displayName: "User One",
         }}
@@ -115,6 +118,7 @@ describe("MobileShell", () => {
         groups={[]}
         notebooks={[]}
         currentUser={{
+          id: "user-1",
           username: "user1",
           displayName: "User One",
         }}

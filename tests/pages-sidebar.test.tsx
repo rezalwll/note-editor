@@ -212,4 +212,37 @@ describe("PagesSidebar", () => {
     expect(screen.getByText("صفحه اول").closest("a")).toHaveClass("cursor-pointer");
     expect(screen.getByLabelText("جابجایی صفحه")).toBeInTheDocument();
   });
+
+  it("virtualizes a sidebar containing five thousand pages", () => {
+    const pages = Array.from({ length: 5_000 }, (_, index) => ({
+      id: `page-${index + 1}`,
+      title: `Large page ${index + 1}`,
+      updatedAt: new Date("2026-06-22T10:00:00.000Z"),
+      deletedAt: null,
+      sortOrder: index,
+    }));
+    const { container } = render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Large notebook",
+            deletedAt: null,
+            pages,
+          },
+        ]}
+      />,
+    );
+
+    const list = container.querySelector(
+      '[data-virtualized="true"]',
+    ) as HTMLDivElement;
+    expect(list).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-page-item]").length).toBeLessThan(30);
+
+    fireEvent.scroll(list, { target: { scrollTop: 198_000 } });
+
+    expect(screen.getByText("Large page 3001")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-page-item]").length).toBeLessThan(30);
+  });
 });

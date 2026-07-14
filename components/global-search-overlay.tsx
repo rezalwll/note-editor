@@ -9,8 +9,11 @@ import {
   getOpenSearchEventName,
 } from "@/lib/search-events";
 import type { SearchResult, SearchResultsPayload, SearchResultType } from "@/lib/search";
+import { getFixedVirtualRange } from "@/lib/virtualization";
 
 const SEARCH_DEBOUNCE_MS = 275;
+const SEARCH_RESULT_ROW_HEIGHT = 92;
+const SEARCH_VIRTUALIZATION_THRESHOLD = 40;
 
 const SECTION_LABELS: Record<SearchResultType, string> = {
   page: "صفحه‌ها",
@@ -48,12 +51,17 @@ function getVisibleResultCount(results: SearchResultsPayload["results"]) {
 export function GlobalSearchOverlay() {
   const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const resultListRef = useRef<HTMLDivElement | null>(null);
   const previousPathnameRef = useRef(pathname);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<SearchResultsPayload["results"]>(createEmptyResults);
   const [isLoading, setIsLoading] = useState(false);
+  const [resultViewport, setResultViewport] = useState({
+    scrollTop: 0,
+    height: 560,
+  });
 
   useEffect(() => {
     const handleOpenEvent = () => {
@@ -167,6 +175,32 @@ export function GlobalSearchOverlay() {
   const visibleResults = debouncedQuery ? results : createEmptyResults();
   const visibleCount = getVisibleResultCount(visibleResults);
   const shouldShowLoading = Boolean(debouncedQuery) && isLoading;
+  const flattenedResults = (
+    Object.keys(SECTION_LABELS) as SearchResultType[]
+  ).flatMap((type) =>
+    visibleResults[type].map((item, index) => ({
+      item,
+      type,
+      isFirstInSection: index === 0,
+    })),
+  );
+  const shouldVirtualizeResults =
+    flattenedResults.length >= SEARCH_VIRTUALIZATION_THRESHOLD;
+  const resultVirtualRange = getFixedVirtualRange({
+    itemCount: flattenedResults.length,
+    itemHeight: SEARCH_RESULT_ROW_HEIGHT,
+    scrollTop: shouldVirtualizeResults ? resultViewport.scrollTop : 0,
+    viewportHeight: shouldVirtualizeResults
+      ? resultViewport.height
+      : flattenedResults.length * SEARCH_RESULT_ROW_HEIGHT,
+    overscan: shouldVirtualizeResults ? 5 : 0,
+  });
+  const renderedResults = shouldVirtualizeResults
+    ? flattenedResults.slice(
+        resultVirtualRange.startIndex,
+        resultVirtualRange.endIndex,
+      )
+    : flattenedResults;
 
   return (
     <div className="fixed inset-0 z-[220] bg-black/35 backdrop-blur-[2px]">
@@ -182,7 +216,13 @@ export function GlobalSearchOverlay() {
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (resultListRef.current) {
+                resultListRef.current.scrollTop = 0;
+              }
+              setResultViewport((current) => ({ ...current, scrollTop: 0 }));
+            }}
             placeholder="در صفحه‌ها، زیر مجموعه‌ها، مجموعه‌ها و فایل‌ها جست‌وجو کنید..."
             className="w-full bg-transparent text-right text-sm text-[#1f2a37] outline-none placeholder:text-[#718198]"
             dir="rtl"
@@ -197,7 +237,24 @@ export function GlobalSearchOverlay() {
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-4" dir="rtl">
+        <div
+          ref={resultListRef}
+          className="max-h-[70vh] overflow-y-auto p-4"
+          dir="rtl"
+          data-search-results
+          data-virtualized={shouldVirtualizeResults ? "true" : "false"}
+          data-rendered-count={renderedResults.length}
+          onScroll={(event) => {
+            if (!shouldVirtualizeResults) {
+              return;
+            }
+
+            setResultViewport({
+              scrollTop: event.currentTarget.scrollTop,
+              height: event.currentTarget.clientHeight || 560,
+            });
+          }}
+        >
           {!query.trim() ? (
             <div className="rounded-2xl border border-dashed border-[#dbe4f0] bg-white px-4 py-8 text-center text-sm text-[#6b7280]">
               با `Ctrl+K` یا دکمه جست‌وجو از هرجای برنامه سریع‌تر به نتیجه برسید.
@@ -212,44 +269,66 @@ export function GlobalSearchOverlay() {
               نتیجه‌ای برای این جست‌وجو پیدا نشد.
             </div>
           ) : (
-            <div className="grid gap-4">
-              {(Object.keys(SECTION_LABELS) as SearchResultType[]).map((type) => {
-                const items = visibleResults[type];
-
-                if (items.length === 0) {
-                  return null;
+            <div
+              className={shouldVirtualizeResults ? "relative" : "grid gap-2"}
+              style={
+                shouldVirtualizeResults
+                  ? { height: `${resultVirtualRange.totalHeight}px` }
+                  : undefined
+              }
+            >
+              <div
+                className={
+                  shouldVirtualizeResults
+                    ? "absolute inset-x-0 top-0"
+                    : "contents"
                 }
-
-                return (
-                  <section key={type} className="grid gap-2">
-                    <div className="px-1 text-[11px] font-semibold text-[#7b8797]">
-                      {SECTION_LABELS[type]}
-                    </div>
-                    <div className="grid gap-2">
-                      {items.map((item) => (
-                        <Link
-                          key={`${item.type}-${item.id}`}
-                          href={item.href}
-                          onClick={() => setOpen(false)}
-                          className="block rounded-2xl border border-[#e4eaf4] bg-white px-4 py-3 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:border-[#c7d5ec] hover:bg-[#fcfdff]"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-medium text-[#1f2a37]">
-                              {item.title}
-                            </div>
-                            <div className="shrink-0 rounded-full bg-[#eef4ff] px-2 py-1 text-[10px] text-[#44618e]">
-                              {MATCH_COPY[item.matchedField]}
-                            </div>
-                          </div>
-                          {item.subtitle ? (
-                            <div className="mt-1 text-xs text-[#708090]">{item.subtitle}</div>
-                          ) : null}
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+                style={
+                  shouldVirtualizeResults
+                    ? {
+                        transform: `translateY(${resultVirtualRange.offsetTop}px)`,
+                      }
+                    : undefined
+                }
+              >
+                {renderedResults.map(({ item, type, isFirstInSection }) => (
+                  <div
+                    key={`${item.type}-${item.id}`}
+                    className="relative"
+                    style={
+                      shouldVirtualizeResults
+                        ? { height: `${SEARCH_RESULT_ROW_HEIGHT}px` }
+                        : undefined
+                    }
+                    data-search-result={item.id}
+                  >
+                    {isFirstInSection ? (
+                      <div className="mb-2 px-1 text-[11px] font-semibold text-[#7b8797]">
+                        {SECTION_LABELS[type]}
+                      </div>
+                    ) : null}
+                    <Link
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className="block rounded-2xl border border-[#e4eaf4] bg-white px-4 py-3 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:border-[#c7d5ec] hover:bg-[#fcfdff]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="truncate text-sm font-medium text-[#1f2a37]">
+                          {item.title}
+                        </div>
+                        <div className="shrink-0 rounded-full bg-[#eef4ff] px-2 py-1 text-[10px] text-[#44618e]">
+                          {MATCH_COPY[item.matchedField]}
+                        </div>
+                      </div>
+                      {item.subtitle ? (
+                        <div className="mt-1 truncate text-xs text-[#708090]">
+                          {item.subtitle}
+                        </div>
+                      ) : null}
+                    </Link>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
