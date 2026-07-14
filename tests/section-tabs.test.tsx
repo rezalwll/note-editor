@@ -72,6 +72,30 @@ describe("SectionTabs", () => {
     });
   });
 
+  it("makes the entire notebook tab link clickable", () => {
+    render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: [],
+          },
+        ]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Inbox" });
+    const tab = link.closest("[data-section-tab]");
+
+    expect(link).toHaveClass("inline-flex", "h-full", "px-4");
+    expect(tab).not.toHaveClass("px-4");
+  });
+
   it("creates a new notebook and opens its untitled page on Enter", async () => {
     const user = userEvent.setup();
 

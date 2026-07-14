@@ -1170,8 +1170,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
                 });
               }}
                className={cn(
-                 "inline-flex h-6 items-center rounded-t-md px-4 text-xs transition",
+                 "inline-flex h-6 items-center rounded-t-md text-xs transition",
                  "cursor-pointer",
+                 isEditing ? "px-4" : null,
                  isActive ? "translate-y-[1px]" : "hover:-translate-y-px",
                  draggedNotebookId === notebook.id ? "opacity-70" : null,
                )}
@@ -1213,6 +1214,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               ) : (
                 <Link
                   href={`/notebooks/${notebook.id}`}
+                  className="inline-flex h-full items-center px-4"
                   onClick={(event) => {
                     if (event.ctrlKey || event.metaKey) {
                       event.preventDefault();
