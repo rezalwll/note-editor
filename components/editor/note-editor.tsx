@@ -135,7 +135,11 @@ function getBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
   );
 }
 
-function measureBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
+function measureBlockWidth(
+  text: string,
+  canvasWidth = BLOCK_MAX_WIDTH,
+  textStyle?: CSSStyleDeclaration | null,
+) {
   if (typeof document === "undefined") {
     return getBlockWidth(text, canvasWidth);
   }
@@ -149,12 +153,32 @@ function measureBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
     return getBlockWidth(text, canvasWidth);
   }
 
-  textMeasureContext.font = "400 15px Segoe UI, Tahoma, Geneva, Verdana, sans-serif";
+  const fontStyle = textStyle?.fontStyle || "normal";
+  const fontWeight = textStyle?.fontWeight || "400";
+  const fontSize = textStyle?.fontSize || "15px";
+  const fontFamily =
+    textStyle?.fontFamily || "Segoe UI, Tahoma, Geneva, Verdana, sans-serif";
+  const letterSpacing = Number.parseFloat(textStyle?.letterSpacing || "0") || 0;
+  const wordSpacing = Number.parseFloat(textStyle?.wordSpacing || "0") || 0;
+  const horizontalPadding =
+    (Number.parseFloat(textStyle?.paddingLeft || "0") || 0) +
+    (Number.parseFloat(textStyle?.paddingRight || "0") || 0);
+
+  textMeasureContext.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
   const longestLineWidth = text
     .split("\n")
     .reduce(
-      (max, line) =>
-        Math.max(max, textMeasureContext!.measureText(line || " ").width),
+      (max, line) => {
+        const measuredLine = line || " ";
+        const spacingWidth =
+          Math.max(0, measuredLine.length - 1) * letterSpacing +
+          (measuredLine.match(/\s/g)?.length ?? 0) * wordSpacing;
+
+        return Math.max(
+          max,
+          textMeasureContext!.measureText(measuredLine).width + spacingWidth,
+        );
+      },
       0,
     );
   const maxWidth = Math.min(BLOCK_MAX_WIDTH, getBlockMaxWidth(canvasWidth));
@@ -165,7 +189,10 @@ function measureBlockWidth(text: string, canvasWidth = BLOCK_MAX_WIDTH) {
 
   return Math.min(
     maxWidth,
-    Math.max(BLOCK_MIN_WIDTH, Math.ceil(longestLineWidth) + 40),
+    Math.max(
+      BLOCK_MIN_WIDTH,
+      Math.ceil(longestLineWidth) + horizontalPadding + 32,
+    ),
   );
 }
 
@@ -1488,11 +1515,15 @@ export function NoteEditor({
     updateBlock(id, (block) => {
       const activeCanvasWidth =
         canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
+      const textElement = getTextBlockElement(id);
+      const textStyle = textElement
+        ? window.getComputedStyle(textElement)
+        : null;
       const isLegacyColumnBlock = typeof block.width !== "number";
       const previousWidth = getRenderedBlockWidth(block, activeCanvasWidth);
       const nextWidth = isLegacyColumnBlock
         ? previousWidth
-        : measureBlockWidth(text, activeCanvasWidth);
+        : measureBlockWidth(text, activeCanvasWidth, textStyle);
       const widthDelta = nextWidth - previousWidth;
       const nextX = getCanvasBoundedX(
         activeCanvasWidth,

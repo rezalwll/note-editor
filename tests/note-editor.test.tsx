@@ -158,6 +158,44 @@ describe("NoteEditor freeform placement", () => {
     });
   }
 
+  it("measures automatic block width with the rendered text styles", async () => {
+    const measurementContext = {
+      font: "",
+      measureText: vi.fn((value: string) => ({ width: value.length * 10 })),
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      measurementContext,
+    );
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "auto-width", x: 48, y: 72, width: 240, text: "start" }],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.style.fontFamily = "IRANYekan";
+    textarea.style.fontSize = "18px";
+    textarea.style.fontWeight = "700";
+    textarea.style.paddingLeft = "4px";
+    textarea.style.paddingRight = "4px";
+
+    fireEvent.change(textarea, { target: { value: "123456789012345678901234567890" } });
+
+    await waitFor(() => {
+      expect(measurementContext.font).toContain("700 18px IRANYekan");
+      expect(container.querySelector('[data-testid="note-block-auto-width"]')).toHaveStyle({
+        width: "340px",
+      });
+    });
+  });
+
   it.each([
     ["empty legacy HTML", "<p></p>"],
     [
