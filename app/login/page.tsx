@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/forms/login-form";
+import { LoginGradientBackground } from "@/components/login-gradient-background";
 import { getSectionDocumentTitle } from "@/lib/page-title";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { passwordReset } = await searchParams;
 
   return (
-    <main className="min-h-[100dvh] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_32%),linear-gradient(180deg,_#faf7f0_0%,_#efe7da_100%)] px-3 py-4 sm:px-4 sm:py-8">
-      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-xl items-center sm:min-h-[calc(100vh-4rem)]">
-        <section className="rounded-[30px] border border-stone-200 bg-white/88 p-6 shadow-[0_24px_80px_rgba(28,25,23,0.12)] backdrop-blur sm:rounded-[36px] sm:p-8">
+    <main className="relative isolate min-h-[100dvh] overflow-hidden px-3 py-4 sm:px-4 sm:py-8">
+      <LoginGradientBackground />
+      <div className="relative z-10 mx-auto grid min-h-[calc(100dvh-2rem)] max-w-xl items-center sm:min-h-[calc(100vh-4rem)]">
+        <section className="rounded-[30px] border border-white/55 bg-white/82 p-6 shadow-[0_24px_80px_rgba(33,0,100,0.24)] backdrop-blur-xl sm:rounded-[36px] sm:p-8">
           <div className="mb-8 space-y-3">
             <h2 className="font-serif text-3xl tracking-tight text-[var(--text-strong)] sm:text-4xl">
               ورود به نوتاوا
