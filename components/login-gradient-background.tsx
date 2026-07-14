@@ -26,7 +26,7 @@ const FRAGMENT_SHADER = `
 
   void main() {
     vec2 point = v_uv;
-    float time = u_time * 0.35;
+    float time = u_time * 1.4;
 
     point.x += sin(point.y * 5.2 - time * 0.8) * 0.035;
     point.y += sin(point.x * 4.4 + time) * 0.045;
