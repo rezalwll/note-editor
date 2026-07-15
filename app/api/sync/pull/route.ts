@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import type { LocalNotebook, LocalPage, SyncBootstrapPayload } from "@/lib/offline-db/types";
 import { prisma } from "@/lib/prisma";
+import { observeRequest } from "@/lib/request-observability";
 
 export async function GET(request: Request) {
+  const observation = observeRequest(request, "/api/sync/pull");
   const user = await requireUser();
   const fetchedAt = new Date();
 
@@ -23,16 +25,25 @@ export async function GET(request: Request) {
       }
     : { userId: user.id, notebook: { archived: false, userId: user.id } };
 
-  const [notebooks, pages] = await Promise.all([
-    prisma.notebook.findMany({
-      where: notebookWhere,
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.page.findMany({
-      where: pageWhere,
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
+  let notebooks;
+  let pages;
+  try {
+    [notebooks, pages] = await Promise.all([
+      prisma.notebook.findMany({
+        where: notebookWhere,
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.page.findMany({
+        where: pageWhere,
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
+  } catch (error) {
+    return observation.failure(error, {
+      userId: user.id,
+      incremental: Boolean(sinceDate),
+    });
+  }
 
   const payload: SyncBootstrapPayload = {
     fetchedAt: fetchedAt.toISOString(),
@@ -63,5 +74,18 @@ export async function GET(request: Request) {
     })),
   };
 
-  return NextResponse.json(payload);
+  const operationCount = payload.notebooks.length + payload.pages.length;
+  observation.log.metric("sync.pull.operations", operationCount, {
+    userId: user.id,
+    notebookCount: payload.notebooks.length,
+    pageCount: payload.pages.length,
+    incremental: Boolean(sinceDate),
+  });
+  return observation.complete(NextResponse.json(payload), {
+    userId: user.id,
+    operationCount,
+    notebookCount: payload.notebooks.length,
+    pageCount: payload.pages.length,
+    incremental: Boolean(sinceDate),
+  });
 }

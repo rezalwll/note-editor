@@ -46,6 +46,16 @@ describe("processSyncQueue", () => {
   });
 
   it("runs one more sync pass when a save is queued during an in-flight sync", async () => {
+    const observabilityEvents: Array<{
+      kind: string;
+      name: string;
+      value?: number;
+      metadata?: Record<string, unknown>;
+    }> = [];
+    const handleObservability = (event: Event) => {
+      observabilityEvents.push((event as CustomEvent).detail);
+    };
+    window.addEventListener("notava-observability", handleObservability);
     const pull = createDeferred<{
       fetchedAt: string;
       notebooks: [];
@@ -134,5 +144,13 @@ describe("processSyncQueue", () => {
       "synced",
       "2026-06-30T00:00:01.000Z",
     );
+    expect(observabilityEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "sync.operations", value: 1 }),
+        expect.objectContaining({ name: "sync.retries", value: 1 }),
+        expect.objectContaining({ name: "sync.duration" }),
+      ]),
+    );
+    window.removeEventListener("notava-observability", handleObservability);
   });
 });

@@ -12,7 +12,7 @@ import {
   isImageBlock,
 } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
-import { getVisibleSpatialItems } from "@/lib/virtualization";
+import { SpatialItemIndex } from "@/lib/virtualization";
 
 const BLOCK_VIRTUALIZATION_THRESHOLD = 120;
 const BLOCK_VIRTUALIZATION_OVERSCAN = 800;
@@ -30,9 +30,15 @@ export function useNoteEditorLayout({
 }: UseNoteEditorLayoutOptions) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const lastBlockElementsRef = useRef<
+    Record<string, HTMLTextAreaElement | null>
+  >({});
   const richTextBlockRefs = useRef<Record<string, RichTextBlockHandle | null>>(
     {},
   );
+  const lastRichTextHandlesRef = useRef<
+    Record<string, RichTextBlockHandle | null>
+  >({});
   const selectionRestoreRef = useRef<{
     id: string;
     start: number;
@@ -46,23 +52,83 @@ export function useNoteEditorLayout({
     top: 0,
     bottom: DEFAULT_VIEWPORT_HEIGHT,
   });
+  const dirtyBlocksRef = useRef(new Map<string, FreeformBlock>());
+  const removedBlockIdsRef = useRef(new Set<string>());
+  const measuredBoundsRef = useRef(
+    new Map<string, { block: FreeformBlock; bottom: number }>(),
+  );
+  const lowestBlockBottomRef = useRef(0);
+  const lastMeasuredCanvasWidthRef = useRef(canvasWidth);
+  const [spatialIndex] = useState(
+    () =>
+      new SpatialItemIndex(
+        blocks,
+        (block) => block.id,
+        (block) => ({
+          top: block.y,
+          height: estimateBlockHeight(block, canvasWidth),
+        }),
+      ),
+  );
+  const [spatialIndexRevision, setSpatialIndexRevision] = useState(0);
 
   const shouldVirtualizeBlocks =
     blocks.length >= BLOCK_VIRTUALIZATION_THRESHOLD;
-  const renderedBlocks = useMemo(
-    () =>
-      shouldVirtualizeBlocks
-        ? getVisibleSpatialItems(
-            blocks,
+  const renderedBlocks = useMemo(() => {
+    void spatialIndexRevision;
+    return shouldVirtualizeBlocks
+        ? spatialIndex.query(
             { ...blockViewport, overscan: BLOCK_VIRTUALIZATION_OVERSCAN },
-            (block) => ({
-              top: block.y,
-              height: estimateBlockHeight(block, canvasWidth),
-            }),
-            (block) => block.id === activeBlockId,
+            activeBlockId,
           )
-        : blocks,
-    [activeBlockId, blockViewport, blocks, canvasWidth, shouldVirtualizeBlocks],
+        : blocks;
+  },
+    [
+      activeBlockId,
+      blockViewport,
+      blocks,
+      shouldVirtualizeBlocks,
+      spatialIndex,
+      spatialIndexRevision,
+    ],
+  );
+
+  const upsertLayoutBlock = useCallback(
+    (block: FreeformBlock) => {
+      spatialIndex.upsert(block, {
+        top: block.y,
+        height: estimateBlockHeight(block, canvasWidth),
+      });
+      dirtyBlocksRef.current.set(block.id, block);
+      removedBlockIdsRef.current.delete(block.id);
+    },
+    [canvasWidth, spatialIndex],
+  );
+  const removeLayoutBlocks = useCallback(
+    (blockIds: readonly string[]) => {
+      spatialIndex.remove(blockIds);
+      for (const blockId of blockIds) {
+        dirtyBlocksRef.current.delete(blockId);
+        removedBlockIdsRef.current.add(blockId);
+      }
+    },
+    [spatialIndex],
+  );
+  const replaceLayoutBlocks = useCallback(
+    (nextBlocks: readonly FreeformBlock[]) => {
+      spatialIndex.replaceAll(nextBlocks, (block) => ({
+        top: block.y,
+        height: estimateBlockHeight(block, canvasWidth),
+      }));
+      dirtyBlocksRef.current = new Map(
+        nextBlocks.map((block) => [block.id, block]),
+      );
+      removedBlockIdsRef.current = new Set(measuredBoundsRef.current.keys());
+      for (const block of nextBlocks) {
+        removedBlockIdsRef.current.delete(block.id);
+      }
+    },
+    [canvasWidth, spatialIndex],
   );
 
   const getTextBlockElement = useCallback(
@@ -80,12 +146,28 @@ export function useNoteEditorLayout({
   const setBlockElement = useCallback(
     (blockId: string, element: HTMLTextAreaElement | null) => {
       blockRefs.current[blockId] = element;
+      if (!element || lastBlockElementsRef.current[blockId] === element) {
+        return;
+      }
+      lastBlockElementsRef.current[blockId] = element;
+      const cachedBlock = measuredBoundsRef.current.get(blockId)?.block;
+      if (cachedBlock) {
+        dirtyBlocksRef.current.set(blockId, cachedBlock);
+      }
     },
     [],
   );
   const setRichTextBlockHandle = useCallback(
     (blockId: string, handle: RichTextBlockHandle | null) => {
       richTextBlockRefs.current[blockId] = handle;
+      if (!handle || lastRichTextHandlesRef.current[blockId] === handle) {
+        return;
+      }
+      lastRichTextHandlesRef.current[blockId] = handle;
+      const cachedBlock = measuredBoundsRef.current.get(blockId)?.block;
+      if (cachedBlock) {
+        dirtyBlocksRef.current.set(blockId, cachedBlock);
+      }
     },
     [],
   );
@@ -171,15 +253,6 @@ export function useNoteEditorLayout({
   }, [activeBlockId, isHydrated]);
 
   useEffect(() => {
-    Object.values(blockRefs.current).forEach((element) => {
-      if (!element) {
-        return;
-      }
-
-      element.style.height = "0px";
-      element.style.height = `${Math.max(element.scrollHeight, 28)}px`;
-    });
-
     const restore = selectionRestoreRef.current;
     if (restore) {
       selectionRestoreRef.current = null;
@@ -188,8 +261,37 @@ export function useNoteEditorLayout({
       element?.setSelectionRange(restore.start, restore.end);
     }
 
-    const nextLowestBlockBottom = blocks.reduce((max, block) => {
+    const widthChanged = lastMeasuredCanvasWidthRef.current !== canvasWidth;
+    lastMeasuredCanvasWidthRef.current = canvasWidth;
+    if (widthChanged) {
+      spatialIndex.replaceAll(blocks, (block) => ({
+        top: block.y,
+        height: estimateBlockHeight(block, canvasWidth),
+      }));
+    }
+    const blocksToMeasure =
+      widthChanged || measuredBoundsRef.current.size === 0
+        ? blocks
+        : [...dirtyBlocksRef.current.values()];
+    let shouldRecalculateMaximum = widthChanged;
+    let nextLowestBlockBottom = lowestBlockBottomRef.current;
+
+    for (const removedBlockId of removedBlockIdsRef.current) {
+      if (
+        measuredBoundsRef.current.get(removedBlockId)?.bottom ===
+        lowestBlockBottomRef.current
+      ) {
+        shouldRecalculateMaximum = true;
+      }
+      measuredBoundsRef.current.delete(removedBlockId);
+    }
+
+    for (const block of blocksToMeasure) {
       const element = getTextBlockElement(block.id);
+      if (element instanceof HTMLTextAreaElement) {
+        element.style.height = "0px";
+        element.style.height = `${Math.max(element.scrollHeight, 28)}px`;
+      }
       const blockWidth = getRenderedBlockWidth(block, canvasWidth);
       const blockHeight = isImageBlock(block)
         ? getImageBlockHeight(block, blockWidth)
@@ -199,14 +301,37 @@ export function useNoteEditorLayout({
             estimateBlockHeight(block, canvasWidth),
             28,
           );
-      return Math.max(max, block.y + blockHeight);
-    }, 0);
+      const previousBottom = measuredBoundsRef.current.get(block.id)?.bottom;
+      const bottom = block.y + blockHeight;
+      measuredBoundsRef.current.set(block.id, { block, bottom });
+      if (
+        previousBottom === lowestBlockBottomRef.current &&
+        bottom < previousBottom
+      ) {
+        shouldRecalculateMaximum = true;
+      }
+      nextLowestBlockBottom = Math.max(nextLowestBlockBottom, bottom);
+    }
+
+    if (shouldRecalculateMaximum) {
+      nextLowestBlockBottom = 0;
+      for (const bounds of measuredBoundsRef.current.values()) {
+        nextLowestBlockBottom = Math.max(nextLowestBlockBottom, bounds.bottom);
+      }
+    }
+
+    dirtyBlocksRef.current.clear();
+    removedBlockIdsRef.current.clear();
+    lowestBlockBottomRef.current = nextLowestBlockBottom;
 
     const frameId = window.requestAnimationFrame(() => {
       setLowestBlockBottom(nextLowestBlockBottom);
+      if (widthChanged) {
+        setSpatialIndexRevision((current) => current + 1);
+      }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [blocks, canvasWidth, getTextBlockElement]);
+  }, [blocks, canvasWidth, getTextBlockElement, spatialIndex]);
 
   useEffect(() => {
     const normalizeBlockLayout = () => {
@@ -271,11 +396,14 @@ export function useNoteEditorLayout({
       lowestBlockBottom + 280,
     ),
     renderedBlocks,
+    removeLayoutBlocks,
+    replaceLayoutBlocks,
     richTextBlockRefs,
     queueSelectionRestore,
     selectionRestoreRef,
     setBlockElement,
     setRichTextBlockHandle,
     shouldVirtualizeBlocks,
+    upsertLayoutBlock,
   };
 }

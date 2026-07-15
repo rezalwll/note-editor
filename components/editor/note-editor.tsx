@@ -2,6 +2,7 @@
 
 import { LoaderCircle } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -36,18 +37,13 @@ import {
   getCanvasInset,
   getCurrentLineRange,
   getInitialBlocks,
-  getPersistableBlocks,
   getRenderedBlockWidth,
   isEmptyTextBlock,
   isImageBlock,
   measureBlockWidth,
 } from "@/lib/editor-document";
-import {
-  type FreeformBlock,
-  extractFreeformPlainText,
-  parseFreeformDocument,
-  serializeFreeformDocument,
-} from "@/lib/notes";
+import { IncrementalBodyTextIndex } from "@/lib/incremental-body-text";
+import { type FreeformBlock } from "@/lib/notes";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { getPageDocumentTitle } from "@/lib/page-title";
 
@@ -113,6 +109,11 @@ export function NoteEditor({
   const [blocks, setBlocks] = useState<FreeformBlock[]>(() =>
     getInitialBlocks(initialHtml),
   );
+  const [bodyTextIndex] = useState(() => new IncrementalBodyTextIndex(blocks));
+  const [documentRevision, setDocumentRevision] = useState(0);
+  const replaceLayoutBlocksBridgeRef = useRef<
+    (blocks: readonly FreeformBlock[]) => void
+  >(() => undefined);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [richTextInitialSelections, setRichTextInitialSelections] = useState<
@@ -148,22 +149,29 @@ export function NoteEditor({
     clientY: number;
   } | null>(null);
 
-  const serializedDocument = useMemo(
-    () =>
-      serializeFreeformDocument({
-        type: "freeform-v1",
-        blocks: getPersistableBlocks(blocks),
-      }),
-    [blocks],
+  const setEditedBlocks = useCallback<
+    React.Dispatch<React.SetStateAction<FreeformBlock[]>>
+  >((action) => {
+    setDocumentRevision((current) => current + 1);
+    setBlocks(action);
+  }, []);
+  const setEditedTitle = useCallback<
+    React.Dispatch<React.SetStateAction<string>>
+  >((action) => {
+    setDocumentRevision((current) => current + 1);
+    setTitle(action);
+  }, []);
+  const replaceDerivedDocumentState = useCallback(
+    (nextBlocks: FreeformBlock[]) => {
+      bodyTextIndex.replaceAll(nextBlocks);
+      replaceLayoutBlocksBridgeRef.current(nextBlocks);
+    },
+    [bodyTextIndex],
   );
-
-  const bodyText = useMemo(() => {
-    const freeformDocument = parseFreeformDocument(serializedDocument);
-    return freeformDocument
-      ? extractFreeformPlainText(freeformDocument)
-      : "";
-  }, [serializedDocument]);
-  const snapshot = `${title}::${serializedDocument}`;
+  const getIncrementalBodyText = useCallback(
+    () => bodyTextIndex.getText(),
+    [bodyTextIndex],
+  );
   const {
     currentDocumentStateRef,
     finishHistoryGroup,
@@ -180,14 +188,15 @@ export function NoteEditor({
     pageRef,
     canRecord: () => isHydrated,
     markInteraction: () => markEditorInteraction(),
-    setTitle,
-    setBlocks,
+    setTitle: setEditedTitle,
+    setBlocks: setEditedBlocks,
     setActiveBlockId,
     setSelectedBlockIds,
     clearRichTextState: () => {
       setActiveRichTextStyle(null);
       setRichTextInitialSelections({});
     },
+    onDocumentApplied: replaceDerivedDocumentState,
   });
   const {
     flushPendingSave,
@@ -202,13 +211,14 @@ export function NoteEditor({
     initialHtml,
     initialUpdatedAt,
     title,
-    bodyText,
-    serializedDocument,
-    snapshot,
+    blocks,
+    revision: documentRevision,
+    getBodyText: getIncrementalBodyText,
     setTitle,
     setBlocks,
     getInitialBlocks,
     resetDocumentHistory,
+    onDocumentLoaded: replaceDerivedDocumentState,
   });
   const {
     blockRefs,
@@ -221,12 +231,21 @@ export function NoteEditor({
     mobileCanvasMinHeight,
     queueSelectionRestore,
     renderedBlocks,
+    removeLayoutBlocks,
+    replaceLayoutBlocks,
     richTextBlockRefs,
     selectionRestoreRef,
     setBlockElement,
     setRichTextBlockHandle,
     shouldVirtualizeBlocks,
+    upsertLayoutBlock,
   } = useNoteEditorLayout({ blocks, activeBlockId, isHydrated });
+  useEffect(() => {
+    replaceLayoutBlocksBridgeRef.current = replaceLayoutBlocks;
+    return () => {
+      replaceLayoutBlocksBridgeRef.current = () => undefined;
+    };
+  }, [replaceLayoutBlocks]);
   const {
     copyImageToClipboard,
     copyTextToClipboard,
@@ -252,12 +271,16 @@ export function NoteEditor({
     isEditorMounted,
     markEditorInteraction,
     recordDocumentHistory,
-    setTitle,
-    setBlocks,
+    setTitle: setEditedTitle,
+    setBlocks: setEditedBlocks,
     setActiveBlockId,
     setSelectedBlockIds,
     updateBlockText,
     addBlockAt,
+    onBlockInserted: (block) => {
+      bodyTextIndex.upsert(block);
+      upsertLayoutBlock(block);
+    },
   });
   const activeBlock =
     blocks.find(
@@ -358,7 +381,14 @@ export function NoteEditor({
     const addBlock = () => {
       markEditorInteraction();
       recordDocumentHistory();
-      setBlocks((current) => [...current, block]);
+      if (block.type === "image" || block.text.trim()) {
+        bodyTextIndex.upsert(block);
+        upsertLayoutBlock(block);
+        setEditedBlocks((current) => [...current, block]);
+      } else {
+        upsertLayoutBlock(block);
+        setBlocks((current) => [...current, block]);
+      }
       setActiveBlockId(block.id);
       setSelectedBlockIds([block.id]);
     };
@@ -461,8 +491,16 @@ export function NoteEditor({
     if (trackHistory) {
       recordDocumentHistory();
     }
-    setBlocks((current) =>
-      current.map((block) => (block.id === id ? updater(block) : block)),
+    setEditedBlocks((current) =>
+      current.map((block) => {
+        if (block.id !== id) {
+          return block;
+        }
+        const nextBlock = updater(block);
+        bodyTextIndex.upsert(nextBlock);
+        upsertLayoutBlock(nextBlock);
+        return nextBlock;
+      }),
     );
   }
 
@@ -475,8 +513,17 @@ export function NoteEditor({
     if (trackHistory) {
       recordDocumentHistory();
     }
-    setBlocks((current) =>
-      current.map((block) => (ids.includes(block.id) ? updater(block) : block)),
+    const targetIds = new Set(ids);
+    setEditedBlocks((current) =>
+      current.map((block) => {
+        if (!targetIds.has(block.id)) {
+          return block;
+        }
+        const nextBlock = updater(block);
+        bodyTextIndex.upsert(nextBlock);
+        upsertLayoutBlock(nextBlock);
+        return nextBlock;
+      }),
     );
   }
 
@@ -518,6 +565,8 @@ export function NoteEditor({
       return;
     }
 
+    bodyTextIndex.remove([id]);
+    removeLayoutBlocks([id]);
     setBlocks((current) => {
       return current.filter((block) => block.id !== id);
     });
@@ -528,7 +577,9 @@ export function NoteEditor({
   function deleteBlock(id: string) {
     markEditorInteraction();
     recordDocumentHistory();
-    setBlocks((current) => current.filter((block) => block.id !== id));
+    bodyTextIndex.remove([id]);
+    removeLayoutBlocks([id]);
+    setEditedBlocks((current) => current.filter((block) => block.id !== id));
     setActiveBlockId((current) => (current === id ? null : current));
     setSelectedBlockIds((current) => current.filter((blockId) => blockId !== id));
   }
@@ -536,7 +587,9 @@ export function NoteEditor({
   function deleteBlocks(ids: string[]) {
     markEditorInteraction();
     recordDocumentHistory();
-    setBlocks((current) =>
+    bodyTextIndex.remove(ids);
+    removeLayoutBlocks(ids);
+    setEditedBlocks((current) =>
       current.filter((block) => !ids.includes(block.id)),
     );
     setActiveBlockId((current) =>
@@ -716,12 +769,15 @@ export function NoteEditor({
     );
 
     markEditorInteraction();
-    setBlocks((current) =>
-      current.map((block) =>
-        block.id === dragStateRef.current?.id
-          ? { ...block, x: nextX, y: nextY, width: blockWidth }
-          : block,
-      ),
+    setEditedBlocks((current) =>
+      current.map((block) => {
+        if (block.id !== dragStateRef.current?.id) {
+          return block;
+        }
+        const nextBlock = { ...block, x: nextX, y: nextY, width: blockWidth };
+        upsertLayoutBlock(nextBlock);
+        return nextBlock;
+      }),
     );
   });
 
@@ -759,12 +815,15 @@ export function NoteEditor({
       resizeState.edge === "left" ? rightEdge - nextWidth : resizeState.startX;
 
     markEditorInteraction();
-    setBlocks((current) =>
-      current.map((block) =>
-        block.id === resizeStateRef.current?.id
-          ? { ...block, x: nextX, width: nextWidth }
-          : block,
-      ),
+    setEditedBlocks((current) =>
+      current.map((block) => {
+        if (block.id !== resizeStateRef.current?.id) {
+          return block;
+        }
+        const nextBlock = { ...block, x: nextX, width: nextWidth };
+        upsertLayoutBlock(nextBlock);
+        return nextBlock;
+      }),
     );
   });
 
@@ -891,7 +950,7 @@ export function NoteEditor({
             onTitleChange={(nextTitle) => {
               markEditorInteraction();
               recordDocumentHistory("title");
-              setTitle(nextTitle);
+              setEditedTitle(nextTitle);
             }}
             onTitleBlur={() => {
               finishHistoryGroup();

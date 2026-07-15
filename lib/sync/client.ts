@@ -15,9 +15,20 @@ import {
   updateLocalSyncStatus,
 } from "@/lib/offline-db/client";
 import type { SyncStatus } from "@/lib/offline-db/types";
+import {
+  reportClientError,
+  reportClientMetric,
+} from "@/lib/client-observability";
 
 let syncInFlight: Promise<void> | null = null;
 let syncRerunRequested = false;
+let syncRetryCount = 0;
+
+type SyncPassResult = {
+  status: SyncStatus;
+  operationCount: number;
+  conflictCount: number;
+};
 
 function dispatchSyncIndicatorEvent(detail: {
   phase: "start" | "complete" | "error";
@@ -57,24 +68,64 @@ export async function pullRemoteChanges(userId: string) {
 export async function processSyncQueue(userId: string) {
   if (syncInFlight) {
     syncRerunRequested = true;
+    syncRetryCount += 1;
     return syncInFlight;
   }
 
   syncInFlight = (async () => {
+    const startedAt = performance.now();
+    syncRetryCount = 0;
     dispatchSyncIndicatorEvent({ phase: "start", syncStatus: "pending" });
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "failed" });
+      reportClientMetric("sync.failure", 1, {
+        source: "sync.client",
+        metadata: { reason: "offline" },
+      });
       return;
     }
 
     try {
       let syncStatus: SyncStatus = "synced";
+      let operationCount = 0;
+      let conflictCount = 0;
 
       do {
         syncRerunRequested = false;
-        syncStatus = await processSyncQueueOnce(userId);
+        const result = await processSyncQueueOnce(userId);
+        syncStatus = result.status;
+        operationCount += result.operationCount;
+        conflictCount += result.conflictCount;
       } while (syncRerunRequested);
+
+      const metadata = {
+        latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        operationCount,
+        conflictCount,
+        retryCount: syncRetryCount,
+        status: syncStatus,
+      };
+      reportClientMetric("sync.duration", metadata.latencyMs, {
+        source: "sync.client",
+        metadata: { ...metadata, unit: "ms" },
+      });
+      reportClientMetric("sync.operations", operationCount, {
+        source: "sync.client",
+        metadata,
+      });
+      if (conflictCount > 0) {
+        reportClientMetric("sync.conflicts", conflictCount, {
+          source: "sync.client",
+          metadata,
+        });
+      }
+      if (syncRetryCount > 0) {
+        reportClientMetric("sync.retries", syncRetryCount, {
+          source: "sync.client",
+          metadata,
+        });
+      }
 
       if (syncStatus === "conflict" || syncStatus === "failed") {
         dispatchSyncIndicatorEvent({ phase: "error", syncStatus });
@@ -84,6 +135,17 @@ export async function processSyncQueue(userId: string) {
       dispatchSyncIndicatorEvent({ phase: "complete", syncStatus });
     } catch (error) {
       dispatchSyncIndicatorEvent({ phase: "error", syncStatus: "failed" });
+      reportClientMetric("sync.failure", 1, {
+        source: "sync.client",
+        metadata: {
+          latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+          retryCount: syncRetryCount,
+        },
+      });
+      reportClientError(error, {
+        source: "sync.client",
+        metadata: { retryCount: syncRetryCount },
+      });
       throw error;
     }
   })().finally(() => {
@@ -93,12 +155,12 @@ export async function processSyncQueue(userId: string) {
   return syncInFlight;
 }
 
-async function processSyncQueueOnce(userId: string): Promise<SyncStatus> {
+async function processSyncQueueOnce(userId: string): Promise<SyncPassResult> {
   const queue = await listPendingQueue(userId);
 
   if (queue.length === 0) {
     await pullRemoteChanges(userId);
-    return "synced";
+    return { status: "synced", operationCount: 0, conflictCount: 0 };
   }
 
   const result = await pushQueue(queue);
@@ -115,11 +177,19 @@ async function processSyncQueueOnce(userId: string): Promise<SyncStatus> {
   }
 
   if (result.conflicts.length > 0) {
-    return "conflict";
+    return {
+      status: "conflict",
+      operationCount: queue.length,
+      conflictCount: result.conflicts.length,
+    };
   }
 
   const remainingQueue = await listPendingQueue(userId);
-  return remainingQueue.length > 0 ? "pending" : "synced";
+  return {
+    status: remainingQueue.length > 0 ? "pending" : "synced",
+    operationCount: queue.length,
+    conflictCount: 0,
+  };
 }
 
 export async function resetOfflineState(userId: string) {

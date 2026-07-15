@@ -30,7 +30,17 @@ vi.mock("@/lib/storage", () => ({
   getUploadRoot: () => "C:/tmp/uploads",
 }));
 vi.mock("@/lib/upload-validation", () => ({ inspectUpload: mocks.inspectUpload }));
-vi.mock("@/lib/logger", () => ({ logger: { error: mocks.loggerError } }));
+vi.mock("@/lib/logger", () => {
+  const testLogger = {
+    error: mocks.loggerError,
+    info: vi.fn(),
+    warn: vi.fn(),
+    metric: vi.fn(),
+    child: vi.fn(),
+  };
+  testLogger.child.mockReturnValue(testLogger);
+  return { logger: testLogger };
+});
 vi.mock("@/lib/env", () => ({ env: { MAX_UPLOAD_SIZE_MB: 10 } }));
 vi.mock("node:fs/promises", () => ({
   default: { mkdir: mocks.mkdir, access: mocks.access },
@@ -202,7 +212,9 @@ describe("small API routes", () => {
       bodyText: "x", archived: false, deletedAt: null, updatedAt,
     }]);
 
-    const initial = await bootstrap();
+    const initial = await bootstrap(
+      new Request("https://notava.test/api/sync/bootstrap"),
+    );
     expect((await initial.json()).notebooks[0]).toMatchObject({
       id: "notebook-1", userId: "user-1", syncStatus: "synced",
     });
@@ -212,5 +224,18 @@ describe("small API routes", () => {
     expect(mocks.notebookFindMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { userId: "user-1", updatedAt: { gt: new Date("2026-07-14T09:00:00.000Z") } },
     }));
+
+    mocks.notebookFindMany.mockRejectedValueOnce(new Error("sync database down"));
+    const failed = await bootstrap(
+      new Request("https://notava.test/api/sync/bootstrap", {
+        headers: { "x-request-id": "failed-bootstrap" },
+      }),
+    );
+    expect(failed.status).toBe(500);
+    expect(failed.headers.get("x-request-id")).toBe("failed-bootstrap");
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      "Request failed",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
   });
 });

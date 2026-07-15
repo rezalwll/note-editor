@@ -3,25 +3,33 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import type { LocalNotebook, LocalPage, SyncBootstrapPayload } from "@/lib/offline-db/types";
 import { prisma } from "@/lib/prisma";
+import { observeRequest } from "@/lib/request-observability";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const observation = observeRequest(request, "/api/sync/bootstrap");
   const user = await requireUser();
   const fetchedAt = new Date();
 
-  const [notebooks, pages] = await Promise.all([
-    prisma.notebook.findMany({
-      where: { archived: false, userId: user.id },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.page.findMany({
-      where: {
-        userId: user.id,
-        archived: false,
-        notebook: { archived: false, userId: user.id },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
+  let notebooks;
+  let pages;
+  try {
+    [notebooks, pages] = await Promise.all([
+      prisma.notebook.findMany({
+        where: { archived: false, userId: user.id },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.page.findMany({
+        where: {
+          userId: user.id,
+          archived: false,
+          notebook: { archived: false, userId: user.id },
+        },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
+  } catch (error) {
+    return observation.failure(error, { userId: user.id });
+  }
 
   const payload: SyncBootstrapPayload = {
     fetchedAt: fetchedAt.toISOString(),
@@ -52,5 +60,16 @@ export async function GET() {
     })),
   };
 
-  return NextResponse.json(payload);
+  const operationCount = payload.notebooks.length + payload.pages.length;
+  observation.log.metric("sync.bootstrap.operations", operationCount, {
+    userId: user.id,
+    notebookCount: payload.notebooks.length,
+    pageCount: payload.pages.length,
+  });
+  return observation.complete(NextResponse.json(payload), {
+    userId: user.id,
+    operationCount,
+    notebookCount: payload.notebooks.length,
+    pageCount: payload.pages.length,
+  });
 }

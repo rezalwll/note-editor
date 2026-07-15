@@ -85,6 +85,7 @@ type UseNoteEditorClipboardOptions = {
     initialText?: string,
     initialRichText?: string,
   ) => void;
+  onBlockInserted: (block: FreeformBlock) => void;
 };
 
 export function useNoteEditorClipboard({
@@ -109,6 +110,7 @@ export function useNoteEditorClipboard({
   setSelectedBlockIds,
   updateBlockText,
   addBlockAt,
+  onBlockInserted,
 }: UseNoteEditorClipboardOptions) {
   const [pendingImageUploads, setPendingImageUploads] = useState(0);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
@@ -213,6 +215,7 @@ export function useNoteEditorClipboard({
 
         markEditorInteraction();
         recordDocumentHistory();
+        onBlockInserted(block);
         setBlocks((current) => [...current, block]);
         setActiveBlockId(block.id);
         setSelectedBlockIds([block.id]);
@@ -440,6 +443,7 @@ export function useNoteEditorClipboard({
         }
 
         if (!currentBlocks.some((block) => block.id === targetBlockId)) {
+          onBlockInserted(targetBlock);
           flushSync(() => {
             setBlocks((current) =>
               current.some((block) => block.id === targetBlockId)

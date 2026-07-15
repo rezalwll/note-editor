@@ -6,7 +6,7 @@ import type {
   LocalPage,
   SyncPushResult,
 } from "@/lib/offline-db/types";
-import { logger } from "@/lib/logger";
+import { observeRequest } from "@/lib/request-observability";
 
 import {
   processNotebookOperation,
@@ -17,30 +17,51 @@ import { pushSchema, type SyncQueueItem } from "./validation";
 import { getIssueSummary, getItemSummary } from "./utils";
 
 function syncPushError(
+  observation: ReturnType<typeof observeRequest>,
   message: string,
   status: number,
   item?: SyncQueueItem,
   issues?: ReturnType<typeof getIssueSummary>,
 ) {
-  logger.warn("Rejected sync push operation", {
+  observation.log.warn("Rejected sync push operation", {
     message,
     item: item ? getItemSummary(item) : undefined,
     issues,
   });
 
-  return NextResponse.json({ error: message, issues }, { status });
+  return observation.complete(
+    NextResponse.json({ error: message, issues }, { status }),
+    { rejectedOperationCount: item ? 1 : 0 },
+  );
 }
 
-function processingErrorResponse(error: PushProcessingError) {
-  return syncPushError(error.message, error.status, error.item, error.issues);
+function processingErrorResponse(
+  observation: ReturnType<typeof observeRequest>,
+  error: PushProcessingError,
+) {
+  return syncPushError(
+    observation,
+    error.message,
+    error.status,
+    error.item,
+    error.issues,
+  );
 }
 
 export async function POST(request: Request) {
+  const observation = observeRequest(request, "/api/sync/push");
   const user = await requireUser();
-  const parsed = pushSchema.safeParse(await request.json());
+  let requestBody: unknown;
+  try {
+    requestBody = await request.json();
+  } catch {
+    return syncPushError(observation, "Invalid JSON payload.", 400);
+  }
+  const parsed = pushSchema.safeParse(requestBody);
 
   if (!parsed.success) {
     return syncPushError(
+      observation,
       "Invalid sync payload.",
       400,
       undefined,
@@ -54,15 +75,24 @@ export async function POST(request: Request) {
   const pages = new Map<string, LocalPage>();
   const context = { userId: user.id, applied, conflicts, notebooks, pages };
 
-  for (const item of parsed.data.operations) {
-    const error =
-      item.entityType === "notebook"
-        ? await processNotebookOperation(item, context)
-        : await processPageOperation(item, context);
+  try {
+    for (const item of parsed.data.operations) {
+      const error =
+        item.entityType === "notebook"
+          ? await processNotebookOperation(item, context)
+          : await processPageOperation(item, context);
 
-    if (error) {
-      return processingErrorResponse(error);
+      if (error) {
+        return processingErrorResponse(observation, error);
+      }
     }
+  } catch (error) {
+    return observation.failure(error, {
+      userId: user.id,
+      operationCount: parsed.data.operations.length,
+      appliedCount: applied.length,
+      conflictCount: conflicts.length,
+    });
   }
 
   const payload: SyncPushResult = {
@@ -73,5 +103,23 @@ export async function POST(request: Request) {
     pulledAt: new Date().toISOString(),
   };
 
-  return NextResponse.json(payload);
+  const operationCount = parsed.data.operations.length;
+  const conflictCount = conflicts.length;
+  observation.log.metric("sync.operations", operationCount, {
+    userId: user.id,
+    appliedCount: applied.length,
+    conflictCount,
+  });
+  if (conflictCount > 0) {
+    observation.log.metric("sync.conflicts", conflictCount, { userId: user.id });
+  }
+
+  return observation.complete(NextResponse.json(payload), {
+    userId: user.id,
+    operationCount,
+    appliedCount: applied.length,
+    conflictCount,
+    notebookCount: notebooks.size,
+    pageCount: pages.size,
+  });
 }

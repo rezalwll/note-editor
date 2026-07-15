@@ -32,6 +32,7 @@ type UseNoteEditorHistoryOptions = DocumentState & {
   setActiveBlockId: Dispatch<SetStateAction<string | null>>;
   setSelectedBlockIds: Dispatch<SetStateAction<string[]>>;
   clearRichTextState: () => void;
+  onDocumentApplied: (blocks: FreeformBlock[]) => void;
 };
 
 export function useNoteEditorHistory({
@@ -47,6 +48,7 @@ export function useNoteEditorHistory({
   setActiveBlockId,
   setSelectedBlockIds,
   clearRichTextState,
+  onDocumentApplied,
 }: UseNoteEditorHistoryOptions) {
   const historyRef = useRef<{
     past: EditorDocumentSnapshot[];
@@ -128,6 +130,7 @@ export function useNoteEditorHistory({
     setBlocks(nextSnapshot.blocks.map((block) => ({ ...block })));
     setActiveBlockId(nextActiveBlockId);
     setSelectedBlockIds(nextSelectedBlockIds);
+    onDocumentApplied(nextSnapshot.blocks);
     clearRichTextState();
   }
 

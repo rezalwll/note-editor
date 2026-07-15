@@ -1,5 +1,6 @@
 import { AuthenticatedRuntime } from "@/components/authenticated-runtime";
 import { AppShell } from "@/components/app-shell";
+import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { requireUser } from "@/lib/auth";
 
 export default async function ProtectedLayout({
@@ -11,6 +12,7 @@ export default async function ProtectedLayout({
   return (
     <>
       <AuthenticatedRuntime userId={user.id} />
+      <ClientErrorReporter />
       <AppShell
         currentUser={{
           id: user.id,

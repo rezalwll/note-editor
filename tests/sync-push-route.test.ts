@@ -72,7 +72,11 @@ describe("sync push route", () => {
     const response = await POST(
       new Request("https://notavanote.ir/api/sync/push", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-request-id": "sync-request-42",
+          "x-correlation-id": "sync-flow-7",
+        },
         body: JSON.stringify({
           operations: [
             {
@@ -98,6 +102,8 @@ describe("sync push route", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBe("sync-request-42");
+    expect(response.headers.get("x-correlation-id")).toBe("sync-flow-7");
     expect(mocks.prisma.notebook.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ groupId: "group-1" }),

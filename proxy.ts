@@ -3,11 +3,37 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookieName, verifySession } from "@/lib/auth";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
+const safeIdPattern = /^[a-zA-Z0-9._:-]{1,128}$/;
+
+function safeRequestId(value: string | null) {
+  return value && safeIdPattern.test(value) ? value : null;
+}
 
 export async function proxy(request: NextRequest) {
+  const requestId =
+    safeRequestId(request.headers.get("x-request-id")) ?? crypto.randomUUID();
+  const correlationId =
+    safeRequestId(request.headers.get("x-correlation-id")) ?? requestId;
+  const forwardedHeaders = new Headers(request.headers);
+  forwardedHeaders.set("x-request-id", requestId);
+  forwardedHeaders.set("x-correlation-id", correlationId);
+  const next = () => {
+    const response = NextResponse.next({
+      request: { headers: forwardedHeaders },
+    });
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("x-correlation-id", correlationId);
+    return response;
+  };
+  const redirect = (url: URL) => {
+    const response = NextResponse.redirect(url);
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("x-correlation-id", correlationId);
+    return response;
+  };
   const pathname = request.nextUrl.pathname;
   if (pathname === "/api/health") {
-    return NextResponse.next();
+    return next();
   }
   const isGuestOnlyRoute =
     pathname === "/login" ||
@@ -19,7 +45,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/reset-password";
 
   if (isDevelopment) {
-    return NextResponse.next();
+    return next();
   }
 
   if (isPublicAuthRoute) {
@@ -28,10 +54,10 @@ export async function proxy(request: NextRequest) {
     );
 
     if (isGuestOnlyRoute && session?.userId) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return redirect(new URL("/", request.url));
     }
 
-    return NextResponse.next();
+    return next();
   }
 
   const session = await verifySession(
@@ -41,10 +67,10 @@ export async function proxy(request: NextRequest) {
   if (!session?.userId) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return next();
 }
 
 export const config = {
