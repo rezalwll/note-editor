@@ -31,6 +31,15 @@ import {
 } from "@/app/actions";
 import { useContextMenu } from "@/components/context-menu";
 import { useWorkspaceHistory } from "@/components/workspace-history-provider";
+import {
+  getTrashItemCount,
+  reduceGroups,
+  reduceNotebooks,
+  reorderIds,
+  TRASH_GROUP_KEY,
+  type NotebookGroupTab,
+  type NotebookTab,
+} from "@/components/section-tabs-model";
 import { getOverflowNotebookIds } from "@/lib/notebook-tabs";
 import {
   NOTEBOOK_THEMES,
@@ -41,60 +50,10 @@ import {
 } from "@/lib/notebook-theme";
 import { cn, formatNumber } from "@/lib/utils";
 
-type NotebookTab = {
-  id: string;
-  name: string;
-  groupId: string | null;
-  sortOrder?: number;
-  themeKey?: string | null;
-  groupName?: string | null;
-  systemKey?: string | null;
-  deletedAt?: Date | null;
-  pageIds?: string[];
-};
-
-type NotebookGroupTab = {
-  id: string;
-  name: string;
-  notebookCount: number;
-  sortOrder?: number;
-  themeKey?: string | null;
-  systemKey?: string | null;
-};
-
 type SectionTabsProps = {
   groups: NotebookGroupTab[];
   notebooks: NotebookTab[];
 };
-
-const TRASH_GROUP_KEY = "deleted-items";
-const TRASH_PAGES_NOTEBOOK_KEY = "deleted-pages";
-function reorderIds(ids: string[], draggedId: string, targetId: string) {
-  if (draggedId === targetId) {
-    return ids;
-  }
-
-  const nextIds = ids.filter((id) => id !== draggedId);
-  const targetIndex = nextIds.indexOf(targetId);
-
-  if (targetIndex === -1) {
-    return ids;
-  }
-
-  nextIds.splice(targetIndex, 0, draggedId);
-  return nextIds;
-}
-
-function getTrashItemCount(notebooks: NotebookTab[]) {
-  return notebooks.reduce(
-    (count, notebook) =>
-      count +
-      (notebook.systemKey === TRASH_PAGES_NOTEBOOK_KEY
-        ? (notebook.pageIds?.length ?? 0)
-        : 1),
-    0,
-  );
-}
 
 export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const pathname = usePathname();
@@ -117,83 +76,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
   const groupInputRef = useRef<HTMLInputElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
   const createNotebookInFlightRef = useRef(false);
-  const [items, updateNotebooks] = useOptimistic(
-    notebooks,
-    (
-      current,
-      action:
-        | { type: "append"; notebook: NotebookTab }
-        | { type: "rename"; notebookId: string; name: string }
-        | { type: "theme"; notebookId: string; themeKey: ThemeKey }
-        | { type: "remove-many"; notebookIds: string[] }
-        | { type: "reorder"; groupId: string; notebookIds: string[] }
-        | {
-            type: "move-many";
-            notebookIds: string[];
-            groupId: string | null;
-            groupName: string | null;
-          },
-    ) => {
-      switch (action.type) {
-        case "append":
-          return [...current, action.notebook];
-        case "rename":
-          return current.map((notebook) =>
-            notebook.id === action.notebookId
-              ? { ...notebook, name: action.name }
-              : notebook,
-          );
-        case "theme":
-          return current.map((notebook) =>
-            notebook.id === action.notebookId
-              ? { ...notebook, themeKey: action.themeKey }
-              : notebook,
-          );
-        case "remove-many":
-          return current.filter(
-            (notebook) => !action.notebookIds.includes(notebook.id),
-          );
-        case "reorder": {
-          const positions = new Map(
-            action.notebookIds.map((id, index) => [id, index]),
-          );
-
-          return current.map((notebook) =>
-            notebook.groupId === action.groupId && positions.has(notebook.id)
-              ? {
-                  ...notebook,
-                  sortOrder: positions.get(notebook.id) ?? notebook.sortOrder,
-                }
-              : notebook,
-          );
-        }
-        case "move-many":
-          {
-            const selectedOrder = new Map(
-              action.notebookIds.map((id, index) => [id, index]),
-            );
-            const targetBaseOrder = current.filter(
-              (item) =>
-                item.groupId === action.groupId &&
-                !action.notebookIds.includes(item.id),
-            ).length;
-
-            return current.map((notebook) =>
-              action.notebookIds.includes(notebook.id)
-                ? {
-                    ...notebook,
-                    groupId: action.groupId,
-                    groupName: action.groupName,
-                    sortOrder:
-                      targetBaseOrder +
-                      (selectedOrder.get(notebook.id) ?? 0),
-                  }
-                : notebook,
-            );
-          }
-      }
-    },
-  );
+  const [items, updateNotebooks] = useOptimistic(notebooks, reduceNotebooks);
   const displayItems = useMemo(
     () =>
       draftNotebook && !items.some((item) => item.id === draftNotebook.id)
@@ -201,46 +84,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         : items,
     [draftNotebook, items],
   );
-  const [groupItems, updateGroups] = useOptimistic(
-    groups,
-    (
-      current,
-      action:
-        | { type: "append"; group: NotebookGroupTab }
-        | { type: "rename"; groupId: string; name: string }
-        | { type: "theme"; groupId: string; themeKey: ThemeKey }
-        | { type: "reorder"; groupIds: string[] }
-        | { type: "delete"; groupId: string },
-    ) => {
-      switch (action.type) {
-        case "append":
-          return [...current, action.group];
-        case "rename":
-          return current.map((group) =>
-            group.id === action.groupId ? { ...group, name: action.name } : group,
-          );
-        case "theme":
-          return current.map((group) =>
-            group.id === action.groupId
-              ? { ...group, themeKey: action.themeKey }
-              : group,
-          );
-        case "reorder": {
-          const positions = new Map(
-            action.groupIds.map((id, index) => [id, index]),
-          );
-
-          return current.map((group) =>
-            positions.has(group.id)
-              ? { ...group, sortOrder: positions.get(group.id) ?? group.sortOrder }
-              : group,
-          );
-        }
-        case "delete":
-          return current.filter((group) => group.id !== action.groupId);
-      }
-    },
-  );
+  const [groupItems, updateGroups] = useOptimistic(groups, reduceGroups);
 
   const activeNotebookId = useMemo(() => {
     const notebookMatch = pathname.match(/^\/notebooks\/([^/]+)/)?.[1];

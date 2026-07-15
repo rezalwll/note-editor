@@ -2,7 +2,6 @@
 
 import { LoaderCircle } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -13,33 +12,29 @@ import { flushSync } from "react-dom";
 
 import { useContextMenu } from "@/components/context-menu";
 import { NoteEditorBlock } from "@/components/editor/note-editor-block";
+import { NoteEditorHeader } from "@/components/editor/note-editor-header";
 import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
 import { useNoteEditorClipboard } from "@/components/editor/use-note-editor-clipboard";
+import { useNoteEditorCommands } from "@/components/editor/use-note-editor-commands";
+import { useNoteEditorHistory } from "@/components/editor/use-note-editor-history";
+import { useNoteEditorLayout } from "@/components/editor/use-note-editor-layout";
 import { useNoteEditorPersistence } from "@/components/editor/use-note-editor-persistence";
 import {
   dispatchEditorCommand,
-  type EditorCommand,
 } from "@/lib/editor-events";
 import {
   BLOCK_DEFAULT_WIDTH,
   BLOCK_MAX_WIDTH,
   BLOCK_MIN_WIDTH,
   BLOCK_RTL_CLICK_ANCHOR,
-  DEFAULT_CANVAS_WIDTH,
-  DEFAULT_VIEWPORT_HEIGHT,
-  type EditorDocumentSnapshot,
   IMAGE_MIN_WIDTH,
   PAGE_SIDE_PADDING_DESKTOP,
   PAGE_SIDE_PADDING_MOBILE,
-  cloneDocumentSnapshot,
   createBlockId,
-  createRichTextSelectionHtml,
-  estimateBlockHeight,
   getBlockMaxWidth,
   getBlockRightGutter,
   getCanvasInset,
   getCurrentLineRange,
-  getImageBlockHeight,
   getInitialBlocks,
   getPersistableBlocks,
   getRenderedBlockWidth,
@@ -55,7 +50,6 @@ import {
 } from "@/lib/notes";
 import { getNotebookTheme } from "@/lib/notebook-theme";
 import { getPageDocumentTitle } from "@/lib/page-title";
-import { getVisibleSpatialItems } from "@/lib/virtualization";
 
 type Attachment = {
   id: string;
@@ -84,8 +78,6 @@ type CanvasCoordinates = {
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
-const BLOCK_VIRTUALIZATION_THRESHOLD = 120;
-const BLOCK_VIRTUALIZATION_OVERSCAN = 800;
 export function NoteEditor({
   userId,
   notebookId,
@@ -132,20 +124,9 @@ export function NoteEditor({
     highlightColor: string;
     fontSize: number;
   } | null>(null);
-  const [isDesktopViewport, setIsDesktopViewport] = useState(true);
-  const [canvasWidth, setCanvasWidth] = useState(DEFAULT_CANVAS_WIDTH);
-  const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
-  const [lowestBlockBottom, setLowestBlockBottom] = useState(0);
-  const [blockViewport, setBlockViewport] = useState({
-    top: 0,
-    bottom: DEFAULT_VIEWPORT_HEIGHT,
-  });
   const pageRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
-  const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const richTextBlockRefs = useRef<Record<string, RichTextBlockHandle | null>>({});
   const textSelectionRef = useRef<
     Record<string, { start: number; end: number }>
   >({});
@@ -161,23 +142,6 @@ export function NoteEditor({
     startX: number;
     startWidth: number;
   } | null>(null);
-  const historyRef = useRef<{
-    past: EditorDocumentSnapshot[];
-    future: EditorDocumentSnapshot[];
-  }>({ past: [], future: [] });
-  const lastHistoryActionRef = useRef<string | null>(null);
-  const currentDocumentStateRef = useRef({
-    title,
-    blocks,
-    activeBlockId,
-    selectedBlockIds,
-  });
-  const selectionRestoreRef = useRef<{
-    id: string;
-    start: number;
-    end: number;
-  } | null>(null);
-
   const pagePointerStartRef = useRef<{
     pointerId: number;
     clientX: number;
@@ -199,14 +163,32 @@ export function NoteEditor({
       ? extractFreeformPlainText(freeformDocument)
       : "";
   }, [serializedDocument]);
-  const mobileCanvasMinHeight = Math.max(viewportHeight - 256, lowestBlockBottom + 280);
-  const desktopCanvasMinHeight = Math.max(viewportHeight - 240, lowestBlockBottom + 360);
-
   const snapshot = `${title}::${serializedDocument}`;
-  const resetDocumentHistory = useCallback(() => {
-    historyRef.current = { past: [], future: [] };
-    lastHistoryActionRef.current = null;
-  }, []);
+  const {
+    currentDocumentStateRef,
+    finishHistoryGroup,
+    historyRef,
+    recordDocumentHistory,
+    redoDocument,
+    resetDocumentHistory,
+    undoDocument,
+  } = useNoteEditorHistory({
+    title,
+    blocks,
+    activeBlockId,
+    selectedBlockIds,
+    pageRef,
+    canRecord: () => isHydrated,
+    markInteraction: () => markEditorInteraction(),
+    setTitle,
+    setBlocks,
+    setActiveBlockId,
+    setSelectedBlockIds,
+    clearRichTextState: () => {
+      setActiveRichTextStyle(null);
+      setRichTextInitialSelections({});
+    },
+  });
   const {
     flushPendingSave,
     isEditorMounted,
@@ -228,6 +210,23 @@ export function NoteEditor({
     getInitialBlocks,
     resetDocumentHistory,
   });
+  const {
+    blockRefs,
+    canvasRef,
+    canvasWidth,
+    desktopCanvasMinHeight,
+    getCanvasRect,
+    getTextBlockElement,
+    isDesktopViewport,
+    mobileCanvasMinHeight,
+    queueSelectionRestore,
+    renderedBlocks,
+    richTextBlockRefs,
+    selectionRestoreRef,
+    setBlockElement,
+    setRichTextBlockHandle,
+    shouldVirtualizeBlocks,
+  } = useNoteEditorLayout({ blocks, activeBlockId, isHydrated });
   const {
     copyImageToClipboard,
     copyTextToClipboard,
@@ -264,96 +263,6 @@ export function NoteEditor({
     blocks.find(
       (block) => block.id === activeBlockId && !isImageBlock(block),
     ) ?? null;
-  const shouldVirtualizeBlocks =
-    blocks.length >= BLOCK_VIRTUALIZATION_THRESHOLD;
-  const renderedBlocks = useMemo(
-    () =>
-      shouldVirtualizeBlocks
-        ? getVisibleSpatialItems(
-            blocks,
-            {
-              ...blockViewport,
-              overscan: BLOCK_VIRTUALIZATION_OVERSCAN,
-            },
-            (block) => ({
-              top: block.y,
-              height: estimateBlockHeight(block, canvasWidth),
-            }),
-            (block) => block.id === activeBlockId,
-          )
-        : blocks,
-    [
-      activeBlockId,
-      blockViewport,
-      blocks,
-      canvasWidth,
-      shouldVirtualizeBlocks,
-    ],
-  );
-
-  function getTextBlockElement(blockId: string) {
-    return (
-      blockRefs.current[blockId] ??
-      richTextBlockRefs.current[blockId]?.getElement() ??
-      null
-    );
-  }
-
-  function getCanvasRect() {
-    return canvasRef.current?.getBoundingClientRect() ?? null;
-  }
-
-  const updateBlockViewport = useCallback(() => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const nextTop = Math.max(0, -rect.top);
-    const nextBottom = Math.max(
-      nextTop,
-      Math.min(rect.height || Number.POSITIVE_INFINITY, window.innerHeight - rect.top),
-    );
-
-    setBlockViewport((current) =>
-      Math.abs(current.top - nextTop) < 1 &&
-      Math.abs(current.bottom - nextBottom) < 1
-        ? current
-        : { top: nextTop, bottom: nextBottom },
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!shouldVirtualizeBlocks) {
-      return;
-    }
-
-    let frameId: number | null = null;
-    const scheduleUpdate = () => {
-      if (frameId !== null) {
-        return;
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        updateBlockViewport();
-      });
-    };
-
-    scheduleUpdate();
-    window.addEventListener("scroll", scheduleUpdate, true);
-    window.addEventListener("resize", scheduleUpdate);
-
-    return () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      window.removeEventListener("scroll", scheduleUpdate, true);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [shouldVirtualizeBlocks, updateBlockViewport]);
 
   function focusTitleAt(caretPosition: number) {
     titleInputRef.current?.focus();
@@ -361,28 +270,19 @@ export function NoteEditor({
   }
 
   function restoreTextSelection(blockId: string, start: number, end: number) {
-    selectionRestoreRef.current = { id: blockId, start, end };
+    queueSelectionRestore(blockId, start, end);
   }
 
   function setBlockRef(blockId: string, element: HTMLTextAreaElement | null) {
-    blockRefs.current[blockId] = element;
+    setBlockElement(blockId, element);
   }
 
   function setRichTextBlockRef(
     blockId: string,
     handle: RichTextBlockHandle | null,
   ) {
-    richTextBlockRefs.current[blockId] = handle;
+    setRichTextBlockHandle(blockId, handle);
   }
-
-  useEffect(() => {
-    currentDocumentStateRef.current = {
-      title,
-      blocks,
-      activeBlockId,
-      selectedBlockIds,
-    };
-  }, [activeBlockId, blocks, selectedBlockIds, title]);
 
   function getCanvasBoundedX(
     targetCanvasWidth: number,
@@ -401,169 +301,9 @@ export function NoteEditor({
     );
   }
 
-  function recordDocumentHistory(coalesceKey?: string) {
-    if (!isHydrated) {
-      return;
-    }
-
-    const shouldCoalesce = Boolean(
-      coalesceKey && lastHistoryActionRef.current === coalesceKey,
-    );
-
-    if (!shouldCoalesce) {
-      const current = currentDocumentStateRef.current;
-      historyRef.current.past.push(
-        cloneDocumentSnapshot(
-          current.title,
-          current.blocks,
-          current.activeBlockId,
-          current.selectedBlockIds,
-        ),
-      );
-
-      if (historyRef.current.past.length > 100) {
-        historyRef.current.past.shift();
-      }
-    }
-
-    historyRef.current.future = [];
-    lastHistoryActionRef.current = coalesceKey ?? null;
-  }
-
-  function finishHistoryGroup() {
-    lastHistoryActionRef.current = null;
-  }
-
   useEffect(() => {
     document.title = getPageDocumentTitle(title);
   }, [title]);
-
-  useEffect(() => {
-    if (!isHydrated || !activeBlockId) {
-      return;
-    }
-
-    const richTextHandle = richTextBlockRefs.current[activeBlockId];
-    if (richTextHandle) {
-      const richTextElement = richTextHandle.getElement();
-      if (!richTextElement?.contains(document.activeElement)) {
-        richTextHandle.focus();
-      }
-      return;
-    }
-
-    const element = blockRefs.current[activeBlockId];
-    if (!element || document.activeElement === element) {
-      return;
-    }
-
-    element.focus();
-  }, [activeBlockId, isHydrated]);
-
-  useEffect(() => {
-    Object.values(blockRefs.current).forEach((element) => {
-      if (!element) {
-        return;
-      }
-
-      element.style.height = "0px";
-      element.style.height = `${Math.max(element.scrollHeight, 28)}px`;
-    });
-
-    if (!selectionRestoreRef.current) {
-      const nextLowestBlockBottom = blocks.reduce((max, block) => {
-        const element = getTextBlockElement(block.id);
-        const blockWidth = getRenderedBlockWidth(block, canvasWidth);
-        const blockHeight = isImageBlock(block)
-          ? getImageBlockHeight(block, blockWidth)
-          : Math.max(
-              element?.scrollHeight ?? 28,
-              element?.offsetHeight ?? 28,
-              estimateBlockHeight(block, canvasWidth),
-              28,
-            );
-        return Math.max(max, block.y + blockHeight);
-      }, 0);
-
-      setLowestBlockBottom(nextLowestBlockBottom);
-      return;
-    }
-
-    const restore = selectionRestoreRef.current;
-    const element = blockRefs.current[restore.id];
-    selectionRestoreRef.current = null;
-
-    if (!element) {
-      return;
-    }
-
-    element.focus();
-    element.setSelectionRange(restore.start, restore.end);
-
-    const nextLowestBlockBottom = blocks.reduce((max, block) => {
-      const blockElement = getTextBlockElement(block.id);
-      const blockWidth = getRenderedBlockWidth(block, canvasWidth);
-      const blockHeight = isImageBlock(block)
-        ? getImageBlockHeight(block, blockWidth)
-        : Math.max(
-            blockElement?.scrollHeight ?? 28,
-            blockElement?.offsetHeight ?? 28,
-            estimateBlockHeight(block, canvasWidth),
-            28,
-          );
-      return Math.max(max, block.y + blockHeight);
-    }, 0);
-
-    setLowestBlockBottom(nextLowestBlockBottom);
-  }, [blocks, canvasWidth]);
-
-  useEffect(() => {
-    const normalizeBlockLayout = () => {
-      const canvasWidth = canvasRef.current?.getBoundingClientRect().width;
-
-      if (!canvasWidth) {
-        return;
-      }
-
-      setCanvasWidth(canvasWidth);
-      setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
-      setIsDesktopViewport(canvasWidth >= 768);
-    };
-    let animationFrameId: number | null = null;
-    const scheduleNormalizeBlockLayout = () => {
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-      }
-
-      animationFrameId = requestAnimationFrame(() => {
-        animationFrameId = null;
-        normalizeBlockLayout();
-      });
-    };
-
-    normalizeBlockLayout();
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleNormalizeBlockLayout);
-    const visualViewport = window.visualViewport;
-
-    if (canvasRef.current) {
-      resizeObserver?.observe(canvasRef.current);
-    }
-
-    window.addEventListener("resize", scheduleNormalizeBlockLayout);
-    visualViewport?.addEventListener("resize", scheduleNormalizeBlockLayout);
-    return () => {
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-      }
-
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", scheduleNormalizeBlockLayout);
-      visualViewport?.removeEventListener("resize", scheduleNormalizeBlockLayout);
-    };
-  }, []);
 
   function focusBlockElement(blockId: string, caretPosition = 0) {
     const richTextHandle = richTextBlockRefs.current[blockId];
@@ -1047,373 +787,27 @@ export function NoteEditor({
     };
   }, []);
 
-  function applyDocumentSnapshot(nextSnapshot: EditorDocumentSnapshot) {
-    const existingBlockIds = new Set(nextSnapshot.blocks.map((block) => block.id));
-    const nextActiveBlockId =
-      nextSnapshot.activeBlockId && existingBlockIds.has(nextSnapshot.activeBlockId)
-        ? nextSnapshot.activeBlockId
-        : null;
-    const nextSelectedBlockIds = nextSnapshot.selectedBlockIds.filter((id) =>
-      existingBlockIds.has(id),
-    );
-
-    currentDocumentStateRef.current = {
-      title: nextSnapshot.title,
-      blocks: nextSnapshot.blocks,
-      activeBlockId: nextActiveBlockId,
-      selectedBlockIds: nextSelectedBlockIds,
-    };
-    setTitle(nextSnapshot.title);
-    setBlocks(nextSnapshot.blocks.map((block) => ({ ...block })));
-    setActiveBlockId(nextActiveBlockId);
-    setSelectedBlockIds(nextSelectedBlockIds);
-    setActiveRichTextStyle(null);
-    setRichTextInitialSelections({});
-  }
-
-  function undoDocument() {
-    const previous = historyRef.current.past.pop();
-    if (!previous) {
-      return;
-    }
-
-    markEditorInteraction();
-    const current = currentDocumentStateRef.current;
-    historyRef.current.future.push(
-      cloneDocumentSnapshot(
-        current.title,
-        current.blocks,
-        current.activeBlockId,
-        current.selectedBlockIds,
-      ),
-    );
-    lastHistoryActionRef.current = null;
-    applyDocumentSnapshot(previous);
-  }
-
-  function redoDocument() {
-    const next = historyRef.current.future.pop();
-    if (!next) {
-      return;
-    }
-
-    markEditorInteraction();
-    const current = currentDocumentStateRef.current;
-    historyRef.current.past.push(
-      cloneDocumentSnapshot(
-        current.title,
-        current.blocks,
-        current.activeBlockId,
-        current.selectedBlockIds,
-      ),
-    );
-    lastHistoryActionRef.current = null;
-    applyDocumentSnapshot(next);
-  }
-
-  const handleHistoryShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-    const isUndo = key === "z" && !event.shiftKey;
-    const isRedo = key === "y" || (key === "z" && event.shiftKey);
-
-    if (!isUndo && !isRedo) {
-      return;
-    }
-
-    const target = event.target;
-    if (!(target instanceof Node) || !pageRef.current?.contains(target)) {
-      return;
-    }
-
-    const canApply = isRedo
-      ? historyRef.current.future.length > 0
-      : historyRef.current.past.length > 0;
-    if (!canApply) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (isRedo) {
-      redoDocument();
-    } else {
-      undoDocument();
-    }
+  const { runEditorCommand } = useNoteEditorCommands({
+    activeBlock,
+    activeBlockId,
+    activeRichTextStyle,
+    blocks,
+    selectedBlockIds,
+    title,
+    blockRefs,
+    richTextBlockRefs,
+    textSelectionRef,
+    imageFileInputRef,
+    historyRef,
+    setRichTextInitialSelections,
+    updateBlock,
+    updateBlocksByIds,
+    toggleSelectedLines,
+    cycleTodoLines,
+    deleteBlocks,
+    undoDocument,
+    redoDocument,
   });
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => handleHistoryShortcut(event);
-    window.addEventListener("keydown", listener, true);
-    return () => window.removeEventListener("keydown", listener, true);
-  }, []);
-
-  function applyInlineTextStyle(
-    blockId: string,
-    style: { textColor?: string; highlightColor?: string; fontSize?: number },
-  ) {
-    const richTextHandle = richTextBlockRefs.current[blockId];
-    if (richTextHandle) {
-      if (style.textColor) {
-        richTextHandle.setTextColor(style.textColor);
-      }
-      if (style.highlightColor) {
-        richTextHandle.setHighlightColor(style.highlightColor);
-      }
-      if (style.fontSize) {
-        richTextHandle.setFontSize(style.fontSize);
-      }
-      return true;
-    }
-
-    const selection = textSelectionRef.current[blockId];
-    if (!selection || selection.start === selection.end) {
-      return false;
-    }
-
-    setRichTextInitialSelections((current) => ({
-      ...current,
-      [blockId]: selection,
-    }));
-    updateBlock(blockId, (block) => ({
-      ...block,
-      richText: createRichTextSelectionHtml(
-        block.text,
-        selection.start,
-        selection.end,
-        style,
-      ),
-    }));
-    return true;
-  }
-
-  function runEditorCommand(
-    command: EditorCommand,
-    payload?: {
-      textColor?: string;
-      highlightColor?: string;
-      fontSize?: number;
-      targetBlockIds?: string[];
-      primaryBlockId?: string | null;
-    },
-  ) {
-    if (command === "undo") {
-      undoDocument();
-      return;
-    }
-
-    if (command === "redo") {
-      redoDocument();
-      return;
-    }
-
-    if (command === "insert-image") {
-      imageFileInputRef.current?.click();
-      return;
-    }
-
-    const targetIds =
-      payload?.targetBlockIds && payload.targetBlockIds.length > 0
-        ? payload.targetBlockIds
-        : selectedBlockIds.length > 0
-        ? selectedBlockIds
-        : activeBlockId
-          ? [activeBlockId]
-          : [];
-
-    if (targetIds.length === 0) {
-      return;
-    }
-
-    const primaryBlockId = payload?.primaryBlockId ?? activeBlockId ?? targetIds[0];
-    const activeRichTextHandle = primaryBlockId
-      ? richTextBlockRefs.current[primaryBlockId]
-      : null;
-    const activeElement = primaryBlockId ? blockRefs.current[primaryBlockId] : null;
-    activeRichTextHandle?.focus();
-    activeElement?.focus();
-
-    switch (command) {
-      case "toggle-bold":
-        updateBlocksByIds(targetIds, (block) => ({
-          ...block,
-          bold: !(block.bold ?? false),
-        }));
-        return;
-      case "toggle-italic":
-        updateBlocksByIds(targetIds, (block) => ({
-          ...block,
-          italic: !(block.italic ?? false),
-        }));
-        return;
-      case "toggle-bullet-list":
-        if (primaryBlockId) {
-          toggleSelectedLines(primaryBlockId, BULLET_PREFIX);
-        }
-        return;
-      case "toggle-todo-list":
-        if (primaryBlockId) {
-          cycleTodoLines(primaryBlockId);
-        }
-        return;
-      case "align-right":
-        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "right" }));
-        return;
-      case "align-center":
-        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "center" }));
-        return;
-      case "align-justify":
-        updateBlocksByIds(targetIds, (block) => ({ ...block, align: "justify" }));
-        return;
-      case "set-direction-rtl":
-        updateBlocksByIds(targetIds, (block) =>
-          isImageBlock(block) ? block : { ...block, direction: "rtl" },
-        );
-        return;
-      case "set-direction-ltr":
-        updateBlocksByIds(targetIds, (block) =>
-          isImageBlock(block) ? block : { ...block, direction: "ltr" },
-        );
-        return;
-      case "set-text-color":
-        if (
-          primaryBlockId &&
-          applyInlineTextStyle(primaryBlockId, {
-            textColor: payload?.textColor ?? "#222222",
-          })
-        ) {
-          return;
-        }
-        updateBlocksByIds(targetIds, (block) => ({
-          ...block,
-          textColor: payload?.textColor ?? "#222222",
-        }));
-        return;
-      case "set-highlight-color":
-        if (
-          primaryBlockId &&
-          applyInlineTextStyle(primaryBlockId, {
-            highlightColor: payload?.highlightColor ?? "#fff2a8",
-          })
-        ) {
-          return;
-        }
-        updateBlocksByIds(targetIds, (block) => ({
-          ...block,
-          richText: createRichTextSelectionHtml(block.text, 0, block.text.length, {
-            highlightColor: payload?.highlightColor ?? "#fff2a8",
-          }),
-        }));
-        return;
-      case "set-font-size":
-        if (
-          primaryBlockId &&
-          applyInlineTextStyle(primaryBlockId, {
-            fontSize: Math.min(32, Math.max(13, payload?.fontSize ?? 15)),
-          })
-        ) {
-          return;
-        }
-        updateBlocksByIds(targetIds, (block) => ({
-          ...block,
-          fontSize: Math.min(32, Math.max(13, payload?.fontSize ?? 15)),
-        }));
-        return;
-      case "delete-block":
-        deleteBlocks(targetIds);
-        return;
-    }
-  }
-
-  const handleEditorCommandEvent = useEffectEvent(
-    (
-      command: EditorCommand,
-      payload?: {
-        textColor?: string;
-        highlightColor?: string;
-        fontSize?: number;
-        targetBlockIds?: string[];
-        primaryBlockId?: string | null;
-      },
-    ) => {
-      runEditorCommand(command, payload);
-    },
-  );
-
-  useEffect(() => {
-    const listener = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        command: EditorCommand;
-        textColor?: string;
-        highlightColor?: string;
-        fontSize?: number;
-      }>;
-      handleEditorCommandEvent(customEvent.detail.command, {
-        textColor: customEvent.detail.textColor,
-        highlightColor: customEvent.detail.highlightColor,
-        fontSize: customEvent.detail.fontSize,
-      });
-    };
-
-    window.addEventListener("note-editor-command", listener);
-    return () => window.removeEventListener("note-editor-command", listener);
-  }, []);
-
-  useEffect(() => {
-    const dispatchToolbarState = () => {
-      window.dispatchEvent(
-        new CustomEvent("note-editor-state", {
-          detail: {
-            hasActiveBlock: Boolean(activeBlock),
-            canInsertImage: true,
-            canUndo: historyRef.current.past.length > 0,
-            canRedo: historyRef.current.future.length > 0,
-            align: activeBlock?.align ?? "right",
-            direction: activeBlock?.direction ?? "rtl",
-            bold: activeBlock?.bold ?? false,
-            italic: activeBlock?.italic ?? false,
-            textColor:
-              activeRichTextStyle?.blockId === activeBlock?.id
-                ? activeRichTextStyle?.textColor ?? "#222222"
-                : activeBlock?.textColor ?? "#222222",
-            highlightColor:
-              activeRichTextStyle?.blockId === activeBlock?.id
-                ? activeRichTextStyle?.highlightColor ?? "transparent"
-                : "transparent",
-            fontSize:
-              activeRichTextStyle?.blockId === activeBlock?.id
-                ? activeRichTextStyle?.fontSize ?? 15
-                : activeBlock?.fontSize ?? 15,
-            selectionCount: selectedBlockIds.length,
-          },
-        }),
-      );
-    };
-
-    dispatchToolbarState();
-    const animationFrameId = requestAnimationFrame(dispatchToolbarState);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [activeBlock, activeRichTextStyle, blocks, selectedBlockIds.length, title]);
-
-  useEffect(
-    () => () => {
-      window.dispatchEvent(
-        new CustomEvent("note-editor-state", {
-          detail: {
-            hasActiveBlock: false,
-            canInsertImage: false,
-            canUndo: false,
-            canRedo: false,
-          },
-        }),
-      );
-    },
-    [],
-  );
 
   function startDraggingBlock(
     event: React.PointerEvent<HTMLButtonElement>,
@@ -1488,70 +882,30 @@ export function NoteEditor({
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,
           }}
         >
-          <div className="px-4 pt-5 text-right md:px-[48px] md:pt-6" dir="rtl">
-            <div
-              className="w-full border-b align-top"
-              style={{ borderColor: notebookTheme.accent }}
-            >
-              <input
-                ref={titleInputRef}
-                value={title}
-                onChange={(event) => {
-                  markEditorInteraction();
-                  recordDocumentHistory("title");
-                  setTitle(event.target.value);
-                }}
-                onBlur={() => {
-                  finishHistoryGroup();
-                  flushPendingSave("title-blur");
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const selectionStart =
-                    event.currentTarget.selectionStart ?? 0;
-                  const selectionEnd =
-                    event.currentTarget.selectionEnd ?? selectionStart;
-                  const selectedText =
-                    selectionStart !== selectionEnd
-                      ? title.slice(selectionStart, selectionEnd)
-                      : title;
-
-                  openMenu(event, {
-                    title: "عنوان صفحه",
-                    items: [
-                      {
-                        id: "copy-title",
-                        label: "کپی",
-                        disabled: !selectedText,
-                        onSelect: () =>
-                          copyTextToClipboard(selectedText),
-                      },
-                      {
-                        id: "paste-title",
-                        label: "پیست",
-                        onSelect: () =>
-                          pasteFromClipboard({
-                            targetTitle: true,
-                            selectionStart,
-                            selectionEnd,
-                          }),
-                      },
-                    ],
-                  });
-                }}
-                placeholder="صفحه بدون عنوان"
-                className="mb-2 w-full border-none bg-transparent text-[22px] font-normal text-[#111] outline-none placeholder:text-[#7d7d7d]"
-                dir="rtl"
-                aria-label="عنوان صفحه"
-              />
-              <div className="flex flex-row-reverse gap-8 text-[12px] text-[#6f6f6f]">
-                <span>{persianTimeLabel}</span>
-                <span>{persianDateLabel}</span>
-              </div>
-            </div>
-
-          </div>
+          <NoteEditorHeader
+            accentColor={notebookTheme.accent}
+            dateLabel={persianDateLabel}
+            timeLabel={persianTimeLabel}
+            title={title}
+            titleInputRef={titleInputRef}
+            onTitleChange={(nextTitle) => {
+              markEditorInteraction();
+              recordDocumentHistory("title");
+              setTitle(nextTitle);
+            }}
+            onTitleBlur={() => {
+              finishHistoryGroup();
+              flushPendingSave("title-blur");
+            }}
+            onCopyTitle={copyTextToClipboard}
+            onPasteTitle={(selectionStart, selectionEnd) =>
+              pasteFromClipboard({
+                targetTitle: true,
+                selectionStart,
+                selectionEnd,
+              })
+            }
+          />
 
           <div
             ref={canvasRef}

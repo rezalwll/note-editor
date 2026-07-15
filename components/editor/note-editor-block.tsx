@@ -2,13 +2,10 @@
 
 import Image from "next/image";
 import { GripVertical, Trash2 } from "lucide-react";
-import type React from "react";
+import React, { Suspense, lazy } from "react";
 
 import type { ContextMenuEntry } from "@/components/context-menu";
-import {
-  RichTextBlockEditor,
-  type RichTextBlockHandle,
-} from "@/components/editor/rich-text-block-editor";
+import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
 import type { EditorCommand } from "@/lib/editor-events";
 import {
   IMAGE_DEFAULT_ASPECT_RATIO,
@@ -20,6 +17,12 @@ import {
 } from "@/lib/editor-document";
 import type { getNotebookTheme } from "@/lib/notebook-theme";
 import type { FreeformBlock } from "@/lib/notes";
+
+const RichTextBlockEditor = lazy(() =>
+  import("@/components/editor/rich-text-block-editor").then((module) => ({
+    default: module.RichTextBlockEditor,
+  })),
+);
 
 type OpenMenu = (
   event:
@@ -316,6 +319,16 @@ export function NoteEditorBlock({
                     </button>
   
                     {block.richText ? (
+                      <Suspense
+                        fallback={
+                          <div
+                            className="min-h-7 w-full px-1 text-right text-[15px] leading-7 text-[#222]"
+                            dir={block.direction ?? "rtl"}
+                          >
+                            {block.text}
+                          </div>
+                        }
+                      >
                       <RichTextBlockEditor
                         ref={(handle) => setRichTextBlockRef(block.id, handle)}
                         html={block.richText}
@@ -368,6 +381,7 @@ export function NoteEditorBlock({
                           });
                         }}
                       />
+                      </Suspense>
                     ) : (
                     <textarea
                     ref={(element) => setBlockRef(block.id, element)}
