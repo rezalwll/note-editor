@@ -165,12 +165,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     }
 
     const updatePanelPosition = () => {
-      const rect = profileTriggerRef.current?.getBoundingClientRect();
+      const rect = profileTriggerRef.current!.getBoundingClientRect();
       const panelWidth = 176;
-
-      if (!rect) {
-        return;
-      }
 
       setProfilePanelPosition({
         top: rect.bottom + 10,
@@ -217,14 +213,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   function submitCreate() {
     const nextTitle = draftTitle.trim() || "صفحه بدون عنوان";
 
-    if (!activeNotebook || activeNotebook.deletedAt) {
-      setDraftTitle("");
-      setIsCreating(false);
-      return;
-    }
-
     startTransition(async () => {
-      const result = await createPageInlineAction(activeNotebook.id, nextTitle);
+      const result = await createPageInlineAction(activeNotebook!.id, nextTitle);
 
       if ("id" in result && result.id) {
         const pageId = result.id;
@@ -249,12 +239,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function submitRenameGroup() {
-    if (!editingGroupId) {
-      return;
-    }
-
     const nextName = draftGroupName.trim() || "مجموعه بدون عنوان";
-    const targetGroupId = editingGroupId;
+    const targetGroupId = editingGroupId!;
     const previousName = groupedNotebooks.find((group) => group.id === targetGroupId)?.name;
 
     setEditingGroupId(null);
@@ -281,12 +267,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function submitRenameNotebook() {
-    if (!editingNotebookId) {
-      return;
-    }
-
     const nextName = draftNotebookName.trim() || "زیر مجموعه بدون عنوان";
-    const targetNotebookId = editingNotebookId;
+    const targetNotebookId = editingNotebookId!;
     const previousName = displayNotebooks.find(
       (notebook) => notebook.id === targetNotebookId,
     )?.name;
@@ -326,13 +308,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     );
   }
 
-  function selectNotebook(notebookId: string) {
-    const notebook = displayNotebooks.find((item) => item.id === notebookId);
-
-    if (!notebook) {
-      return;
-    }
-
+  function selectNotebook(notebook: MobileNotebook) {
     setSelectedGroupId(notebook.groupId);
     setSelectedNotebookId(notebook.id);
     closeAll();
@@ -394,9 +370,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     });
   }
 
-  function deleteGroup(groupId: string) {
-    const group = groupedNotebooks.find((item) => item.id === groupId);
-    if (!group) return;
+  function deleteGroup(group: MobileGroupSection) {
+    const groupId = group.id;
     closeActionSheet();
 
     startTransition(async () => {
@@ -500,18 +475,14 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       clear();
       await deletePagePermanentlyInlineAction(pageId);
       if (activePageId === pageId) {
-        router.push(activeNotebook ? `/notebooks/${activeNotebook.id}` : "/");
+        router.push(`/notebooks/${activeNotebook!.id}`);
       }
       router.refresh();
     });
   }
 
-  async function handleInstall() {
-    if (!installEvent) {
-      return;
-    }
-
-    await installEvent.prompt();
+  async function handleInstall(event: InstallPromptEvent) {
+    await event.prompt();
     setInstallEvent(null);
   }
 
@@ -765,7 +736,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
                                   <button
                                     type="button"
-                                    onClick={() => selectNotebook(notebook.id)}
+                                    onClick={() => selectNotebook(notebook)}
                                     className="w-full rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition"
                                     style={{
                                       backgroundColor: isActiveNotebook
@@ -926,9 +897,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                 <div className="px-4 py-6 text-right text-sm text-[#708090]">
                   هنوز زیر مجموعه‌ای برای این مجموعه انتخاب نشده است.
                 </div>
-              ) : activeNotebook ? (
-                activeNotebook.pages.length > 0 ? (
-                  activeNotebook.pages.map((page) => {
+              ) : activeNotebook!.pages.length > 0 ? (
+                  activeNotebook!.pages.map((page) => {
                     const isActive = pathname === `/pages/${page.id}`;
 
                     return (
@@ -960,18 +930,13 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                       </div>
                     );
                   })
-                ) : (
+              ) : (
                   <div
                     className="px-4 py-6 text-right text-sm"
                     style={{ color: activeTheme.sidebarMuted }}
                   >
                     این زیر مجموعه هنوز صفحه‌ای ندارد.
                   </div>
-                )
-              ) : (
-                <div className="px-4 py-6 text-right text-sm text-[#708090]">
-                  یک زیر مجموعه را از منوی مجموعه‌ها انتخاب کنید.
-                </div>
               )}
             </div>
           </div>
@@ -999,7 +964,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
                   </button>
                   <button
                     type="button"
-                    onClick={() => deleteGroup(actionGroup.id)}
+                    onClick={() => deleteGroup(actionGroup)}
                     className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
                   >
                     حذف مجموعه
@@ -1090,7 +1055,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
             {installEvent ? (
               <button
                 type="button"
-                onClick={handleInstall}
+                onClick={() => handleInstall(installEvent)}
                 className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
               >
                 نصب برنامه

@@ -77,11 +77,8 @@ const pendingSignupStore = prisma as typeof prisma & {
   pendingSignup: any;
 };
 
-function getSafeRedirectTarget(value: FormDataEntryValue | null) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-
+function getSafeRedirectTarget(value: string | undefined) {
+  if (!value) return "/";
   if (!value.startsWith("/") || value.startsWith("//")) {
     return "/";
   }
@@ -205,7 +202,7 @@ export async function loginAction(
 
   clearAttempts(key);
   await createSession(user.id);
-  redirect(getSafeRedirectTarget(formData.get("next")));
+  redirect(getSafeRedirectTarget(parsed.data.next));
 }
 
 export async function signupAction(
@@ -708,5 +705,4 @@ export async function resetPasswordAction(
 
   redirect("/login?passwordReset=success");
 }
-
 

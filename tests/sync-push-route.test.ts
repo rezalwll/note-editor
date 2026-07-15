@@ -523,4 +523,138 @@ describe("sync push route", () => {
     expect(response.status).toBe(400);
     expect(mocks.prisma.page.findMany).not.toHaveBeenCalled();
   });
+
+  it("rejects malformed JSON and structurally invalid payloads", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    const { POST } = await import("@/app/api/sync/push/route");
+
+    const malformed = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{",
+      }),
+    );
+    const invalid = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operations: "invalid" }),
+      }),
+    );
+
+    expect(malformed.status).toBe(400);
+    await expect(malformed.json()).resolves.toMatchObject({
+      error: "Invalid JSON payload.",
+    });
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: "Invalid sync payload.",
+      issues: expect.any(Array),
+    });
+  });
+
+  it("rejects queue items belonging to another user", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            id: 31,
+            userId: "user-2",
+            entityType: "page",
+            entityId: "foreign-page",
+            operation: "archive",
+            payload: { id: "foreign-page" },
+          }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Forbidden sync queue scope.",
+    });
+    expect(mocks.prisma.page.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns a bounded processing error for an invalid notebook operation", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            id: "not-a-number",
+            entityType: "notebook",
+            entityId: "invalid-notebook",
+            operation: "upsert",
+            payload: { id: 12, name: "invalid" },
+          }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Invalid notebook sync payload.",
+      issues: expect.any(Array),
+    });
+  });
+
+  it("turns prefetch failures into an observed server failure", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.page.findMany.mockRejectedValue(new Error("database offline"));
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            entityType: "page",
+            entityId: "page-1",
+            operation: "archive",
+            payload: { id: "page-1" },
+          }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+  });
+
+  it("ignores tombstones for unsupported entity types", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.entityTombstone.findMany.mockResolvedValue([{
+      id: "legacy-tombstone",
+      userId: "user-1",
+      entityType: "legacy",
+      entityId: "page-absent",
+      deletedAt: new Date("2026-07-15T10:00:00.000Z"),
+    }]);
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(
+      new Request("https://notava.test/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            entityType: "page",
+            entityId: "page-absent",
+            operation: "archive",
+            payload: { id: "page-absent" },
+          }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ tombstones: [] });
+  });
 });

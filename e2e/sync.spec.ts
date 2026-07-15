@@ -204,24 +204,12 @@ test("propagates a permanent deletion tombstone to a second device", async ({
     await deviceA.page.goto(`/notebooks/${trashNotebookId}`);
     const trashTargetRow = deviceA.page.getByTestId(`page-item-${target.id}`);
     await expect(trashTargetRow).toBeVisible();
-    await trashTargetRow.evaluate((element) =>
-      element.dispatchEvent(
-        new MouseEvent("contextmenu", {
-          bubbles: true,
-          cancelable: true,
-          button: 2,
-          clientX: 240,
-          clientY: 240,
-        }),
-      ),
-    );
+    await trashTargetRow.click({ button: "right" });
     const permanentDeleteItem = deviceA.page
       .getByRole("menu")
       .getByRole("menuitem", { name: "حذف دائمی صفحه", exact: true });
     await expect(permanentDeleteItem).toBeVisible();
-    await permanentDeleteItem.evaluate((element) =>
-      (element as HTMLButtonElement).click(),
-    );
+    await permanentDeleteItem.click({ noWaitAfter: true });
 
     await expect
       .poll(() => findPage(target.id))

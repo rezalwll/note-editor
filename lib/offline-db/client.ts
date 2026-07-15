@@ -429,9 +429,7 @@ export async function applySyncPushResult(userId: string, result: SyncPushResult
           .toArray();
         await Promise.all(
           queuedItems.map((item) =>
-            item.id
-              ? offlineDb.queue.update(item.id, { status: "conflict" })
-              : Promise.resolve(0),
+            offlineDb.queue.update(item.id!, { status: "conflict" }),
           ),
         );
       }
@@ -576,9 +574,7 @@ async function deleteEntityConflictState(conflict: ConflictRecord) {
 
   await Promise.all([
     ...conflicts.map((item) => offlineDb.conflicts.delete(item.id)),
-    ...queue.map((item) =>
-      item.id ? offlineDb.queue.delete(item.id) : Promise.resolve(),
-    ),
+    ...queue.map((item) => offlineDb.queue.delete(item.id!)),
   ]);
 }
 

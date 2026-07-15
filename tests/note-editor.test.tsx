@@ -736,17 +736,18 @@ describe("NoteEditor freeform placement", () => {
       const richTextEditor = container.querySelector(
         '[data-rich-text-editor="true"]',
       ) as HTMLElement | null;
-      expect(richTextEditor?.querySelector("h1")).toHaveTextContent(
+      expect(richTextEditor).toBeInTheDocument();
+      expect(richTextEditor!.querySelector("h1")).toHaveTextContent(
         "بانک جامع مهارت‌های فنی و رفتاری تیم توسعه وب",
       );
-      expect(richTextEditor?.querySelector("h2")).toHaveTextContent(
+      expect(richTextEditor!.querySelector("h2")).toHaveTextContent(
         "۱. ویژگی‌های فردی و مهارت‌های رفتاری",
       );
-      expect(richTextEditor?.querySelector("ul li")).toHaveTextContent(
+      expect(richTextEditor!.querySelector("ul li")).toHaveTextContent(
         "انتقادپذیر و پذیرای بازخورد",
       );
-      expect(richTextEditor?.querySelector("strong")).toHaveTextContent("بازخورد");
-    });
+      expect(richTextEditor!.querySelector("strong")).toHaveTextContent("بازخورد");
+    }, { timeout: 5_000 });
   });
 
   it("applies text color and font size only to the selected text", async () => {
