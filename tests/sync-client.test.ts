@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   listPendingQueue: vi.fn(),
   pushQueue: vi.fn(),
   seedOfflineBootstrap: vi.fn(),
-  setLastPullAt: vi.fn(),
   upsertConflictRecords: vi.fn(),
   updateLocalSyncStatus: vi.fn(),
 }));
@@ -63,6 +62,7 @@ describe("processSyncQueue", () => {
     }>();
     const pendingItem: SyncQueueItem = {
       id: 1,
+      userId: "user-1",
       entityType: "page",
       entityId: "page-1",
       operation: "upsert",
@@ -87,7 +87,6 @@ describe("processSyncQueue", () => {
       .mockResolvedValueOnce([]);
     mocks.fetchPullChanges.mockReturnValueOnce(pull.promise);
     mocks.applyPullChanges.mockResolvedValue(undefined);
-    mocks.setLastPullAt.mockResolvedValue(undefined);
     mocks.pushQueue.mockResolvedValue({
       applied: [
         {
@@ -152,5 +151,80 @@ describe("processSyncQueue", () => {
       ]),
     );
     window.removeEventListener("notava-observability", handleObservability);
+  });
+
+  it("consumes every bootstrap page before marking initialization complete", async () => {
+    mocks.hasOfflineBootstrap.mockResolvedValue(false);
+    mocks.fetchBootstrap
+      .mockResolvedValueOnce({
+        fetchedAt: "2026-07-15T10:00:00.000Z",
+        notebooks: [{ id: "notebook-1" }],
+        pages: [],
+        tombstones: [],
+        hasMore: true,
+        nextCursor: "cursor-2",
+      })
+      .mockResolvedValueOnce({
+        fetchedAt: "2026-07-15T10:00:00.000Z",
+        notebooks: [],
+        pages: [{ id: "page-1" }],
+        tombstones: [],
+        hasMore: false,
+        nextCursor: null,
+      });
+    mocks.seedOfflineBootstrap.mockResolvedValue(undefined);
+    mocks.applyPullChanges.mockResolvedValue(undefined);
+
+    const { bootstrapOfflineState } = await import("@/lib/sync/client");
+    await bootstrapOfflineState("user-1");
+
+    expect(mocks.fetchBootstrap).toHaveBeenNthCalledWith(1, null);
+    expect(mocks.fetchBootstrap).toHaveBeenNthCalledWith(2, "cursor-2");
+    expect(mocks.seedOfflineBootstrap).toHaveBeenCalledTimes(1);
+    expect(mocks.applyPullChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it("drains a large queue through bounded push batches", async () => {
+    const firstItem = {
+      id: 1,
+      userId: "user-1",
+      entityType: "page" as const,
+      entityId: "page-1",
+      operation: "upsert" as const,
+      payload: { userId: "user-1" },
+      createdAt: "2026-07-15T10:00:00.000Z",
+      status: "pending" as const,
+    };
+    const secondItem = { ...firstItem, id: 2, entityId: "page-2" };
+    mocks.listPendingQueue
+      .mockResolvedValueOnce([firstItem])
+      .mockResolvedValueOnce([secondItem])
+      .mockResolvedValueOnce([secondItem])
+      .mockResolvedValueOnce([]);
+    mocks.pushQueue
+      .mockResolvedValueOnce({
+        applied: [{ ...firstItem, queueId: 1 }],
+        conflicts: [],
+        notebooks: [],
+        pages: [],
+        pulledAt: "2026-07-15T10:00:01.000Z",
+      })
+      .mockResolvedValueOnce({
+        applied: [{ ...secondItem, queueId: 2 }],
+        conflicts: [],
+        notebooks: [],
+        pages: [],
+        pulledAt: "2026-07-15T10:00:02.000Z",
+      });
+    mocks.applySyncPushResult.mockResolvedValue(undefined);
+    mocks.upsertConflictRecords.mockResolvedValue(undefined);
+
+    const { processSyncQueue } = await import("@/lib/sync/client");
+    await processSyncQueue("user-1");
+
+    expect(mocks.pushQueue).toHaveBeenNthCalledWith(1, [firstItem]);
+    expect(mocks.pushQueue).toHaveBeenNthCalledWith(2, [secondItem]);
+    expect(mocks.listPendingQueue).toHaveBeenCalledWith("user-1", 50);
+    expect(mocks.listPendingQueue).toHaveBeenCalledWith("user-1", 1);
   });
 });

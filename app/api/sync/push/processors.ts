@@ -2,7 +2,9 @@ import type {
   LocalNotebook,
   LocalPage,
   SyncPushResult,
+  SyncTombstone,
 } from "@/lib/offline-db/types";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   extractFreeformPlainText,
   extractPlainText,
@@ -38,6 +40,14 @@ export type PushProcessingContext = {
   conflicts: SyncPushResult["conflicts"];
   notebooks: Map<string, LocalNotebook>;
   pages: Map<string, LocalPage>;
+  existingNotebooks: Map<string, Prisma.NotebookGetPayload<object>>;
+  existingPages: Map<string, Prisma.PageGetPayload<object>>;
+  validGroupIds: Set<string>;
+  validNotebookIds: Set<string>;
+  fallbackGroupId?: string;
+  fallbackNotebookId?: string;
+  existingTombstones: Map<string, SyncTombstone>;
+  tombstones: Map<string, SyncTombstone>;
 };
 
 export type PushProcessingError = {
@@ -73,10 +83,20 @@ export async function processNotebookOperation(
 
   const payload = parsedNotebook.data;
   const notebookId = payload.id ?? item.entityId;
-  const existing = await prisma.notebook.findUnique({ where: { id: notebookId } });
+  if (notebookId !== item.entityId) {
+    return { message: "Notebook identity mismatch.", status: 400, item };
+  }
+  const existing = context.existingNotebooks.get(notebookId) ?? null;
+  const tombstone = context.existingTombstones.get(`notebook:${notebookId}`);
 
   if (existing && existing.userId !== context.userId) {
     return { message: "Forbidden notebook scope.", status: 403, item };
+  }
+
+  if (!existing && tombstone) {
+    context.tombstones.set(`notebook:${notebookId}`, tombstone);
+    context.applied.push(appliedOperation(item));
+    return null;
   }
 
   if (
@@ -86,7 +106,7 @@ export async function processNotebookOperation(
   ) {
     const remote = toNotebookResponse(existing);
     context.notebooks.set(existing.id, remote);
-    context.conflicts.push(createConflict(item, payload, remote));
+    context.conflicts.push(createConflict(context.userId, item, payload, remote));
     return null;
   }
 
@@ -102,25 +122,24 @@ export async function processNotebookOperation(
     });
 
     context.notebooks.set(archived.id, toNotebookResponse(archived));
+    context.existingNotebooks.set(archived.id, archived);
     context.applied.push(appliedOperation(item));
     return null;
   }
 
-  const payloadGroup = payload.groupId
-    ? await prisma.notebookGroup.findFirst({
-        where: { id: payload.groupId, userId: context.userId },
-        select: { id: true },
-      })
+  const payloadGroup = payload.groupId && context.validGroupIds.has(payload.groupId)
+    ? { id: payload.groupId }
     : null;
 
   if (payload.groupId && !payloadGroup) {
     return { message: "Invalid notebook group.", status: 400, item };
   }
 
+  if (!context.fallbackGroupId && !payloadGroup?.id && !existing?.groupId) {
+    context.fallbackGroupId = await getFallbackNotebookGroupId(context.userId);
+  }
   const targetGroupId =
-    payloadGroup?.id ??
-    existing?.groupId ??
-    (await getFallbackNotebookGroupId(context.userId));
+    payloadGroup?.id ?? existing?.groupId ?? context.fallbackGroupId!;
   const nextName = nonEmptyText(
     payload.name,
     existing?.name ?? DEFAULT_NOTEBOOK_NAME,
@@ -154,6 +173,8 @@ export async function processNotebookOperation(
       });
 
   context.notebooks.set(notebook.id, toNotebookResponse(notebook));
+  context.existingNotebooks.set(notebook.id, notebook);
+  context.validNotebookIds.add(notebook.id);
   context.applied.push(appliedOperation(item));
   return null;
 }
@@ -175,10 +196,20 @@ export async function processPageOperation(
 
   const payload = parsedPage.data;
   const pageId = payload.id ?? item.entityId;
-  const existing = await prisma.page.findUnique({ where: { id: pageId } });
+  if (pageId !== item.entityId) {
+    return { message: "Page identity mismatch.", status: 400, item };
+  }
+  const existing = context.existingPages.get(pageId) ?? null;
+  const tombstone = context.existingTombstones.get(`page:${pageId}`);
 
   if (existing && existing.userId !== context.userId) {
     return { message: "Forbidden page scope.", status: 403, item };
+  }
+
+  if (!existing && tombstone) {
+    context.tombstones.set(`page:${pageId}`, tombstone);
+    context.applied.push(appliedOperation(item));
+    return null;
   }
 
   if (
@@ -188,7 +219,7 @@ export async function processPageOperation(
   ) {
     const remote = toPageResponse(existing);
     context.pages.set(existing.id, remote);
-    context.conflicts.push(createConflict(item, payload, remote));
+    context.conflicts.push(createConflict(context.userId, item, payload, remote));
     return null;
   }
 
@@ -198,23 +229,23 @@ export async function processPageOperation(
   }
 
   let targetNotebookId = payload.notebookId ?? existing?.notebookId;
-  let notebook = targetNotebookId
-    ? await prisma.notebook.findFirst({
-        where: { id: targetNotebookId, userId: context.userId },
-        select: { id: true },
-      })
+  let notebook = targetNotebookId && context.validNotebookIds.has(targetNotebookId)
+    ? { id: targetNotebookId }
     : null;
 
   if (!notebook && existing) {
     targetNotebookId = existing.notebookId;
-    notebook = await prisma.notebook.findFirst({
-      where: { id: existing.notebookId, userId: context.userId },
-      select: { id: true },
-    });
+    notebook = context.validNotebookIds.has(existing.notebookId)
+      ? { id: existing.notebookId }
+      : null;
   }
 
   if (!notebook && item.operation === "upsert") {
-    targetNotebookId = await getFallbackPageNotebookId(context.userId);
+    if (!context.fallbackNotebookId) {
+      context.fallbackNotebookId = await getFallbackPageNotebookId(context.userId);
+      context.validNotebookIds.add(context.fallbackNotebookId);
+    }
+    targetNotebookId = context.fallbackNotebookId;
     notebook = { id: targetNotebookId };
   }
 
@@ -255,6 +286,7 @@ export async function processPageOperation(
     });
 
     context.pages.set(archived.id, toPageResponse(archived));
+    context.existingPages.set(archived.id, archived);
     context.applied.push(appliedOperation(item));
     return null;
   }
@@ -284,6 +316,7 @@ export async function processPageOperation(
       });
 
   context.pages.set(page.id, toPageResponse(page));
+  context.existingPages.set(page.id, page);
   context.applied.push(appliedOperation(item));
   return null;
 }

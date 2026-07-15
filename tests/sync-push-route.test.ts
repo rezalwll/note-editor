@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     notebook: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
@@ -13,13 +14,18 @@ const mocks = vi.hoisted(() => ({
     notebookGroup: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     page: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+    },
+    entityTombstone: {
+      findMany: vi.fn(),
     },
   },
   moveNotebookToTrash: vi.fn(),
@@ -42,7 +48,28 @@ vi.mock("@/lib/trash", () => ({
 
 describe("sync push route", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    mocks.prisma.entityTombstone.findMany.mockResolvedValue([]);
+    mocks.prisma.notebookGroup.findMany.mockImplementation(async ({ where }) =>
+      (where?.id?.in ?? []).map((id: string) => ({ id })),
+    );
+    mocks.prisma.notebook.findMany.mockImplementation(async ({ where }) => {
+      if (where?.userId) {
+        return (where.id?.in ?? [])
+          .filter((id: string) => id !== "missing-notebook" && id !== "deleted-notebook")
+          .map((id: string) => ({ id }));
+      }
+      const id = where?.id?.in?.[0];
+      if (!id) return [];
+      const existing = await mocks.prisma.notebook.findUnique({ where: { id } });
+      return existing ? [existing] : [];
+    });
+    mocks.prisma.page.findMany.mockImplementation(async ({ where }) => {
+      const id = where?.id?.in?.[0];
+      if (!id) return [];
+      const existing = await mocks.prisma.page.findUnique({ where: { id } });
+      return existing ? [existing] : [];
+    });
   });
 
   it("accepts legacy queue metadata and preserves existing notebook groups", async () => {
@@ -340,9 +367,9 @@ describe("sync push route", () => {
   it("recovers orphan page upserts into an active notebook", async () => {
     mocks.requireUser.mockResolvedValue({ id: "user-1" });
     mocks.prisma.page.findUnique.mockResolvedValue(null);
-    mocks.prisma.notebook.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "fallback-notebook" });
+    mocks.prisma.notebook.findFirst.mockResolvedValueOnce({
+      id: "fallback-notebook",
+    });
     mocks.prisma.page.create.mockResolvedValue({
       id: "orphan-page",
       userId: "user-1",
@@ -440,5 +467,60 @@ describe("sync push route", () => {
         operation: "archive",
       },
     ]);
+  });
+
+  it("lets a permanent tombstone win over a stale offline upsert", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    mocks.prisma.page.findUnique.mockResolvedValue(null);
+    mocks.prisma.entityTombstone.findMany.mockResolvedValue([{
+      id: "tombstone-1",
+      userId: "user-1",
+      entityType: "page",
+      entityId: "page-deleted",
+      deletedAt: new Date("2026-07-15T10:00:00.000Z"),
+    }]);
+
+    const { POST } = await import("@/app/api/sync/push/route");
+    const response = await POST(new Request("https://notava.test/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations: [{
+        id: 20,
+        entityType: "page",
+        entityId: "page-deleted",
+        operation: "upsert",
+        payload: { id: "page-deleted", userId: "user-1", title: "stale" },
+        createdAt: "2026-07-15T09:00:00.000Z",
+      }] }),
+    }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.page.create).not.toHaveBeenCalled();
+    expect(payload.applied).toEqual([expect.objectContaining({ queueId: 20 })]);
+    expect(payload.tombstones).toEqual([expect.objectContaining({
+      entityType: "page",
+      entityId: "page-deleted",
+    })]);
+  });
+
+  it("rejects oversized push batches", async () => {
+    mocks.requireUser.mockResolvedValue({ id: "user-1" });
+    const { POST } = await import("@/app/api/sync/push/route");
+    const operations = Array.from({ length: 101 }, (_, index) => ({
+      entityType: "page",
+      entityId: `page-${index}`,
+      operation: "archive",
+      payload: { id: `page-${index}` },
+      createdAt: "2026-07-15T09:00:00.000Z",
+    }));
+    const response = await POST(new Request("https://notava.test/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.prisma.page.findMany).not.toHaveBeenCalled();
   });
 });

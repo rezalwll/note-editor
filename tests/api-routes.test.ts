@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   pageUpdate: vi.fn(),
   attachmentFindFirst: vi.fn(),
   attachmentCreate: vi.fn(),
+  tombstoneFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -60,6 +61,7 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: mocks.attachmentFindFirst,
       create: mocks.attachmentCreate,
     },
+    entityTombstone: { findMany: mocks.tombstoneFindMany },
   },
 }));
 
@@ -81,6 +83,7 @@ beforeEach(() => {
   mocks.mkdir.mockResolvedValue(undefined);
   mocks.access.mockResolvedValue(undefined);
   mocks.queryRaw.mockResolvedValue([{ ok: 1 }]);
+  mocks.tombstoneFindMany.mockResolvedValue([]);
 });
 
 describe("small API routes", () => {
@@ -204,11 +207,11 @@ describe("small API routes", () => {
   it("serializes bootstrap and incremental pull payloads", async () => {
     const updatedAt = new Date("2026-07-14T10:00:00.000Z");
     mocks.notebookFindMany.mockResolvedValue([{
-      id: "notebook-1", groupId: "group-1", name: "Notes", description: null,
+      id: "notebook-1", userId: "user-1", groupId: "group-1", name: "Notes", description: null,
       archived: false, deletedAt: null, updatedAt,
     }]);
     mocks.pageFindMany.mockResolvedValue([{
-      id: "page-1", notebookId: "notebook-1", title: "Page", bodyHtml: "<p>x</p>",
+      id: "page-1", userId: "user-1", notebookId: "notebook-1", title: "Page", bodyHtml: "<p>x</p>",
       bodyText: "x", archived: false, deletedAt: null, updatedAt,
     }]);
 
@@ -219,10 +222,22 @@ describe("small API routes", () => {
       id: "notebook-1", userId: "user-1", syncStatus: "synced",
     });
 
+    mocks.notebookFindMany.mockResolvedValueOnce([]);
     const incremental = await pull(new Request("https://notava.test/api/sync/pull?since=2026-07-14T09:00:00.000Z"));
     expect((await incremental.json()).pages[0]).toMatchObject({ id: "page-1", syncStatus: "synced" });
     expect(mocks.notebookFindMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { userId: "user-1", updatedAt: { gt: new Date("2026-07-14T09:00:00.000Z") } },
+      take: 101,
+      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+      where: expect.objectContaining({
+        userId: "user-1",
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            updatedAt: expect.objectContaining({
+              gt: new Date("2026-07-14T09:00:00.000Z"),
+            }),
+          }),
+        ]),
+      }),
     }));
 
     mocks.notebookFindMany.mockRejectedValueOnce(new Error("sync database down"));

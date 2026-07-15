@@ -32,6 +32,7 @@ export type QueueOperationType = "upsert" | "archive";
 
 export type SyncQueueItem = {
   id?: number;
+  userId: string;
   entityType: QueueEntityType;
   entityId: string;
   operation: QueueOperationType;
@@ -43,6 +44,7 @@ export type SyncQueueItem = {
 
 export type ConflictRecord = {
   id: string;
+  userId: string;
   entityType: QueueEntityType;
   entityId: string;
   createdAt: string;
@@ -51,10 +53,20 @@ export type ConflictRecord = {
   remotePayload?: Record<string, unknown>;
 };
 
+export type SyncTombstone = {
+  id: string;
+  entityType: QueueEntityType;
+  entityId: string;
+  deletedAt: string;
+};
+
 export type SyncBootstrapPayload = {
   fetchedAt: string;
   notebooks: LocalNotebook[];
   pages: LocalPage[];
+  tombstones?: SyncTombstone[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
 };
 
 export type SyncPushResult = {
@@ -67,5 +79,6 @@ export type SyncPushResult = {
   conflicts: ConflictRecord[];
   notebooks: LocalNotebook[];
   pages: LocalPage[];
+  tombstones?: SyncTombstone[];
   pulledAt: string;
 };

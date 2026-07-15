@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   pageUpdateMany: vi.fn(),
   pageDeleteMany: vi.fn(),
   attachmentFindMany: vi.fn(),
+  tombstoneDeleteMany: vi.fn(),
+  tombstoneCreateMany: vi.fn(),
   deleteUpload: vi.fn(),
 }));
 
@@ -45,6 +47,10 @@ vi.mock("@/lib/prisma", () => ({
     },
     attachment: {
       findMany: mocks.attachmentFindMany,
+    },
+    entityTombstone: {
+      deleteMany: mocks.tombstoneDeleteMany,
+      createMany: mocks.tombstoneCreateMany,
     },
   },
 }));
@@ -77,6 +83,8 @@ describe("trash lifecycle", () => {
     mocks.notebookUpdateMany.mockResolvedValue({ count: 1 });
     mocks.pageUpdate.mockResolvedValue({ id: "page-1" });
     mocks.pageUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.tombstoneDeleteMany.mockResolvedValue({ count: 0 });
+    mocks.tombstoneCreateMany.mockResolvedValue({ count: 1 });
   });
 
   it("moves a notebook and all of its pages into trash atomically", async () => {
@@ -207,6 +215,12 @@ describe("trash lifecycle", () => {
       where: { userId: "user-1", id: { in: ["notebook-1"] } },
     });
     expect(mocks.deleteUpload).toHaveBeenCalledWith("upload-1");
+    expect(mocks.tombstoneCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({ entityType: "notebook", entityId: "notebook-1" }),
+        expect.objectContaining({ entityType: "page", entityId: "page-1" }),
+      ]),
+    });
   });
 
   it("permanently deletes a trashed page and its uploads", async () => {
@@ -220,5 +234,12 @@ describe("trash lifecycle", () => {
       where: { userId: "user-1", id: { in: ["page-1"] } },
     });
     expect(mocks.deleteUpload).toHaveBeenCalledWith("upload-1");
+    expect(mocks.tombstoneCreateMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        userId: "user-1",
+        entityType: "page",
+        entityId: "page-1",
+      })],
+    });
   });
 });

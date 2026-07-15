@@ -234,9 +234,23 @@ async function purgeTrashPages(userId: string, pageIds: string[]) {
   }
 
   await deleteAttachmentsForPages(userId, pageIds);
-  const result = await prisma.page.deleteMany({
-    where: { userId, id: { in: pageIds } },
-  });
+  const deletedAt = new Date();
+  const [, , result] = await prisma.$transaction([
+    prisma.entityTombstone.deleteMany({
+      where: { userId, entityType: "page", entityId: { in: pageIds } },
+    }),
+    prisma.entityTombstone.createMany({
+      data: pageIds.map((entityId) => ({
+        userId,
+        entityType: "page",
+        entityId,
+        deletedAt,
+      })),
+    }),
+    prisma.page.deleteMany({
+      where: { userId, id: { in: pageIds } },
+    }),
+  ]);
 
   return result.count;
 }
@@ -254,10 +268,36 @@ async function purgeTrashNotebooks(userId: string, notebookIds: string[]) {
     userId,
     pages.map((page) => page.id),
   );
-
-  const result = await prisma.notebook.deleteMany({
-    where: { userId, id: { in: notebookIds } },
-  });
+  const tombstones = [
+    ...notebookIds.map((entityId) => ({
+      userId,
+      entityType: "notebook",
+      entityId,
+    })),
+    ...pages.map((page) => ({
+      userId,
+      entityType: "page",
+      entityId: page.id,
+    })),
+  ];
+  const deletedAt = new Date();
+  const [, , result] = await prisma.$transaction([
+    prisma.entityTombstone.deleteMany({
+      where: {
+        userId,
+        OR: [
+          { entityType: "notebook", entityId: { in: notebookIds } },
+          { entityType: "page", entityId: { in: pages.map((page) => page.id) } },
+        ],
+      },
+    }),
+    prisma.entityTombstone.createMany({
+      data: tombstones.map((item) => ({ ...item, deletedAt })),
+    }),
+    prisma.notebook.deleteMany({
+      where: { userId, id: { in: notebookIds } },
+    }),
+  ]);
 
   return result.count;
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyPullChanges,
   applySyncPushResult,
+  listPendingQueue,
   listConflictRecords,
   resolveConflictWithLocal,
   resolveConflictWithRemote,
@@ -63,6 +64,7 @@ describe("offline sync merge", () => {
   it("replaces the local page when the server version wins a conflict", async () => {
     await offlineDb.pages.put({ ...localPendingPage, syncStatus: "conflict" });
     await offlineDb.queue.add({
+      userId: "user-1",
       entityType: "page",
       entityId: "page-1",
       operation: "upsert",
@@ -80,6 +82,7 @@ describe("offline sync merge", () => {
     };
     await offlineDb.conflicts.put({
       id: "user-1:page:page-1:remote",
+      userId: "user-1",
       entityType: "page",
       entityId: "page-1",
       createdAt: remotePage.updatedAt,
@@ -109,6 +112,7 @@ describe("offline sync merge", () => {
     };
     await offlineDb.conflicts.put({
       id: "user-1:page:page-1:remote",
+      userId: "user-1",
       entityType: "page",
       entityId: "page-1",
       createdAt: remotePage.updatedAt,
@@ -136,6 +140,7 @@ describe("offline sync merge", () => {
   it("keeps local content and marks its queue item when push conflicts", async () => {
     await offlineDb.pages.put(localPendingPage);
     await offlineDb.queue.add({
+      userId: "user-1",
       entityType: "page",
       entityId: "page-1",
       operation: "upsert",
@@ -148,6 +153,7 @@ describe("offline sync merge", () => {
       applied: [],
       conflicts: [{
         id: "page:page-1:remote",
+        userId: "user-1",
         entityType: "page",
         entityId: "page-1",
         createdAt: "2026-07-14T10:05:00.000Z",
@@ -169,5 +175,80 @@ describe("offline sync merge", () => {
       syncStatus: "conflict",
     });
     expect((await offlineDb.queue.toArray())[0]).toMatchObject({ status: "conflict" });
+  });
+
+  it("removes permanently deleted pages and their pending sync state", async () => {
+    await offlineDb.pages.put(localPendingPage);
+    await offlineDb.queue.add({
+      userId: "user-1",
+      entityType: "page",
+      entityId: "page-1",
+      operation: "upsert",
+      payload: localPendingPage,
+      createdAt: localPendingPage.updatedAt,
+      status: "pending",
+    });
+    await offlineDb.conflicts.put({
+      id: "user-1:page:page-1:remote",
+      userId: "user-1",
+      entityType: "page",
+      entityId: "page-1",
+      createdAt: localPendingPage.updatedAt,
+      message: "conflict",
+    });
+
+    await applyPullChanges("user-1", {
+      fetchedAt: "2026-07-15T10:00:00.000Z",
+      notebooks: [],
+      pages: [],
+      tombstones: [{
+        id: "tombstone-1",
+        entityType: "page",
+        entityId: "page-1",
+        deletedAt: "2026-07-15T09:59:00.000Z",
+      }],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    expect(await offlineDb.pages.get("page-1")).toBeUndefined();
+    expect(await offlineDb.queue.count()).toBe(0);
+    expect(await offlineDb.conflicts.count()).toBe(0);
+  });
+
+  it("uses the compound user/status queue index and respects batch size", async () => {
+    await offlineDb.queue.bulkAdd([
+      {
+        userId: "user-1",
+        entityType: "page",
+        entityId: "page-2",
+        operation: "upsert",
+        payload: { userId: "user-1" },
+        createdAt: "2026-07-15T10:00:02.000Z",
+        status: "pending",
+      },
+      {
+        userId: "user-1",
+        entityType: "page",
+        entityId: "page-1",
+        operation: "upsert",
+        payload: { userId: "user-1" },
+        createdAt: "2026-07-15T10:00:01.000Z",
+        status: "failed",
+      },
+      {
+        userId: "user-2",
+        entityType: "page",
+        entityId: "foreign-page",
+        operation: "upsert",
+        payload: { userId: "user-2" },
+        createdAt: "2026-07-15T10:00:00.000Z",
+        status: "pending",
+      },
+    ]);
+
+    expect(await listPendingQueue("user-1", 1)).toEqual([
+      expect.objectContaining({ entityId: "page-1", userId: "user-1" }),
+    ]);
   });
 });

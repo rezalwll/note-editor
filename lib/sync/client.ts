@@ -10,7 +10,6 @@ import {
   listPendingQueue,
   pushQueue,
   seedOfflineBootstrap,
-  setLastPullAt,
   upsertConflictRecords,
   updateLocalSyncStatus,
 } from "@/lib/offline-db/client";
@@ -23,6 +22,7 @@ import {
 let syncInFlight: Promise<void> | null = null;
 let syncRerunRequested = false;
 let syncRetryCount = 0;
+const SYNC_PUSH_BATCH_SIZE = 50;
 
 type SyncPassResult = {
   status: SyncStatus;
@@ -51,8 +51,20 @@ export async function bootstrapOfflineState(userId: string) {
     return;
   }
 
-  const payload = await fetchBootstrap();
-  await seedOfflineBootstrap(userId, payload);
+  let cursor: string | null = null;
+  let isFirstPage = true;
+  do {
+    const payload = await fetchBootstrap(cursor);
+    if (isFirstPage) {
+      await seedOfflineBootstrap(userId, payload);
+      isFirstPage = false;
+    } else {
+      await applyPullChanges(userId, payload);
+    }
+    cursor = payload.nextCursor ?? null;
+    if (!payload.hasMore) break;
+    if (!cursor) throw new Error("INVALID_BOOTSTRAP_CURSOR");
+  } while (true);
 }
 
 export async function pullRemoteChanges(userId: string) {
@@ -60,9 +72,14 @@ export async function pullRemoteChanges(userId: string) {
     return;
   }
 
-  const payload = await fetchPullChanges(userId);
-  await applyPullChanges(userId, payload);
-  await setLastPullAt(userId, payload.fetchedAt);
+  let cursor: string | null = null;
+  do {
+    const payload = await fetchPullChanges(userId, cursor);
+    await applyPullChanges(userId, payload);
+    cursor = payload.nextCursor ?? null;
+    if (!payload.hasMore) break;
+    if (!cursor) throw new Error("INVALID_PULL_CURSOR");
+  } while (true);
 }
 
 export async function processSyncQueue(userId: string) {
@@ -97,7 +114,8 @@ export async function processSyncQueue(userId: string) {
         syncStatus = result.status;
         operationCount += result.operationCount;
         conflictCount += result.conflictCount;
-      } while (syncRerunRequested);
+        if (result.status === "conflict" || result.status === "failed") break;
+      } while (syncRerunRequested || syncStatus === "pending");
 
       const metadata = {
         latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
@@ -156,7 +174,7 @@ export async function processSyncQueue(userId: string) {
 }
 
 async function processSyncQueueOnce(userId: string): Promise<SyncPassResult> {
-  const queue = await listPendingQueue(userId);
+  const queue = await listPendingQueue(userId, SYNC_PUSH_BATCH_SIZE);
 
   if (queue.length === 0) {
     await pullRemoteChanges(userId);
@@ -184,7 +202,7 @@ async function processSyncQueueOnce(userId: string): Promise<SyncPassResult> {
     };
   }
 
-  const remainingQueue = await listPendingQueue(userId);
+  const remainingQueue = await listPendingQueue(userId, 1);
   return {
     status: remainingQueue.length > 0 ? "pending" : "synced",
     operationCount: queue.length,

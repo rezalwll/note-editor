@@ -22,6 +22,7 @@ model User {
   pages              Page[]
   attachments        Attachment[]
   passwordResetTokens PasswordResetToken[]
+  entityTombstones   EntityTombstone[]
 
   @@map("users")
 }
@@ -149,4 +150,17 @@ model PasswordResetToken {
   @@index([userId, expiresAt])
   @@index([email, expiresAt])
   @@map("password_reset_tokens")
+}
+
+model EntityTombstone {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  deletedAt  DateTime @default(now()) @map("deleted_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+  @@index([userId, deletedAt, id])
+  @@map("entity_tombstones")
 }

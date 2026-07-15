@@ -56,6 +56,7 @@ const optionalDateStringSchema = z
 
 export const queueSchema = z.object({
   id: queueIdSchema,
+  userId: z.string().optional(),
   entityType: z.enum(["notebook", "page"]),
   entityId: z.string(),
   operation: z.enum(["upsert", "archive"]),
@@ -72,7 +73,20 @@ export const queueSchema = z.object({
 });
 
 export const pushSchema = z.object({
-  operations: z.array(queueSchema),
+  operations: z.array(queueSchema).min(1).max(100),
+}).superRefine(({ operations }, context) => {
+  const identities = new Set<string>();
+  for (const [index, operation] of operations.entries()) {
+    const identity = `${operation.entityType}:${operation.entityId}`;
+    if (identities.has(identity)) {
+      context.addIssue({
+        code: "custom",
+        message: "Duplicate entity operation in one sync batch.",
+        path: ["operations", index, "entityId"],
+      });
+    }
+    identities.add(identity);
+  }
 });
 
 export type NotebookPayload = z.infer<typeof notebookPayloadSchema>;

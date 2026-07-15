@@ -140,12 +140,14 @@ export function pagePayloadMatches(
 }
 
 export function createConflict(
+  userId: string,
   item: SyncQueueItem,
   localPayload: Record<string, unknown>,
   remotePayload: Record<string, unknown>,
 ) {
   return {
     id: `${item.entityType}:${item.entityId}:${remotePayload.updatedAt ?? "unknown"}`,
+    userId,
     entityType: item.entityType,
     entityId: item.entityId,
     createdAt: new Date().toISOString(),
