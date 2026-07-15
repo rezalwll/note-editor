@@ -95,4 +95,24 @@ describe("structured observability", () => {
       }),
     ]);
   });
+
+  it("does not report expected Next.js redirect signals as client errors", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 202 }));
+    render(<ClientErrorReporter />);
+
+    act(() => {
+      window.dispatchEvent(
+        new ErrorEvent("error", {
+          message: "NEXT_REDIRECT",
+          error: new Error("NEXT_REDIRECT"),
+        }),
+      );
+      vi.advanceTimersByTime(1_000);
+    });
+    await act(async () => Promise.resolve());
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

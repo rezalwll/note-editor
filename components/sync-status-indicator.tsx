@@ -46,13 +46,7 @@ function getStateFromSyncDetail(detail: SyncEventDetail): SyncIndicatorState | n
 }
 
 export function SyncStatusIndicator({ userId }: { userId: string }) {
-  const [state, setState] = useState<SyncIndicatorState>(() => {
-    if (typeof navigator === "undefined") {
-      return "synced";
-    }
-
-    return navigator.onLine ? "synced" : "error";
-  });
+  const [state, setState] = useState<SyncIndicatorState>("synced");
   const [conflictCount, setConflictCount] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const label = STATUS_COPY[state];
@@ -66,6 +60,10 @@ export function SyncStatusIndicator({ userId }: { userId: string }) {
   }, []);
 
   useEffect(() => {
+    const initialConnectionFrame = !navigator.onLine
+      ? window.requestAnimationFrame(() => setState("error"))
+      : null;
+
     const refreshConflictCount = async () => {
       try {
         const conflicts = await listConflictRecords(userId);
@@ -83,7 +81,9 @@ export function SyncStatusIndicator({ userId }: { userId: string }) {
       const nextState = detail ? getStateFromSyncDetail(detail) : null;
 
       if (nextState) {
-        setState(nextState);
+        setState(
+          !navigator.onLine && nextState !== "conflict" ? "error" : nextState,
+        );
       }
 
       if (detail?.syncStatus === "conflict" || detail?.type === "conflict-resolved") {
@@ -99,6 +99,9 @@ export function SyncStatusIndicator({ userId }: { userId: string }) {
     window.addEventListener("offline", handleOffline);
     void refreshConflictCount();
     return () => {
+      if (initialConnectionFrame !== null) {
+        window.cancelAnimationFrame(initialConnectionFrame);
+      }
       window.removeEventListener("notava-sync", handleSyncEvent);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

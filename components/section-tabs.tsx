@@ -794,6 +794,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           return (
             <div
               key={group.id}
+              data-testid={`group-tab-${group.id}`}
+              data-group-id={group.id}
+              data-group-system-key={group.systemKey ?? ""}
               draggable={!isEditing && !isTrash}
               onDragStart={() => {
                 if (isTrash) {
@@ -950,6 +953,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
           <div className="inline-flex h-8 items-center rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)]">
             <input
               ref={groupInputRef}
+              data-testid="new-group-name"
               value={draftGroupName}
               onChange={(event) => setDraftGroupName(event.target.value)}
               onBlur={submitGroupRename}
@@ -972,6 +976,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         ) : (
           <button
             type="button"
+            data-testid="create-group"
             onClick={beginCreateGroup}
             className="inline-flex h-8 items-center gap-2 rounded-full border border-dashed border-[#9DA6FF] bg-[linear-gradient(90deg,#9FA1FF_0%,#B5BAFF_35%,#AEE2FF_70%,#D9F9DF_100%)] px-3 text-xs font-medium text-[#30416c] shadow-[0_8px_22px_rgba(159,161,255,0.2)] transition hover:brightness-[1.03]"
           >
@@ -1039,6 +1044,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             <div
               key={notebook.id}
               data-section-tab="true"
+              data-testid={`notebook-tab-${notebook.id}`}
+              data-notebook-id={notebook.id}
+              data-notebook-system-key={notebook.systemKey ?? ""}
               draggable={!isEditing && !isDeleted && !isSystemNotebook && !isTrashGroup(activeGroupKey)}
               onDragStart={() => {
                 if (isDeleted || isSystemNotebook || isTrashGroup(activeGroupKey)) {
@@ -1165,6 +1173,11 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
               {isEditing ? (
                 <input
                   ref={notebookInputRef}
+                  data-testid={
+                    draftNotebook?.id === notebook.id
+                      ? "new-notebook-name"
+                      : `rename-notebook-${notebook.id}`
+                  }
                   autoFocus
                   disabled={isPending}
                   value={draftName}
@@ -1247,6 +1260,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         {!isTrashGroup(activeGroupKey) && hasWritableGroup ? (
         <button
           type="button"
+          data-testid="create-notebook"
           onClick={beginCreateNotebook}
           disabled={isPending}
           className="flex h-6 w-9 items-center justify-center rounded-t-md border border-stone-300 bg-white text-stone-700 transition hover:bg-stone-100 disabled:cursor-wait disabled:opacity-60"

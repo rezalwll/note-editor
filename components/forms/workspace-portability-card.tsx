@@ -61,6 +61,7 @@ export function WorkspacePortabilityCard() {
         </p>
         <a
           href="/api/profile/export"
+          data-testid="workspace-export"
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[#7682ff] px-4 py-2 text-sm font-semibold !text-white shadow-[0_12px_24px_rgba(118,130,255,0.28)] transition hover:bg-[#5d6bff]"
         >
           پشتیبان گیری
@@ -84,6 +85,7 @@ export function WorkspacePortabilityCard() {
           <span className="text-sm font-medium text-stone-700">فایل آرشیو</span>
           <input
             name="archive"
+            data-testid="workspace-import-file"
             type="file"
             accept=".zip,application/zip"
             required
@@ -97,12 +99,16 @@ export function WorkspacePortabilityCard() {
           </p>
         ) : null}
         {success ? (
-          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">
+          <p
+            data-testid="workspace-import-success"
+            className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700"
+          >
             {success}
           </p>
         ) : null}
         <button
           type="submit"
+          data-testid="workspace-import-submit"
           disabled={pending}
           className="mt-3 inline-flex items-center justify-center rounded-full bg-[#7682ff] px-4 py-2 text-sm font-semibold !text-white shadow-[0_12px_24px_rgba(118,130,255,0.28)] transition hover:bg-[#5d6bff] disabled:cursor-not-allowed disabled:opacity-60"
         >

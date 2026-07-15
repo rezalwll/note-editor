@@ -968,6 +968,7 @@ export function NoteEditor({
 
           <div
             ref={canvasRef}
+            data-testid="note-canvas"
             data-layout-mode="freeform"
             data-virtualized={shouldVirtualizeBlocks ? "true" : "false"}
             data-rendered-block-count={renderedBlocks.length}

@@ -11,6 +11,14 @@ import {
 const FLUSH_DELAY_MS = 1_000;
 const MAX_BATCH_SIZE = 25;
 
+function isExpectedNavigationError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? `${error.message}\n${error.stack ?? ""}`
+      : String(error ?? "");
+  return message.includes("NEXT_REDIRECT");
+}
+
 function clientCorrelationId() {
   const storageKey = "notava-correlation-id";
   try {
@@ -80,6 +88,9 @@ export function ClientErrorReporter() {
       enqueue((event as CustomEvent<ClientObservabilityEvent>).detail);
     };
     const handleWindowError = (event: ErrorEvent) => {
+      if (isExpectedNavigationError(event.error ?? event.message)) {
+        return;
+      }
       reportClientError(event.error ?? event.message, {
         source: "window.error",
         route: window.location.pathname,
@@ -91,6 +102,9 @@ export function ClientErrorReporter() {
       });
     };
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (isExpectedNavigationError(event.reason)) {
+        return;
+      }
       reportClientError(event.reason, {
         source: "window.unhandledrejection",
         route: window.location.pathname,

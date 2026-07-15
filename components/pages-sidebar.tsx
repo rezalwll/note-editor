@@ -530,6 +530,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         >
           <button
             type="button"
+            data-testid="create-page"
             onClick={beginCreate}
             className="inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[13px] font-medium shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition hover:brightness-[1.03]"
             style={{
@@ -564,6 +565,7 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
           >
             <input
               ref={inputRef}
+              data-testid="new-page-title"
               value={draftTitle}
               onChange={(event) => setDraftTitle(event.target.value)}
               onBlur={submitCreate}
@@ -627,6 +629,8 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               <div
                 key={page.id}
                 data-page-item="true"
+                data-page-id={page.id}
+                data-testid={`page-item-${page.id}`}
                 onDragOver={(event) => {
                   if (draggedPageId && !activeNotebook.deletedAt) {
                     event.preventDefault();

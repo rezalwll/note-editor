@@ -187,6 +187,15 @@ export function getPersistableBlocks(blocks: FreeformBlock[]) {
   return blocks.filter((block) => !isEmptyTextBlock(block));
 }
 
+function getLegacyBlockId(initialHtml: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < initialHtml.length; index += 1) {
+    hash ^= initialHtml.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `legacy-${(hash >>> 0).toString(36)}`;
+}
+
 export function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   const parsed = parseFreeformDocument(initialHtml);
   if (parsed) return getPersistableBlocks(parsed.blocks);
@@ -194,7 +203,7 @@ export function getInitialBlocks(initialHtml: string): FreeformBlock[] {
   const plainText = initialHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   if (!plainText) return [];
   return [{
-    id: createBlockId(),
+    id: getLegacyBlockId(initialHtml),
     x: PAGE_SIDE_PADDING_DESKTOP,
     y: 72,
     text: plainText,

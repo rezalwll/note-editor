@@ -243,28 +243,30 @@ export async function updateLocalSyncStatus(
 }
 
 export async function enqueuePageUpsert(page: LocalPage, baseUpdatedAt?: string | null) {
-  const existing = await offlineDb.queue
-    .where("[userId+entityType+entityId]")
-    .equals([page.userId, "page", page.id])
-    .and((item) => item.operation === "upsert")
-    .first();
+  await offlineDb.transaction("rw", offlineDb.queue, async () => {
+    const existing = await offlineDb.queue
+      .where("[userId+entityType+entityId]")
+      .equals([page.userId, "page", page.id])
+      .and((item) => item.operation === "upsert")
+      .first();
 
-  const nextQueueItem = {
-    userId: page.userId,
-    entityType: "page",
-    entityId: page.id,
-    operation: "upsert",
-    payload: page,
-    baseUpdatedAt: existing?.baseUpdatedAt ?? baseUpdatedAt,
-    createdAt: new Date().toISOString(),
-    status: "pending",
-  } satisfies SyncQueueItem;
+    const nextQueueItem = {
+      userId: page.userId,
+      entityType: "page",
+      entityId: page.id,
+      operation: "upsert",
+      payload: page,
+      baseUpdatedAt: existing?.baseUpdatedAt ?? baseUpdatedAt,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+    } satisfies SyncQueueItem;
 
-  if (existing?.id) {
-    await offlineDb.queue.put({ ...nextQueueItem, id: existing.id });
-  } else {
-    await offlineDb.queue.add(nextQueueItem);
-  }
+    if (existing?.id) {
+      await offlineDb.queue.put({ ...nextQueueItem, id: existing.id });
+    } else {
+      await offlineDb.queue.add(nextQueueItem);
+    }
+  });
 
   await updateLocalSyncStatus(page.userId, page.id, "pending", page.lastSyncedAt ?? null);
 }
@@ -273,28 +275,30 @@ export async function enqueueNotebookUpsert(
   notebook: LocalNotebook,
   baseUpdatedAt?: string | null,
 ) {
-  const existing = await offlineDb.queue
-    .where("[userId+entityType+entityId]")
-    .equals([notebook.userId, "notebook", notebook.id])
-    .and((item) => item.operation === "upsert")
-    .first();
+  await offlineDb.transaction("rw", offlineDb.queue, async () => {
+    const existing = await offlineDb.queue
+      .where("[userId+entityType+entityId]")
+      .equals([notebook.userId, "notebook", notebook.id])
+      .and((item) => item.operation === "upsert")
+      .first();
 
-  const nextQueueItem = {
-    userId: notebook.userId,
-    entityType: "notebook",
-    entityId: notebook.id,
-    operation: "upsert",
-    payload: notebook,
-    baseUpdatedAt: existing?.baseUpdatedAt ?? baseUpdatedAt,
-    createdAt: new Date().toISOString(),
-    status: "pending",
-  } satisfies SyncQueueItem;
+    const nextQueueItem = {
+      userId: notebook.userId,
+      entityType: "notebook",
+      entityId: notebook.id,
+      operation: "upsert",
+      payload: notebook,
+      baseUpdatedAt: existing?.baseUpdatedAt ?? baseUpdatedAt,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+    } satisfies SyncQueueItem;
 
-  if (existing?.id) {
-    await offlineDb.queue.put({ ...nextQueueItem, id: existing.id });
-  } else {
-    await offlineDb.queue.add(nextQueueItem);
-  }
+    if (existing?.id) {
+      await offlineDb.queue.put({ ...nextQueueItem, id: existing.id });
+    } else {
+      await offlineDb.queue.add(nextQueueItem);
+    }
+  });
 }
 
 export async function enqueuePageArchive(page: LocalPage, baseUpdatedAt?: string | null) {

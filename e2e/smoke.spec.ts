@@ -1,9 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, login, test } from "./support/fixtures";
 
-test("serves the login form", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.locator("#username")).toBeVisible();
-  await expect(page.locator("#password")).toBeVisible();
+test("authenticates a real user through the login form", async ({
+  page,
+  account,
+}) => {
+  await login(page, account);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("create-group")).toBeVisible();
 });
 
 test("reports database and storage health", async ({ request }) => {

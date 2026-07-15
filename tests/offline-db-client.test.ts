@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyPullChanges,
   applySyncPushResult,
+  enqueuePageUpsert,
   listPendingQueue,
   listConflictRecords,
   resolveConflictWithLocal,
@@ -250,5 +251,23 @@ describe("offline sync merge", () => {
     expect(await listPendingQueue("user-1", 1)).toEqual([
       expect.objectContaining({ entityId: "page-1", userId: "user-1" }),
     ]);
+  });
+
+  it("coalesces concurrent page autosaves into one queue operation", async () => {
+    await Promise.all([
+      enqueuePageUpsert({ ...localPendingPage, title: "First revision" }),
+      enqueuePageUpsert({ ...localPendingPage, title: "Second revision" }),
+      enqueuePageUpsert({ ...localPendingPage, title: "Final revision" }),
+    ]);
+
+    const queue = await offlineDb.queue.toArray();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({
+      userId: "user-1",
+      entityType: "page",
+      entityId: "page-1",
+      operation: "upsert",
+      status: "pending",
+    });
   });
 });

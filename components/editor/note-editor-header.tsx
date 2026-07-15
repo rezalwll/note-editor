@@ -37,6 +37,7 @@ export function NoteEditorHeader({
       >
         <input
           ref={titleInputRef}
+          data-testid="page-title-input"
           value={title}
           onChange={(event) => onTitleChange(event.target.value)}
           onBlur={onTitleBlur}

@@ -178,6 +178,7 @@ export function SyncConflictDialog({
                         </p>
                         <button
                           type="button"
+                          data-testid={`conflict-use-local-${conflict.id}`}
                           onClick={() => void resolve(conflict, "local")}
                           disabled={Boolean(resolvingId)}
                           className="mt-3 w-full rounded-xl bg-[#4361ee] px-3 py-2 text-xs font-semibold text-white hover:bg-[#3651d4] disabled:opacity-50"
@@ -193,6 +194,7 @@ export function SyncConflictDialog({
                         </p>
                         <button
                           type="button"
+                          data-testid={`conflict-use-remote-${conflict.id}`}
                           onClick={() => void resolve(conflict, "remote")}
                           disabled={Boolean(resolvingId)}
                           className="mt-3 w-full rounded-xl bg-[#2f855a] px-3 py-2 text-xs font-semibold text-white hover:bg-[#28734e] disabled:opacity-50"
