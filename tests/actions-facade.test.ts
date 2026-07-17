@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const delegate = vi.hoisted(() => vi.fn().mockResolvedValue({ delegated: true }));
 
@@ -44,6 +44,10 @@ vi.mock("@/app/actions/workspace-actions", () => ({
 import * as actions from "@/app/actions";
 
 describe("server action facade", () => {
+  beforeEach(() => {
+    delegate.mockReset().mockResolvedValue({ delegated: true });
+  });
+
   it("delegates every public action to its focused implementation module", async () => {
     const publicActions = Object.values(actions).filter(
       (value) => typeof value === "function",
@@ -52,5 +56,12 @@ describe("server action facade", () => {
     expect(publicActions).toHaveLength(34);
     await Promise.all(publicActions.map((action) => action()));
     expect(delegate).toHaveBeenCalledTimes(34);
+  });
+
+  it("returns the non-redirecting logout result from the auth action", async () => {
+    delegate.mockResolvedValueOnce({ success: true });
+
+    await expect(actions.logoutAction()).resolves.toEqual({ success: true });
+    expect(delegate).toHaveBeenCalledOnce();
   });
 });

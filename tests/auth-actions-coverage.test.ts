@@ -414,9 +414,9 @@ describe("signup and verification actions", () => {
 
 describe("account maintenance actions", () => {
   it("clears the session on logout", async () => {
-    await logoutAction();
+    await expect(logoutAction()).resolves.toEqual({ success: true });
     expect(mocks.clearSession).toHaveBeenCalled();
-    expect(mocks.redirect).toHaveBeenCalledWith("/login");
+    expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
   it("validates, updates and revalidates profile data", async () => {

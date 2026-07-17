@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSidebarData: vi.fn(),
   requireUser: vi.fn(),
+  activateSync: vi.fn(),
   bootstrap: vi.fn(),
   sync: vi.fn(),
+  registerPrivateDataTab: vi.fn(),
+  unregisterPrivateDataTab: vi.fn(),
   unregister: vi.fn(),
   register: vi.fn(),
   cacheDelete: vi.fn(),
@@ -18,8 +21,12 @@ vi.mock("@/lib/trash", () => ({
   TRASH_PAGES_NOTEBOOK_SYSTEM_KEY: "deleted-pages",
 }));
 vi.mock("@/lib/sync/client", () => ({
+  activateOfflineSync: mocks.activateSync,
   bootstrapOfflineState: mocks.bootstrap,
   processSyncQueue: mocks.sync,
+}));
+vi.mock("@/lib/private-data-coordinator", () => ({
+  registerPrivateDataTab: mocks.registerPrivateDataTab,
 }));
 vi.mock("next/font/local", () => ({ default: () => ({ variable: "font-variable" }) }));
 vi.mock("@/components/context-menu", () => ({ ContextMenuProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -47,6 +54,7 @@ beforeEach(() => {
   mocks.requireUser.mockResolvedValue(user);
   mocks.bootstrap.mockResolvedValue(undefined);
   mocks.sync.mockResolvedValue(undefined);
+  mocks.registerPrivateDataTab.mockReturnValue(mocks.unregisterPrivateDataTab);
   mocks.unregister.mockResolvedValue(true);
   mocks.register.mockResolvedValue(undefined);
   mocks.cacheDelete.mockResolvedValue(true);
@@ -76,7 +84,9 @@ describe("application shell and runtimes", () => {
   });
 
   it("boots offline sync and retries on browser lifecycle events", async () => {
-    render(<AuthenticatedRuntime userId="user-1" />);
+    const view = render(<AuthenticatedRuntime userId="user-1" />);
+    expect(mocks.registerPrivateDataTab).toHaveBeenCalledWith("user-1");
+    expect(mocks.activateSync).toHaveBeenCalledWith("user-1");
     await waitFor(() => expect(mocks.bootstrap).toHaveBeenCalledWith("user-1"));
     await waitFor(() => expect(mocks.sync).toHaveBeenCalled());
 
@@ -85,6 +95,9 @@ describe("application shell and runtimes", () => {
       window.dispatchEvent(new Event("focus"));
     });
     expect(mocks.sync.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+    view.unmount();
+    expect(mocks.unregisterPrivateDataTab).toHaveBeenCalledOnce();
   });
 
   it("cleans stale development service workers and caches", async () => {

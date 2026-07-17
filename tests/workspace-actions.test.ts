@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   revalidate: vi.fn(),
   redirect: vi.fn(),
+  queryRaw: vi.fn(),
   transaction: vi.fn(),
   groupFindFirst: vi.fn(),
   groupFindUnique: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/lib/trash", () => ({
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $queryRaw: mocks.queryRaw,
     $transaction: mocks.transaction,
     notebookGroup: {
       findFirst: mocks.groupFindFirst,
@@ -114,9 +116,20 @@ beforeEach(() => {
     args.where.id.in.map((id) => ({ id })),
   );
   mocks.pageCreate.mockResolvedValue({ id: pageId });
-  mocks.transaction.mockImplementation(async (input: unknown) =>
-    Promise.all(input as Promise<unknown>[]),
-  );
+  mocks.queryRaw.mockResolvedValue([]);
+  mocks.transaction.mockImplementation(async (input: unknown) => {
+    if (typeof input === "function") {
+      return input({
+        $queryRaw: mocks.queryRaw,
+        notebook: { findFirst: mocks.notebookFindFirst },
+        page: {
+          findFirst: mocks.pageFindFirst,
+          create: mocks.pageCreate,
+        },
+      });
+    }
+    return Promise.all(input as Promise<unknown>[]);
+  });
   mocks.moveNotebook.mockResolvedValue("trash-group");
   mocks.deleteNotebooks.mockResolvedValue(1);
   mocks.movePage.mockResolvedValue({ notebookId, trashNotebookId: "trash-notebook" });
@@ -179,6 +192,20 @@ describe("workspace mutation actions", () => {
     expect(mocks.pageUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ tags: expect.any(Object) }),
     }));
+  });
+
+  it("revalidates the notebook under its hierarchy lock before creating a page", async () => {
+    mocks.notebookFindFirst.mockResolvedValue(null);
+
+    await expect(createPageInlineAction(notebookId, "Late page")).resolves.toEqual({
+      error: "زیر مجموعه پیدا نشد.",
+    });
+
+    expect(mocks.queryRaw).toHaveBeenCalledOnce();
+    expect(mocks.queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.notebookFindFirst.mock.invocationCallOrder[0],
+    );
+    expect(mocks.pageCreate).not.toHaveBeenCalled();
   });
 
   it("archives, restores and permanently deletes trash entities", async () => {

@@ -102,4 +102,25 @@ describe("ContextMenu submenus", () => {
       await screen.findByRole("menu", { name: "رنگ" }),
     ).toBeInTheDocument();
   });
+
+  it("ignores hydration scroll restoration briefly, then dismisses on scroll", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    render(
+      <ContextMenuProvider>
+        <ContextMenuHarness onSelect={vi.fn()} />
+      </ContextMenuProvider>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "باز کردن منو" }), {
+      clientX: 300,
+      clientY: 120,
+    });
+    fireEvent.scroll(window);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    now.mockReturnValue(1_251);
+    fireEvent.scroll(window);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    now.mockRestore();
+  });
 });

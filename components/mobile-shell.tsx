@@ -50,6 +50,7 @@ import {
   dispatchNotebookRenamed,
 } from "@/lib/page-events";
 import { getNotebookTheme, getRandomThemeKey } from "@/lib/notebook-theme";
+import { performSafeLogout } from "@/lib/safe-logout";
 import { formatDate } from "@/lib/utils";
 
 type MobileShellProps = {
@@ -94,6 +95,10 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const notebookInputRef = useRef<HTMLInputElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  async function logoutAndClearClientData() {
+    await performSafeLogout(currentUser.id);
+  }
 
   const activePageId = pathname.match(/^\/pages\/([^/]+)/)?.[1] ?? null;
   const {
@@ -1070,7 +1075,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
               تنظیمات
             </Link>
 
-            <form action="/api/auth/logout" method="post">
+            <form action={logoutAndClearClientData}>
               <button
                 type="submit"
                 className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"

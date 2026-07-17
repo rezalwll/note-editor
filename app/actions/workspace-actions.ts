@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { parseTags, serializeFreeformDocument } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
+import { acquireSyncEntityLocks } from "@/lib/sync/entity-lock";
 import {
   deleteTrashNotebooks,
   deleteTrashPage,
@@ -110,14 +111,45 @@ async function getNextNotebookSortOrder(userId: string, groupId: string) {
   return (lastNotebook?.sortOrder ?? -1) + 1;
 }
 
-async function getNextPageSortOrder(userId: string, notebookId: string) {
-  const lastPage = await prisma.page.findFirst({
-    where: { userId, notebookId },
-    orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
-    select: { sortOrder: true },
-  });
+async function createPageInActiveNotebook(
+  userId: string,
+  notebookId: string,
+  title: string,
+) {
+  return prisma.$transaction(async (transaction) => {
+    await acquireSyncEntityLocks(transaction, userId, [
+      { entityType: "notebook", entityId: notebookId },
+    ]);
 
-  return (lastPage?.sortOrder ?? -1) + 1;
+    const notebook = await transaction.notebook.findFirst({
+      where: {
+        id: notebookId,
+        userId,
+        archived: false,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!notebook) {
+      return null;
+    }
+
+    const lastPage = await transaction.page.findFirst({
+      where: { userId, notebookId },
+      orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { sortOrder: true },
+    });
+    return transaction.page.create({
+      data: {
+        userId,
+        notebookId,
+        title,
+        bodyHtml: emptyFreeformDocument,
+        bodyText: "",
+        sortOrder: (lastPage?.sortOrder ?? -1) + 1,
+      },
+    });
+  });
 }
 
 export async function createNotebookAction(formData: FormData) {
@@ -780,24 +812,14 @@ export async function createPageAction(formData: FormData) {
     return;
   }
 
-  const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
-
-  if (!notebook || notebook.archived || notebook.deletedAt) {
+  const page = await createPageInActiveNotebook(
+    user.id,
+    parsed.data.notebookId,
+    parsed.data.title,
+  );
+  if (!page) {
     return;
   }
-
-  const sortOrder = await getNextPageSortOrder(user.id, parsed.data.notebookId);
-
-  const page = await prisma.page.create({
-    data: {
-      userId: user.id,
-      notebookId: parsed.data.notebookId,
-      title: parsed.data.title,
-      bodyHtml: emptyFreeformDocument,
-      bodyText: "",
-      sortOrder,
-    },
-  });
 
   revalidatePath(`/notebooks/${parsed.data.notebookId}`);
   redirect(`/pages/${page.id}`);
@@ -815,24 +837,14 @@ export async function createPageInlineAction(notebookId: string, title: string) 
     return { error: "عنوان صفحه الزامی است." };
   }
 
-  const notebook = await getOwnedNotebook(user.id, parsed.data.notebookId);
-
-  if (!notebook || notebook.archived || notebook.deletedAt) {
+  const page = await createPageInActiveNotebook(
+    user.id,
+    parsed.data.notebookId,
+    parsed.data.title,
+  );
+  if (!page) {
     return { error: "زیر مجموعه پیدا نشد." };
   }
-
-  const sortOrder = await getNextPageSortOrder(user.id, parsed.data.notebookId);
-
-  const page = await prisma.page.create({
-    data: {
-      userId: user.id,
-      notebookId: parsed.data.notebookId,
-      title: parsed.data.title,
-      bodyHtml: emptyFreeformDocument,
-      bodyText: "",
-      sortOrder,
-    },
-  });
 
   revalidatePath(`/notebooks/${parsed.data.notebookId}`);
   revalidatePath("/");

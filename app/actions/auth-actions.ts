@@ -479,7 +479,7 @@ export async function resendSignupVerificationCodeAction(
 
 export async function logoutAction() {
   await clearSession();
-  redirect("/login");
+  return { success: true as const };
 }
 
 export async function updateProfileAction(
@@ -705,4 +705,3 @@ export async function resetPasswordAction(
 
   redirect("/login?passwordReset=success");
 }
-

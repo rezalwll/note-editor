@@ -6,16 +6,17 @@ import type {
   LocalPage,
   SyncQueueItem,
 } from "@/lib/offline-db/types";
+import { planQueueRepair } from "@/lib/offline-db/queue-coalescing";
 
-class NotavaOfflineDb extends Dexie {
+export class NotavaOfflineDb extends Dexie {
   notebooks!: Table<LocalNotebook, string>;
   pages!: Table<LocalPage, string>;
   queue!: Table<SyncQueueItem, number>;
   conflicts!: Table<ConflictRecord, string>;
   meta!: Table<{ key: string; value: string }, string>;
 
-  constructor() {
-    super("notava-offline");
+  constructor(name = "notava-offline") {
+    super(name);
 
     this.version(2).stores({
       notebooks: "id, userId, [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
@@ -40,6 +41,52 @@ class NotavaOfflineDb extends Dexie {
         await transaction.table("conflicts").toCollection().modify((item) => {
           item.userId = item.userId ?? String(item.id).split(":", 1)[0];
         });
+      });
+
+    this.version(4)
+      .stores({
+        notebooks: "id, userId, [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
+        pages: "id, userId, notebookId, [userId+notebookId], [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
+        queue: "++id, userId, [userId+status], [userId+status+createdAt], [userId+entityType+entityId], createdAt, status",
+        conflicts: "id, userId, [userId+createdAt], [userId+entityType+entityId], createdAt",
+        meta: "key",
+      })
+      .upgrade(async (transaction) => {
+        const queue = transaction.table<SyncQueueItem, number>("queue");
+        const meta = transaction.table<{ key: string; value: string }, string>(
+          "meta",
+        );
+        const queueItems = await queue.toArray();
+        const itemsByEntity = new Map<string, SyncQueueItem[]>();
+        for (const item of queueItems) {
+          const key = JSON.stringify([
+            item.userId,
+            item.entityType,
+            item.entityId,
+          ]);
+          const matchingItems = itemsByEntity.get(key) ?? [];
+          matchingItems.push(item);
+          itemsByEntity.set(key, matchingItems);
+        }
+
+        for (const matchingItems of itemsByEntity.values()) {
+          const repair = planQueueRepair(matchingItems);
+          if (!repair) {
+            continue;
+          }
+
+          await queue.put(repair.queueItem);
+          await queue.bulkDelete(repair.duplicateIds);
+        }
+
+        await meta.bulkPut(
+          [...new Set(queueItems.map((item) => item.userId))]
+            .filter((userId): userId is string => typeof userId === "string")
+            .map((userId) => ({
+              key: `${userId}:queueCoalescedV4`,
+              value: "4",
+            })),
+        );
       });
   }
 }

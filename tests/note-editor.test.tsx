@@ -110,7 +110,9 @@ describe("NoteEditor freeform placement", () => {
     mocks.upsertLocalPage.mockImplementation(async (page) => {
       localPageStore = page as Record<string, unknown>;
     });
-    mocks.enqueuePageUpsert.mockResolvedValue(undefined);
+    mocks.enqueuePageUpsert.mockImplementation(async (page) => {
+      localPageStore = page as Record<string, unknown>;
+    });
     mocks.processSyncQueue.mockResolvedValue(undefined);
     setViewport(1200);
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -261,7 +263,7 @@ describe("NoteEditor freeform placement", () => {
       expect(container.querySelectorAll("[data-editor-block='true']")).toHaveLength(0);
       expect(container.querySelectorAll("textarea")).toHaveLength(0);
     });
-    expect(mocks.upsertLocalPage).not.toHaveBeenCalled();
+    expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1065,7 +1067,7 @@ describe("NoteEditor freeform placement", () => {
     );
 
     await waitFor(() => {
-      const savedPage = mocks.upsertLocalPage.mock.calls
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
         .map(([pageValue]) => pageValue as { bodyHtml?: string })
         .find((pageValue) => pageValue.bodyHtml?.includes("attachment-1"));
       const savedDocument = savedPage?.bodyHtml
@@ -1260,7 +1262,7 @@ describe("NoteEditor freeform placement", () => {
     fireEvent(window, new Event("pagehide"));
 
     await waitFor(() => {
-      const savedPage = mocks.upsertLocalPage.mock.calls
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
         .map(([pageValue]) => pageValue as { bodyHtml?: string })
         .find((pageValue) => pageValue.bodyHtml?.includes("resizable"));
       const savedDocument = savedPage?.bodyHtml
@@ -1335,10 +1337,10 @@ describe("NoteEditor freeform placement", () => {
     fireEvent(window, new Event("pagehide"));
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalledWith(
         expect.objectContaining({ title: "عنوان پایدار" }),
+        expect.any(String),
       );
-      expect(mocks.enqueuePageUpsert).toHaveBeenCalled();
     });
   });
 
@@ -1361,8 +1363,9 @@ describe("NoteEditor freeform placement", () => {
     fireEvent(document, new Event("visibilitychange"));
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalledWith(
         expect.objectContaining({ bodyText: "متن تازه" }),
+        expect.any(String),
       );
     });
   });
@@ -1382,8 +1385,9 @@ describe("NoteEditor freeform placement", () => {
     view.unmount();
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalledWith(
         expect.objectContaining({ title: "قبل از بستن" }),
+        expect.any(String),
       );
     });
   });
@@ -1408,11 +1412,12 @@ describe("NoteEditor freeform placement", () => {
     fireEvent(window, new Event("pagehide"));
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "نسخه محلی",
           bodyText: "متن ذخیره محلی",
         }),
+        expect.any(String),
       );
     });
 
@@ -1438,7 +1443,7 @@ describe("NoteEditor freeform placement", () => {
 
   it("keeps retrying local persistence after a failed local save", async () => {
     const failure = new Error("indexeddb write failed");
-    mocks.upsertLocalPage.mockRejectedValue(failure);
+    mocks.enqueuePageUpsert.mockRejectedValue(failure);
 
     const { container } = renderEditor(
       serializeFreeformDocument({
@@ -1448,22 +1453,21 @@ describe("NoteEditor freeform placement", () => {
     );
     await waitForHydration();
     vi.clearAllMocks();
-    mocks.upsertLocalPage.mockRejectedValue(failure);
+    mocks.enqueuePageUpsert.mockRejectedValue(failure);
 
     const titleInput = container.querySelector('input[aria-label]') as HTMLInputElement;
     fireEvent.change(titleInput, { target: { value: "ذخیره ناموفق" } });
     fireEvent.blur(titleInput);
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalled();
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalled();
     });
-    const firstAttemptCount = mocks.upsertLocalPage.mock.calls.length;
+    const firstAttemptCount = mocks.enqueuePageUpsert.mock.calls.length;
 
     fireEvent(window, new Event("pagehide"));
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage.mock.calls.length).toBeGreaterThan(firstAttemptCount);
-      expect(mocks.enqueuePageUpsert).not.toHaveBeenCalled();
+      expect(mocks.enqueuePageUpsert.mock.calls.length).toBeGreaterThan(firstAttemptCount);
     });
   });
 
@@ -1483,11 +1487,12 @@ describe("NoteEditor freeform placement", () => {
     fireEvent.change(textarea, { target: { value: "متن تازه ذخیره شده" } });
 
     await waitFor(() => {
-      expect(mocks.upsertLocalPage).toHaveBeenCalledWith(
+      expect(mocks.enqueuePageUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "عنوان تازه",
           bodyText: "متن تازه ذخیره شده",
         }),
+        expect.any(String),
       );
     });
 

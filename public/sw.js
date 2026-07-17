@@ -25,9 +25,14 @@ self.addEventListener("message", (event) => {
     return;
   }
 
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))),
-  );
+  const requestId = event.data?.requestId;
+  const clearPromise = caches
+    .keys()
+    .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    .then(() => {
+      event.ports?.[0]?.postMessage({ type: "PRIVATE_DATA_CLEARED", requestId });
+    });
+  event.waitUntil(clearPromise);
 });
 
 function isCacheableStaticRequest(request, url) {

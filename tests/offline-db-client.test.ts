@@ -178,7 +178,7 @@ describe("offline sync merge", () => {
     expect((await offlineDb.queue.toArray())[0]).toMatchObject({ status: "conflict" });
   });
 
-  it("removes permanently deleted pages and their pending sync state", async () => {
+  it("turns a remote deletion with pending local content into a conflict", async () => {
     await offlineDb.pages.put(localPendingPage);
     await offlineDb.queue.add({
       userId: "user-1",
@@ -212,9 +212,23 @@ describe("offline sync merge", () => {
       nextCursor: null,
     });
 
-    expect(await offlineDb.pages.get("page-1")).toBeUndefined();
-    expect(await offlineDb.queue.count()).toBe(0);
-    expect(await offlineDb.conflicts.count()).toBe(0);
+    expect(await offlineDb.pages.get("page-1")).toMatchObject({
+      title: "Local draft",
+      syncStatus: "conflict",
+    });
+    expect(await offlineDb.queue.toArray()).toEqual([
+      expect.objectContaining({ entityId: "page-1", status: "conflict" }),
+    ]);
+    expect(await offlineDb.conflicts.toArray()).toEqual([
+      expect.objectContaining({
+        entityId: "page-1",
+        localPayload: expect.objectContaining({ title: "Local draft" }),
+        remotePayload: expect.objectContaining({
+          isTombstone: true,
+          deletedAt: "2026-07-15T09:59:00.000Z",
+        }),
+      }),
+    ]);
   });
 
   it("uses the compound user/status queue index and respects batch size", async () => {
@@ -269,5 +283,24 @@ describe("offline sync merge", () => {
       operation: "upsert",
       status: "pending",
     });
+  });
+
+  it("uses a newer stored sync base when an autosave races a push ACK", async () => {
+    const submittedBase = "2026-07-14T10:00:00.000Z";
+    const acknowledgedBase = "2026-07-14T10:01:00.000Z";
+    await offlineDb.pages.put({
+      ...localPendingPage,
+      lastSyncedAt: acknowledgedBase,
+      syncStatus: "synced",
+    });
+
+    await enqueuePageUpsert(
+      { ...localPendingPage, lastSyncedAt: submittedBase },
+      submittedBase,
+    );
+
+    await expect(offlineDb.queue.toArray()).resolves.toEqual([
+      expect.objectContaining({ baseUpdatedAt: acknowledgedBase }),
+    ]);
   });
 });

@@ -153,6 +153,34 @@ describe("SyncConflictDialog", () => {
     expect(screen.getAllByText("زیرمجموعه")).toHaveLength(2);
   });
 
+  it("explains a remote tombstone and presents recovery or deletion actions", async () => {
+    mocks.listConflictRecords.mockResolvedValue([
+      conflict("deleted", {
+        remotePayload: {
+          isTombstone: true,
+          deletedAt: "2026-07-15T10:00:00.000Z",
+        },
+      }),
+    ]);
+
+    render(<SyncConflictDialog userId="user-1" open onClose={vi.fn()} />);
+
+    expect(
+      await screen.findByText(
+        "این مورد در سرور برای همیشه حذف شده است و نسخه‌ای برای جایگزینی وجود ندارد.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "بازیابی نسخه این دستگاه" }),
+    ).toHaveAttribute("data-testid", "conflict-use-local-deleted");
+    expect(
+      screen.getByRole("button", { name: "پذیرش حذف از سرور" }),
+    ).toHaveAttribute("data-testid", "conflict-use-remote-deleted");
+    expect(
+      screen.queryByRole("button", { name: "استفاده از نسخه سرور" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the dialog open after a remote resolution when conflicts remain", async () => {
     const first = conflict("first");
     const remaining = conflict("remaining");
@@ -222,13 +250,15 @@ describe("SyncConflictDialog", () => {
         "حل تعارض انجام نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.",
       ),
     ).toBeInTheDocument();
-    expect(button).toBeEnabled();
+    await waitFor(() => expect(button).toBeEnabled());
     expect(consoleError).toHaveBeenCalledWith(
       "Failed to resolve sync conflict.",
       expect.any(Error),
     );
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
     consoleError.mockRestore();
   });
 });

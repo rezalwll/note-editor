@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   pathname: "/notebooks/notebook-1",
   push: vi.fn(),
   refresh: vi.fn(),
+  safeLogout: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -51,10 +52,15 @@ vi.mock("@/app/actions", () => ({
   restorePageInlineAction: vi.fn(),
 }));
 
+vi.mock("@/lib/safe-logout", () => ({
+  performSafeLogout: mocks.safeLogout,
+}));
+
 describe("MobileShell", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.pathname = "/notebooks/notebook-1";
+    mocks.safeLogout.mockResolvedValue("completed");
   });
 
   it("updates group and notebook labels immediately after rename events", async () => {

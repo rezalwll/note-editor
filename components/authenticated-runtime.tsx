@@ -2,7 +2,12 @@
 
 import { useEffect } from "react";
 
-import { bootstrapOfflineState, processSyncQueue } from "@/lib/sync/client";
+import {
+  activateOfflineSync,
+  bootstrapOfflineState,
+  processSyncQueue,
+} from "@/lib/sync/client";
+import { registerPrivateDataTab } from "@/lib/private-data-coordinator";
 
 type AuthenticatedRuntimeProps = {
   userId: string;
@@ -10,6 +15,9 @@ type AuthenticatedRuntimeProps = {
 
 export function AuthenticatedRuntime({ userId }: AuthenticatedRuntimeProps) {
   useEffect(() => {
+    const unregisterPrivateDataTab = registerPrivateDataTab(userId);
+    activateOfflineSync(userId);
+
     const bootstrap = async () => {
       try {
         await bootstrapOfflineState(userId);
@@ -39,6 +47,7 @@ export function AuthenticatedRuntime({ userId }: AuthenticatedRuntimeProps) {
     window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
     return () => {
+      unregisterPrivateDataTab();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);

@@ -1,13 +1,15 @@
 "use client";
 
-import { logoutAction } from "@/app/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
-import { clearPrivateClientData } from "@/lib/clear-client-data";
+import { performSafeLogout } from "@/lib/safe-logout";
 
-export function LogoutForm() {
+type LogoutFormProps = {
+  userId: string;
+};
+
+export function LogoutForm({ userId }: LogoutFormProps) {
   async function logoutAndClearClientData() {
-    await clearPrivateClientData();
-    await logoutAction();
+    await performSafeLogout(userId);
   }
 
   return (

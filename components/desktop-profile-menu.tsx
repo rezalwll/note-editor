@@ -5,9 +5,8 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { logoutAction } from "@/app/actions";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
-import { clearPrivateClientData } from "@/lib/clear-client-data";
+import { performSafeLogout } from "@/lib/safe-logout";
 
 type DesktopProfileMenuProps = {
   currentUser: {
@@ -30,8 +29,7 @@ export function DesktopProfileMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   async function logoutAndClearClientData() {
-    await clearPrivateClientData();
-    await logoutAction();
+    await performSafeLogout(currentUser.id);
   }
 
   useEffect(() => {

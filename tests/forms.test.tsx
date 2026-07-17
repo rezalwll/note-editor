@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   fetch: vi.fn(),
   action: vi.fn(),
+  safeLogout: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -28,7 +29,9 @@ vi.mock("@/app/actions", () => ({
   changePasswordAction: mocks.action,
   logoutAction: mocks.action,
 }));
-vi.mock("@/lib/clear-client-data", () => ({ clearPrivateClientData: vi.fn() }));
+vi.mock("@/lib/safe-logout", () => ({
+  performSafeLogout: mocks.safeLogout,
+}));
 
 import { ForgotPasswordForm } from "@/components/forms/forgot-password-form";
 import { LoginForm } from "@/components/forms/login-form";
@@ -43,6 +46,8 @@ import { WorkspacePortabilityCard } from "@/components/forms/workspace-portabili
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("fetch", mocks.fetch);
+  mocks.safeLogout.mockResolvedValue("completed");
+  mocks.action.mockResolvedValue(undefined);
 });
 
 describe("authentication and settings forms", () => {
@@ -56,7 +61,7 @@ describe("authentication and settings forms", () => {
         <ResetPasswordForm token="reset-token" supportEmail="help@example.com" />
         <ProfileForm username="owner" displayName="Owner" email="owner@example.com" />
         <PasswordForm />
-        <LogoutForm />
+        <LogoutForm userId="user-1" />
       </div>,
     );
 
@@ -66,6 +71,17 @@ describe("authentication and settings forms", () => {
     expect(container.querySelector<HTMLInputElement>('input[name="username"][value="owner"]')).toBeTruthy();
     expect(screen.getAllByRole("button").length).toBeGreaterThan(7);
     expect(screen.getAllByRole("link").some((link) => link.getAttribute("href") === "mailto:help@example.com")).toBe(true);
+  });
+
+  it("delegates logout to the safe client workflow for the current user", async () => {
+    const { container } = render(<LogoutForm userId="user-1" />);
+
+    fireEvent.submit(container.querySelector("form")!);
+
+    await waitFor(() =>
+      expect(mocks.safeLogout).toHaveBeenCalledWith("user-1"),
+    );
+    expect(mocks.safeLogout).toHaveBeenCalledOnce();
   });
 
   it("imports a workspace and reports server failures", async () => {

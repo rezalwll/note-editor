@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   deleteGroup: vi.fn(),
   deleteNotebookPermanently: vi.fn(),
   deletePagePermanently: vi.fn(),
+  safeLogout: vi.fn(),
   pathname: "/notebooks/notebook-1",
   push: vi.fn(),
   record: vi.fn(),
@@ -58,6 +59,9 @@ vi.mock("@/app/actions", () => ({
   renameNotebookInlineAction: mocks.renameNotebook,
   restoreNotebookGroupInlineAction: mocks.restoreGroup,
   restorePageInlineAction: mocks.restorePage,
+}));
+vi.mock("@/lib/safe-logout", () => ({
+  performSafeLogout: mocks.safeLogout,
 }));
 
 type Props = ComponentProps<typeof MobileShell>;
@@ -187,6 +191,7 @@ beforeEach(() => {
   mocks.renameNotebook.mockResolvedValue({});
   mocks.restoreGroup.mockResolvedValue({});
   mocks.restorePage.mockResolvedValue({});
+  mocks.safeLogout.mockResolvedValue("completed");
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     x: 20,
     y: 10,
@@ -201,6 +206,17 @@ beforeEach(() => {
 });
 
 describe("MobileShell panels and installation", () => {
+  it("delegates mobile logout to the safe client workflow", async () => {
+    renderShell();
+
+    fireEvent.click(screen.getByRole("button", { name: /باز کردن پروفایل/ }));
+    const profile = screen.getByText("@owner").closest("div.fixed")!;
+    fireEvent.submit(profile.querySelector("form")!);
+
+    await waitFor(() => expect(mocks.safeLogout).toHaveBeenCalledWith("user-1"));
+    expect(mocks.safeLogout).toHaveBeenCalledOnce();
+  });
+
   it("toggles every panel, positions profile and dismisses it inside/outside correctly", async () => {
     renderShell();
     expect(screen.getByTestId("mobile-sync")).toBeInTheDocument();

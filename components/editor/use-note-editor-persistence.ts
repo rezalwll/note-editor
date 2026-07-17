@@ -17,6 +17,7 @@ import type { LocalPage, SyncStatus } from "@/lib/offline-db/types";
 import { serializeEditorContent } from "@/lib/editor-serialization";
 import { parseFreeformDocument, type FreeformBlock } from "@/lib/notes";
 import { dispatchPageTitleUpdated } from "@/lib/page-events";
+import { registerPrivateDataDraftFlusher } from "@/lib/private-data-epoch";
 import { processSyncQueue } from "@/lib/sync/client";
 import {
   reportClientError,
@@ -67,6 +68,7 @@ export function useNoteEditorPersistence({
   const [, setIsSavingLocally] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistGenerationRef = useRef(0);
   const lastSavedRevisionRef = useRef(-1);
   const lastSyncedAtRef = useRef(initialUpdatedAt);
   const latestContentRef = useRef({ title, blocks, revision });
@@ -207,12 +209,24 @@ export function useNoteEditorPersistence({
       return true;
     }
 
+    const persistGeneration = ++persistGenerationRef.current;
+
     try {
       const startedAt = performance.now();
       const { bodyHtml, bodyText } = await serializeEditorContent(
         pendingContent.blocks,
         getBodyText(),
       );
+      const wasSuperseded =
+        persistGeneration !== persistGenerationRef.current ||
+        latestContentRef.current.revision !== pendingContent.revision;
+      if (wasSuperseded) {
+        if (isMountedRef.current) {
+          setIsSavingLocally(true);
+        }
+        return false;
+      }
+
       const updatedAt = new Date().toISOString();
       const localPage: LocalPage = {
         id: pageId,
@@ -228,7 +242,6 @@ export function useNoteEditorPersistence({
         syncStatus: "pending",
       };
 
-      await upsertLocalPage(localPage);
       await enqueuePageUpsert(localPage, lastSyncedAtRef.current ?? initialUpdatedAt);
 
       const isCurrentRevision =
@@ -242,12 +255,14 @@ export function useNoteEditorPersistence({
         setIsSavingLocally(!isCurrentRevision);
       }
 
-      dispatchPageTitleUpdated({
-        notebookId,
-        pageId,
-        title: pendingContent.title,
-        updatedAt,
-      });
+      if (isCurrentRevision) {
+        dispatchPageTitleUpdated({
+          notebookId,
+          pageId,
+          title: pendingContent.title,
+          updatedAt,
+        });
+      }
       autosaveFailureCountRef.current = 0;
       reportClientMetric("autosave.duration", performance.now() - startedAt, {
         source: "editor.autosave",
@@ -291,6 +306,35 @@ export function useNoteEditorPersistence({
     pageId,
     userId,
   ]);
+
+  const flushDraftBeforePrivateDataClear = useCallback(async () => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    if (!isHydrated) {
+      // The server copy is already durable until the user changes something.
+      // Pre-hydration edits, however, must wait for hydration and then flush.
+      return !userEditedBeforeHydrationRef.current;
+    }
+
+    if (latestContentRef.current.revision !== lastSavedRevisionRef.current) {
+      if (isMountedRef.current) {
+        setIsSavingLocally(true);
+      }
+      const persisted = await persistLocalDraft("private-data-clear");
+      if (!persisted) return false;
+    }
+
+    return (
+      latestContentRef.current.revision === lastSavedRevisionRef.current
+    );
+  }, [isHydrated, persistLocalDraft]);
+
+  useEffect(
+    () => registerPrivateDataDraftFlusher(flushDraftBeforePrivateDataClear),
+    [flushDraftBeforePrivateDataClear],
+  );
 
   const flushRemoteSync = useCallback(async (reason: string) => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -342,7 +386,7 @@ export function useNoteEditorPersistence({
       autosaveTimerRef.current = null;
     }
 
-    if (revision === lastSavedRevisionRef.current) {
+    if (latestContentRef.current.revision === lastSavedRevisionRef.current) {
       if (isMountedRef.current) {
         setIsSavingLocally(false);
       }
@@ -353,7 +397,7 @@ export function useNoteEditorPersistence({
       setIsSavingLocally(true);
     }
     void persistDraftAndSync(reason);
-  }, [isHydrated, persistDraftAndSync, revision]);
+  }, [isHydrated, persistDraftAndSync]);
 
   useEffect(() => {
     if (!isHydrated || revision === lastSavedRevisionRef.current) {

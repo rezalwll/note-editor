@@ -50,7 +50,7 @@ export default async function SettingsPage() {
               </div>
             </div>
             <div className="w-full md:w-auto">
-              <LogoutForm />
+              <LogoutForm userId={user.id} />
             </div>
           </div>
           {user.mustChangePassword ? (

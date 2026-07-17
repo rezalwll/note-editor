@@ -133,6 +133,8 @@ export async function POST(request: Request) {
           ],
         },
         userId: user.id,
+        archived: false,
+        deletedAt: null,
       },
       select: { id: true },
     });

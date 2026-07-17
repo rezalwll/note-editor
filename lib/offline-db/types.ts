@@ -38,6 +38,7 @@ export type SyncQueueItem = {
   operation: QueueOperationType;
   payload: Record<string, unknown>;
   baseUpdatedAt?: string | null;
+  revision?: number;
   createdAt: string;
   status: Extract<SyncStatus, "pending" | "failed" | "conflict">;
 };

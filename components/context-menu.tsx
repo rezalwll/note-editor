@@ -27,6 +27,7 @@ export type ContextMenuEntry =
 type ContextMenuState = {
   x: number;
   y: number;
+  openedAt: number;
   title?: string;
   items: ContextMenuEntry[];
   dismissOnScroll: boolean;
@@ -67,6 +68,7 @@ export function ContextMenuProvider({
         setMenu({
           x: event.clientX,
           y: event.clientY,
+          openedAt: Date.now(),
           title: options.title,
           items: options.items,
           dismissOnScroll: !isTouchLike,
@@ -116,6 +118,11 @@ export function ContextMenuProvider({
     window.addEventListener("keydown", handleKeyDown);
     if (menu.dismissOnScroll) {
       const handleViewportChange = (event: Event) => {
+        // Ignore the late scroll-restoration event that can follow hydration or
+        // a redirect immediately after the user's context-menu gesture.
+        if (Date.now() - menu.openedAt < 250) {
+          return;
+        }
         if (
           event.target instanceof Element &&
           event.target.closest("[data-context-menu-surface]")
