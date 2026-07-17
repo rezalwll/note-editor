@@ -111,10 +111,15 @@ GitHub Actions remains responsible for production deploys.
 1. From the project root, create and upload an archive:
 
 ```bash
-tar --exclude .git --exclude node_modules --exclude .next --exclude uploads -czf notebook-deploy.tgz .
+chmod +x scripts/create-deploy-archive.sh
+scripts/create-deploy-archive.sh notebook-deploy.tgz
 scp notebook-deploy.tgz root@YOUR_SERVER_IP:/root/
 scp scripts/deploy-notebook.sh root@YOUR_SERVER_IP:/root/
 ```
+
+The archive is generated from the current committed `HEAD`, so commit intended
+release changes before running this command. Untracked files, local build output,
+uploads, and local environment secrets are never included in the release artifact.
 
 2. SSH into the server and run:
 

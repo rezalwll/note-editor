@@ -14,7 +14,9 @@ jobs:
   deploy:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'master'
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -27,7 +29,7 @@ jobs:
         run: chmod +x scripts/create-deploy-archive.sh
 
       - name: Create deploy archive
-        run: scripts/create-deploy-archive.sh notebook-deploy.tgz
+        run: scripts/create-deploy-archive.sh "${RUNNER_TEMP}/notebook-deploy.tgz"
 
       - name: Setup SSH key
         shell: bash
@@ -39,7 +41,7 @@ jobs:
 
       - name: Upload release files
         run: |
-          scp notebook-deploy.tgz scripts/deploy-notebook.sh \
+          scp "${RUNNER_TEMP}/notebook-deploy.tgz" scripts/deploy-notebook.sh \
             "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:/root/"
 
       - name: Deploy on server
@@ -53,7 +55,7 @@ jobs:
             APP_DIR='${{ secrets.PROD_APP_DIR }}' \
             VERIFY_ON_SERVER='false' \
             bash /root/deploy-notebook.sh && \
-            systemctl disable --now notebook-auto-deploy.timer >/dev/null 2>&1 || true && \
+            (systemctl disable --now notebook-auto-deploy.timer >/dev/null 2>&1 || true) && \
             rm -f /etc/systemd/system/notebook-auto-deploy.service /etc/systemd/system/notebook-auto-deploy.timer && \
             systemctl daemon-reload && \
             rm -f /usr/local/bin/notebook-auto-deploy /etc/notebook-auto-deploy.env /var/lock/notebook-auto-deploy.lock && \
