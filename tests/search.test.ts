@@ -1,168 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  prisma: {
-    page: {
-      findMany: vi.fn(),
-    },
-    notebook: {
-      findMany: vi.fn(),
-    },
-    notebookGroup: {
-      findMany: vi.fn(),
-    },
-    attachment: {
-      findMany: vi.fn(),
-    },
-  },
+  queryRaw: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: mocks.prisma,
+  prisma: {
+    $queryRaw: mocks.queryRaw,
+  },
 }));
 
 vi.mock("@/lib/trash", () => ({
   TRASH_GROUP_SYSTEM_KEY: "deleted-items",
 }));
 
+const date = (value: string) => new Date(value);
+
 describe("searchWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.prisma.page.findMany.mockResolvedValue([]);
-    mocks.prisma.notebook.findMany.mockResolvedValue([]);
-    mocks.prisma.notebookGroup.findMany.mockResolvedValue([]);
-    mocks.prisma.attachment.findMany.mockResolvedValue([]);
+    mocks.queryRaw.mockResolvedValue([]);
   });
 
-  it("searches all supported entities and ranks page title matches above body and tags", async () => {
-    mocks.prisma.page.findMany.mockResolvedValue([
-      {
-        id: "page-title",
-        title: "Alpha Project",
-        bodyText: "plain text",
-        updatedAt: new Date("2026-07-01T10:00:00.000Z"),
-        tags: [{ value: "misc" }],
-        notebook: { name: "Notebook A", group: { name: "Group A" } },
-      },
-      {
-        id: "page-tag",
-        title: "Notes",
-        bodyText: "plain text",
-        updatedAt: new Date("2026-07-01T12:00:00.000Z"),
-        tags: [{ value: "alpha-tag" }],
-        notebook: { name: "Notebook B", group: { name: "Group B" } },
-      },
-      {
-        id: "page-body",
-        title: "Archive",
-        bodyText: "contains alpha in body",
-        updatedAt: new Date("2026-07-01T11:00:00.000Z"),
-        tags: [],
-        notebook: { name: "Notebook C", group: { name: "Group C" } },
-      },
-    ]);
-    mocks.prisma.notebook.findMany.mockResolvedValue([
-      {
-        id: "notebook-1",
-        name: "Alpha Notebook",
-        updatedAt: new Date("2026-07-01T09:00:00.000Z"),
-        group: { name: "Projects" },
-      },
-    ]);
-    mocks.prisma.notebookGroup.findMany.mockResolvedValue([
-      {
-        id: "group-1",
-        name: "Alpha Group",
-        updatedAt: new Date("2026-07-01T08:00:00.000Z"),
-        notebooks: [{ id: "notebook-1", pages: [{ id: "page-title" }] }],
-      },
-    ]);
-    mocks.prisma.attachment.findMany.mockResolvedValue([
-      {
-        id: "attachment-1",
-        fileName: "alpha-spec.pdf",
-        createdAt: new Date("2026-07-01T07:00:00.000Z"),
-        page: {
-          id: "page-title",
-          title: "Alpha Project",
-          notebook: { name: "Notebook A" },
-        },
-      },
-    ]);
-
+  it("returns grouped empty results without touching PostgreSQL for a blank query", async () => {
     const { searchWorkspace } = await import("@/lib/search");
-    const payload = await searchWorkspace("user-1", "Alpha");
-
-    expect(mocks.prisma.page.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          userId: "user-1",
-          archived: false,
-          deletedAt: null,
-        }),
-      }),
-    );
-    expect(mocks.prisma.notebook.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          userId: "user-1",
-          archived: false,
-          deletedAt: null,
-        }),
-      }),
-    );
-    expect(mocks.prisma.attachment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          userId: "user-1",
-          fileName: { contains: "alpha", mode: "insensitive" },
-        }),
-      }),
-    );
-
-    expect(payload.results.page.map((item) => item.id)).toEqual([
-      "page-title",
-      "page-tag",
-      "page-body",
-    ]);
-    expect(payload.results.page[0]).toEqual(
-      expect.objectContaining({
-        matchedField: "title",
-        href: "/pages/page-title",
-        subtitle: "Group A / Notebook A",
-      }),
-    );
-    expect(payload.results.page[1]).toEqual(
-      expect.objectContaining({ matchedField: "tags" }),
-    );
-    expect(payload.results.page[2]).toEqual(
-      expect.objectContaining({ matchedField: "bodyText" }),
-    );
-    expect(payload.results.notebook[0]).toEqual(
-      expect.objectContaining({
-        title: "Alpha Notebook",
-        href: "/notebooks/notebook-1",
-        matchedField: "name",
-      }),
-    );
-    expect(payload.results.group[0]).toEqual(
-      expect.objectContaining({
-        title: "Alpha Group",
-        href: "/pages/page-title",
-      }),
-    );
-    expect(payload.results.attachment[0]).toEqual(
-      expect.objectContaining({
-        title: "alpha-spec.pdf",
-        href: "/pages/page-title",
-        matchedField: "fileName",
-      }),
-    );
-  });
-
-  it("returns empty grouped results for blank queries", async () => {
-    const { searchWorkspace } = await import("@/lib/search");
-    const payload = await searchWorkspace("user-1", "   ");
+    const payload = await searchWorkspace("user-1", "   \u200c  ");
 
     expect(payload).toEqual({
       query: "",
@@ -172,10 +34,203 @@ describe("searchWorkspace", () => {
         group: [],
         attachment: [],
       },
+      nextCursor: null,
     });
-    expect(mocks.prisma.page.findMany).not.toHaveBeenCalled();
-    expect(mocks.prisma.notebook.findMany).not.toHaveBeenCalled();
-    expect(mocks.prisma.notebookGroup.findMany).not.toHaveBeenCalled();
-    expect(mocks.prisma.attachment.findMany).not.toHaveBeenCalled();
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("uses parameterized pg_trgm queries, Persian normalization and database ranking", async () => {
+    mocks.queryRaw
+      .mockResolvedValueOnce([
+        {
+          id: "page-title",
+          title: "برنامه‌نویسی 100%_",
+          subtitle: "فنی / وب",
+          matchedField: "title",
+          score: 433.5,
+          sortAt: date("2026-07-01T12:00:00.000Z"),
+        },
+        {
+          id: "page-tag",
+          title: "یادداشت‌ها",
+          subtitle: "فنی / وب",
+          matchedField: "tags",
+          score: 263,
+          sortAt: date("2026-07-01T11:00:00.000Z"),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "notebook-1",
+          title: "برنامه نویسی",
+          subtitle: "فنی",
+          matchedField: "name",
+          score: 434,
+          sortAt: date("2026-07-01T10:00:00.000Z"),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "group-1",
+          title: "فنی",
+          subtitle: "اولین نتیجه در صفحه‌های این مجموعه باز می‌شود",
+          matchedField: "name",
+          score: 431,
+          sortAt: date("2026-07-01T09:00:00.000Z"),
+          targetNotebookId: "notebook-1",
+          targetPageId: "page-title",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "attachment-1",
+          pageId: "page-title",
+          title: "برنامه.pdf",
+          subtitle: "برنامه‌نویسی / وب",
+          matchedField: "fileName",
+          score: 193,
+          sortAt: date("2026-07-01T08:00:00.000Z"),
+        },
+      ]);
+
+    const { searchWorkspace } = await import("@/lib/search");
+    const payload = await searchWorkspace(
+      "user-1",
+      "  برنامۀ‌نويسي 100%_  ",
+    );
+
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(4);
+    const pageQuery = mocks.queryRaw.mock.calls[0][0] as {
+      sql: string;
+      values: unknown[];
+    };
+    expect(pageQuery.sql).toContain("notava_normalize_search_text");
+    expect(pageQuery.sql).toContain("similarity");
+    expect(pageQuery.sql).not.toContain("برنامه نویسی");
+    expect(pageQuery.values).toContain("برنامه نویسی 100%_");
+    expect(pageQuery.values).toContain("%برنامه نویسی 100\\%\\_%");
+    expect(pageQuery.values).toContain("user-1");
+
+    expect(payload.query).toBe("برنامه نویسی 100%_");
+    expect(payload.nextCursor).toBeNull();
+    expect(payload.results.page.map((item) => item.id)).toEqual([
+      "page-title",
+      "page-tag",
+    ]);
+    expect(payload.results.page[0]).toEqual({
+      type: "page",
+      id: "page-title",
+      title: "برنامه‌نویسی 100%_",
+      subtitle: "فنی / وب",
+      href: "/pages/page-title",
+      matchedField: "title",
+    });
+    expect(payload.results.group[0].href).toBe("/pages/page-title");
+    expect(payload.results.notebook[0].href).toBe("/notebooks/notebook-1");
+    expect(payload.results.attachment[0].href).toBe("/pages/page-title");
+  });
+
+  it("paginates each result type with an opaque stable keyset cursor", async () => {
+    const firstPageRows = [
+      {
+        id: "page-1",
+        title: "Alpha 1",
+        subtitle: null,
+        matchedField: "title",
+        score: 420,
+        sortAt: date("2026-07-01T12:00:00.000Z"),
+      },
+      {
+        id: "page-2",
+        title: "Alpha 2",
+        subtitle: null,
+        matchedField: "title",
+        score: 410,
+        sortAt: date("2026-07-01T11:00:00.000Z"),
+      },
+      {
+        id: "page-3",
+        title: "Alpha 3",
+        subtitle: null,
+        matchedField: "bodyText",
+        score: 210,
+        sortAt: date("2026-07-01T10:00:00.000Z"),
+      },
+    ];
+    mocks.queryRaw
+      .mockResolvedValueOnce(firstPageRows)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const { searchWorkspace } = await import("@/lib/search");
+    const first = await searchWorkspace("user-1", "Alpha", { limit: 2 });
+
+    expect(first.results.page.map((item) => item.id)).toEqual(["page-1", "page-2"]);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    mocks.queryRaw.mockReset();
+    mocks.queryRaw
+      .mockResolvedValueOnce([firstPageRows[2]])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const second = await searchWorkspace("user-1", "alpha", {
+      limit: 2,
+      cursor: first.nextCursor,
+    });
+
+    expect(second.results.page.map((item) => item.id)).toEqual(["page-3"]);
+    expect(second.nextCursor).toBeNull();
+    const pageQuery = mocks.queryRaw.mock.calls[0][0] as { values: unknown[] };
+    expect(pageQuery.values).toContain(410);
+    expect(pageQuery.values).toContain("page-2");
+
+    const notebookQuery = mocks.queryRaw.mock.calls[1][0] as { sql: string };
+    expect(notebookQuery.sql).toContain("WHERE FALSE");
+  });
+
+  it("rejects malformed, cross-query and out-of-range pagination inputs", async () => {
+    const { InvalidSearchCursorError, searchWorkspace } = await import("@/lib/search");
+
+    await expect(
+      searchWorkspace("user-1", "alpha", { cursor: "not-json" }),
+    ).rejects.toBeInstanceOf(InvalidSearchCursorError);
+    await expect(
+      searchWorkspace("user-1", "alpha", { limit: 0 }),
+    ).rejects.toBeInstanceOf(RangeError);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+
+    mocks.queryRaw
+      .mockResolvedValueOnce([
+        {
+          id: "page-1",
+          title: "Alpha",
+          subtitle: null,
+          matchedField: "title",
+          score: 430,
+          sortAt: date("2026-07-01T12:00:00.000Z"),
+        },
+        {
+          id: "page-2",
+          title: "Alpha two",
+          subtitle: null,
+          matchedField: "title",
+          score: 420,
+          sortAt: date("2026-07-01T11:00:00.000Z"),
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const first = await searchWorkspace("user-1", "alpha", { limit: 1 });
+
+    await expect(
+      searchWorkspace("user-1", "beta", {
+        limit: 1,
+        cursor: first.nextCursor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidSearchCursorError);
   });
 });

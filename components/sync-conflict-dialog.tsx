@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, Check, LoaderCircle, X } from "lucide-react";
+import { AlertTriangle, Check, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import {
+  discardConflictRecords,
   listConflictRecords,
   resolveConflictWithLocal,
   resolveConflictWithRemote,
@@ -19,6 +20,8 @@ type SyncConflictDialogProps = {
   onClose: () => void;
   onCountChange?: (count: number) => void;
 };
+
+const DISCARD_ALL_ID = "__discard-all-conflicts__";
 
 function isRemoteTombstone(conflict: ConflictRecord) {
   return conflict.remotePayload?.isTombstone === true;
@@ -59,6 +62,7 @@ export function SyncConflictDialog({
   const [conflicts, setConflicts] = useState<ConflictRecord[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDiscardAll, setConfirmDiscardAll] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -66,12 +70,19 @@ export function SyncConflictDialog({
     }
 
     let cancelled = false;
-    void listConflictRecords(userId).then((next) => {
-      if (!cancelled) {
-        setConflicts(next);
-        onCountChange?.(next.length);
-      }
-    });
+    void listConflictRecords(userId)
+      .then((next) => {
+        if (!cancelled) {
+          setConflicts(next);
+          onCountChange?.(next.length);
+        }
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          console.error("Failed to load sync conflicts.", cause);
+          setError("خواندن اختلاف‌های همگام‌سازی انجام نشد.");
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -112,7 +123,46 @@ export function SyncConflictDialog({
       }
     } catch (cause) {
       console.error("Failed to resolve sync conflict.", cause);
-      setError("حل تعارض انجام نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.");
+      setError(
+        "حل اختلاف انجام نشد. اگر این مورد از نسخه‌های قدیمی باقی مانده، از گزینه «پاک‌کردن موارد قدیمی» استفاده کنید.",
+      );
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
+  async function discardAll() {
+    setResolvingId(DISCARD_ALL_ID);
+    setError(null);
+
+    try {
+      await discardConflictRecords(
+        userId,
+        conflicts.map((conflict) => conflict.id),
+      );
+      setConfirmDiscardAll(false);
+
+      try {
+        await processSyncQueue(userId);
+      } catch (cause) {
+        // Cleanup is already durable locally. The regular sync runtime retries
+        // reconciliation when the connection becomes available again.
+        console.warn(
+          "Conflict cleanup completed before remote reconciliation.",
+          cause,
+        );
+      }
+
+      const next = await listConflictRecords(userId);
+      setConflicts(next);
+      onCountChange?.(next.length);
+      router.refresh();
+      if (next.length === 0) {
+        onClose();
+      }
+    } catch (cause) {
+      console.error("Failed to discard stale sync conflicts.", cause);
+      setError("پاک‌سازی اختلاف‌های قدیمی انجام نشد. دوباره تلاش کنید.");
     } finally {
       setResolvingId(null);
     }
@@ -141,18 +191,67 @@ export function SyncConflictDialog({
               برای هر مورد مشخص کنید نسخه این دستگاه حفظ شود یا نسخه سرور.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={Boolean(resolvingId)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#d8deea] text-[#667085] hover:bg-[#f7f8fb] disabled:opacity-50"
-            aria-label="بستن"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {conflicts.length > 0 ? (
+              <button
+                type="button"
+                data-testid="conflict-discard-all"
+                onClick={() => setConfirmDiscardAll(true)}
+                disabled={Boolean(resolvingId)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#f0b4ad] px-3 text-xs font-semibold text-[#b42318] hover:bg-[#fff5f4] disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                پاک‌کردن موارد قدیمی
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={Boolean(resolvingId)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#d8deea] text-[#667085] hover:bg-[#f7f8fb] disabled:opacity-50"
+              aria-label="بستن"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </header>
 
         <div className="overflow-y-auto p-4 sm:p-5" dir="rtl">
+          {confirmDiscardAll && conflicts.length > 0 ? (
+            <div className="mb-4 rounded-2xl border border-[#f0b4ad] bg-[#fff8f7] p-4">
+              <p className="text-sm font-semibold text-[#912018]">
+                این رکوردهای قدیمی از فهرست اختلاف‌ها پاک شوند؟
+              </p>
+              <p className="mt-1 text-xs leading-6 text-[#7a443f]">
+                خود صفحه‌ها و زیرمجموعه‌ها حذف نمی‌شوند؛ فقط وضعیت اختلاف و عملیات گیرکرده این دستگاه پاک می‌شود و نسخه فعلی سرور دوباره دریافت خواهد شد.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  data-testid="conflict-confirm-discard-all"
+                  onClick={() => void discardAll()}
+                  disabled={Boolean(resolvingId)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#b42318] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {resolvingId === DISCARD_ALL_ID ? (
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  پاک‌کردن {conflicts.length.toLocaleString("fa-IR")} مورد
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDiscardAll(false)}
+                  disabled={Boolean(resolvingId)}
+                  className="rounded-xl border border-[#d8deea] px-3 py-2 text-xs font-semibold text-[#475467] disabled:opacity-50"
+                >
+                  انصراف
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {conflicts.length === 0 ? (
             <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
               <Check className="h-8 w-8 text-[#198754]" />

@@ -4,7 +4,12 @@ import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { NotavaOfflineDb } from "@/lib/offline-db/db";
-import type { SyncQueueItem } from "@/lib/offline-db/types";
+import type {
+  ConflictRecord,
+  LocalNotebook,
+  LocalPage,
+  SyncQueueItem,
+} from "@/lib/offline-db/types";
 
 const legacyStores = {
   notebooks: "id, userId, [userId+updatedAt], syncStatus, lastSyncedAt, deletedAt",
@@ -98,7 +103,7 @@ describe("offline database migrations", () => {
     const upgradedDb = new NotavaOfflineDb(name);
     await upgradedDb.open();
 
-    expect(upgradedDb.verno).toBe(4);
+    expect(upgradedDb.verno).toBe(5);
     expect(await upgradedDb.queue.toArray()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -139,5 +144,96 @@ describe("offline database migrations", () => {
     await reopenedDb.open();
     expect(await reopenedDb.queue.count()).toBe(3);
     reopenedDb.close();
+  });
+
+  it("clears pre-upgrade conflicts while preserving cached entities and live work", async () => {
+    const name = `notava-offline-v5-${crypto.randomUUID()}`;
+    databaseNames.push(name);
+    const legacyDb = new Dexie(name);
+    legacyDb.version(4).stores(legacyStores);
+    await legacyDb.open();
+
+    const legacyPage: LocalPage = {
+      id: "page-1",
+      userId: "user-1",
+      notebookId: "notebook-1",
+      title: "Local page",
+      bodyHtml: "<p>Local page</p>",
+      bodyText: "Local page",
+      archived: false,
+      updatedAt: "2026-07-17T10:00:00.000Z",
+      syncStatus: "conflict",
+    };
+    const legacyNotebook: LocalNotebook = {
+      id: "notebook-1",
+      userId: "user-1",
+      groupId: "group-1",
+      name: "Local notebook",
+      archived: false,
+      updatedAt: "2026-07-17T10:00:00.000Z",
+      syncStatus: "conflict",
+    };
+    await legacyDb.table<LocalPage, string>("pages").put(legacyPage);
+    await legacyDb
+      .table<LocalNotebook, string>("notebooks")
+      .put(legacyNotebook);
+    await legacyDb.table<ConflictRecord, string>("conflicts").bulkPut([
+      {
+        id: "old-page-conflict",
+        userId: "user-1",
+        entityType: "page",
+        entityId: "page-1",
+        createdAt: "2026-07-17T10:00:00.000Z",
+        message: "legacy",
+      },
+      {
+        id: "old-notebook-conflict",
+        userId: "user-1",
+        entityType: "notebook",
+        entityId: "notebook-1",
+        createdAt: "2026-07-17T10:00:00.000Z",
+        message: "legacy",
+      },
+    ]);
+    const queue = legacyDb.table<SyncQueueItem, number>("queue");
+    const blockedQueueId = await queue.add({
+      userId: "user-1",
+      entityType: "page",
+      entityId: "page-1",
+      operation: "upsert",
+      payload: legacyPage,
+      createdAt: "2026-07-17T10:00:00.000Z",
+      status: "conflict",
+    });
+    const pendingQueueId = await queue.add({
+      userId: "user-1",
+      entityType: "notebook",
+      entityId: "notebook-1",
+      operation: "upsert",
+      payload: legacyNotebook,
+      createdAt: "2026-07-17T10:01:00.000Z",
+      status: "pending",
+    });
+    legacyDb.close();
+
+    const upgradedDb = new NotavaOfflineDb(name);
+    await upgradedDb.open();
+
+    expect(upgradedDb.verno).toBe(5);
+    expect(await upgradedDb.conflicts.count()).toBe(0);
+    expect(await upgradedDb.queue.get(blockedQueueId)).toBeUndefined();
+    expect(await upgradedDb.queue.get(pendingQueueId)).toMatchObject({
+      status: "pending",
+    });
+    expect(await upgradedDb.pages.get("page-1")).toMatchObject({
+      title: "Local page",
+      syncStatus: "synced",
+    });
+    expect(await upgradedDb.notebooks.get("notebook-1")).toMatchObject({
+      name: "Local notebook",
+      syncStatus: "pending",
+    });
+
+    upgradedDb.close();
   });
 });

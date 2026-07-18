@@ -1,20 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  ChevronDown,
-  CirclePlus,
-  Download,
-  EllipsisVertical,
-  FileText,
-  FolderPlus,
-  Menu,
-  NotebookTabs,
-  Trash2,
-  UserRound,
-  X,
-} from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
@@ -31,13 +17,13 @@ import {
   restoreNotebookGroupInlineAction,
   restorePageInlineAction,
 } from "@/app/actions";
-import { BrandLogo } from "@/components/brand-logo";
-import { EditorToolbar } from "@/components/editor-toolbar";
-import { SearchTrigger } from "@/components/search-trigger";
-import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { MobileShellView } from "@/components/mobile-shell-view";
+import type {
+  InstallPromptEvent,
+  MobileCurrentUser,
+} from "@/components/mobile-shell-types";
 import {
   TRASH_GROUP_KEY,
-  UNGROUPED_ID,
   useMobileShellModel,
   type ActionSheetState,
   type MobileGroup,
@@ -49,22 +35,13 @@ import {
   dispatchGroupRenamed,
   dispatchNotebookRenamed,
 } from "@/lib/page-events";
-import { getNotebookTheme, getRandomThemeKey } from "@/lib/notebook-theme";
+import { getRandomThemeKey } from "@/lib/notebook-theme";
 import { performSafeLogout } from "@/lib/safe-logout";
-import { formatDate } from "@/lib/utils";
 
 type MobileShellProps = {
   notebooks: MobileNotebook[];
   groups: MobileGroup[];
-  currentUser: {
-    id: string;
-    username: string;
-    displayName: string;
-  };
-};
-
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
+  currentUser: MobileCurrentUser;
 };
 
 
@@ -492,600 +469,67 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   return (
-    <div className="xl:hidden">
-      <div className="sticky top-0 z-40 border-b border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.95)_0%,rgba(181,186,255,0.95)_36%,rgba(174,226,255,0.92)_74%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
-        <div className="flex items-center justify-between gap-3 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => {
-              setSectionsOpen((current) => !current);
-              setPagesOpen(false);
-              setProfileOpen(false);
-            }}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            aria-label="باز کردن مجموعه‌ها"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-
-          <BrandLogo frameClassName="h-7 w-[100px]" showWordmark={false} />
-
-          <div className="flex items-center gap-2">
-            <SyncStatusIndicator userId={currentUser.id} />
-            <button
-              ref={profileTriggerRef}
-              type="button"
-              onClick={() => {
-                setProfileOpen((current) => !current);
-                setSectionsOpen(false);
-                setPagesOpen(false);
-              }}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/60 bg-white/78 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-              aria-label="باز کردن پروفایل"
-            >
-              <UserRound className="h-5 w-5" />
-            </button>
-            <SearchTrigger
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/60 bg-white/78 px-3 text-[#33406d] shadow-[0_10px_26px_rgba(116,125,255,0.18)]"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto px-3 pb-2">
-          <div className="min-w-max">
-            <EditorToolbar />
-          </div>
-        </div>
-      </div>
-
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_30%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
-        <div className="grid grid-cols-3 gap-2 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => {
-              setSectionsOpen((current) => !current);
-              setPagesOpen(false);
-              setProfileOpen(false);
-            }}
-            className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
-          >
-            <NotebookTabs className="h-5 w-5" />
-            مجموعه‌ها
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setPagesOpen((current) => !current);
-              setSectionsOpen(false);
-              setProfileOpen(false);
-            }}
-            className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
-          >
-            <FileText className="h-5 w-5" />
-            صفحه‌ها
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setProfileOpen((current) => !current);
-              setSectionsOpen(false);
-              setPagesOpen(false);
-            }}
-            className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
-          >
-            <UserRound className="h-5 w-5" />
-            پروفایل
-          </button>
-        </div>
-      </div>
-
-      {sectionsOpen ? (
-        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
-          <div
-            className="absolute inset-x-0 top-0 max-h-[72vh] overflow-hidden rounded-b-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-soft)] bg-white px-4 py-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingGroupId(null);
-                  setDraftGroupName("");
-                  setIsCreatingGroup((current) => !current);
-                }}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-soft)] px-3 py-1.5 text-xs font-semibold text-[#33406d]"
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-                مجموعه جدید
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="text-sm font-semibold text-[var(--text-strong)]">مجموعه‌ها</div>
-                <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-[calc(72vh-58px)] overflow-y-auto p-4">
-              <div className="grid gap-4">
-                {isCreatingGroup ? (
-                  <div className="rounded-2xl border border-dashed border-[#b5baff] bg-[#f8f8ff] px-4 py-3">
-                    <input
-                      ref={groupInputRef}
-                      value={draftGroupName}
-                      onChange={(event) => setDraftGroupName(event.target.value)}
-                      onBlur={submitCreateGroup}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          submitCreateGroup();
-                        }
-
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          setDraftGroupName("");
-                          setIsCreatingGroup(false);
-                        }
-                      }}
-                      disabled={isPending}
-                      placeholder="نام مجموعه جدید"
-                      className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#708090]"
-                      dir="rtl"
-                    />
-                  </div>
-                ) : null}
-
-                {groupedNotebooks
-                  .filter((group) => group.id !== UNGROUPED_ID)
-                  .map((group) => {
-                  const canManageGroup =
-                    group.id !== UNGROUPED_ID && group.systemKey !== TRASH_GROUP_KEY;
-                  const isEditing = editingGroupId === group.id;
-                  const isActiveGroup = activeGroupId === group.id;
-
-                  return (
-                    <div key={group.id}>
-                      <div className="flex items-center gap-2">
-                        {canManageGroup ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setActionSheet({ type: "group", id: group.id });
-                            }}
-                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
-                            aria-label={`عملیات ${group.name}`}
-                          >
-                            <EllipsisVertical className="h-4 w-4" />
-                          </button>
-                        ) : null}
-
-                        <button
-                          type="button"
-                          onClick={() => toggleGroupSelection(group.id)}
-                          className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                          style={{
-                            boxShadow: isActiveGroup
-                              ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
-                              : undefined,
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <ChevronDown
-                              className={[
-                                "h-4 w-4 text-[#708090] transition",
-                                expandedGroupIds.includes(group.id) ? "rotate-180" : "",
-                              ].join(" ")}
-                            />
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#50607a]">
-                              {group.notebookCount}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-[#23324d]">
-                            {group.systemKey === TRASH_GROUP_KEY ? (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            ) : null}
-                            {isEditing ? (
-                              <input
-                                ref={groupInputRef}
-                                value={draftGroupName}
-                                onChange={(event) => setDraftGroupName(event.target.value)}
-                                onBlur={submitRenameGroup}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    submitRenameGroup();
-                                  }
-                                  if (event.key === "Escape") {
-                                    event.preventDefault();
-                                    setEditingGroupId(null);
-                                    setDraftGroupName("");
-                                  }
-                                }}
-                                className="min-w-0 border-none bg-transparent text-right text-sm outline-none"
-                                dir="rtl"
-                                onClick={(event) => event.stopPropagation()}
-                              />
-                            ) : (
-                              <span>{group.name}</span>
-                            )}
-                          </div>
-                        </button>
-                      </div>
-
-                      {expandedGroupIds.includes(group.id) ? (
-                        <div className="mt-2 grid gap-2 pr-3">
-                          {group.notebooks.length > 0 ? (
-                            group.notebooks.map((notebook) => {
-                              const theme = getNotebookTheme(notebook.id, notebook.themeKey);
-                              const isActiveNotebook = activeNotebook?.id === notebook.id;
-                              const canManageNotebook = !notebook.systemKey;
-                              const isEditingNotebook = editingNotebookId === notebook.id;
-
-                              return (
-                                <div key={notebook.id} className="flex items-center gap-2">
-                                  {canManageNotebook ? (
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setActionSheet({ type: "notebook", id: notebook.id });
-                                      }}
-                                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border bg-white text-[#50607a] shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                                      style={{ borderColor: theme.editorBorder }}
-                                      aria-label={`عملیات ${notebook.name}`}
-                                    >
-                                      <EllipsisVertical className="h-4 w-4" />
-                                    </button>
-                                  ) : null}
-
-                                  <button
-                                    type="button"
-                                    onClick={() => selectNotebook(notebook)}
-                                    className="w-full rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition"
-                                    style={{
-                                      backgroundColor: isActiveNotebook
-                                        ? theme.sidebarActive
-                                        : theme.accentSoft,
-                                      borderColor: isActiveNotebook
-                                        ? theme.accent
-                                        : theme.editorBorder,
-                                      color: theme.sidebarText,
-                                    }}
-                                  >
-                                    {isEditingNotebook ? (
-                                      <input
-                                        ref={notebookInputRef}
-                                        value={draftNotebookName}
-                                        onChange={(event) => setDraftNotebookName(event.target.value)}
-                                        onBlur={submitRenameNotebook}
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter") {
-                                            event.preventDefault();
-                                            submitRenameNotebook();
-                                          }
-                                          if (event.key === "Escape") {
-                                            event.preventDefault();
-                                            setEditingNotebookId(null);
-                                            setDraftNotebookName("");
-                                          }
-                                        }}
-                                        className="w-full border-none bg-transparent text-right text-sm outline-none"
-                                        dir="rtl"
-                                        onClick={(event) => event.stopPropagation()}
-                                      />
-                                    ) : (
-                                      notebook.name
-                                    )}
-                                  </button>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="rounded-2xl border border-dashed border-[var(--border-soft)] bg-white px-4 py-3 text-right text-xs text-[#708090]">
-                              هنوز زیر مجموعه‌ای در این مجموعه نیست
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {pagesOpen ? (
-        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
-          <div
-            className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-hidden rounded-t-[28px] shadow-[0_-24px_80px_rgba(15,23,42,0.22)]"
-            style={{ backgroundColor: activeTheme.sidebarBg }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div
-              className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3"
-              style={{
-                borderColor: activeTheme.sidebarBorder,
-                backgroundColor: activeTheme.sidebarHeaderBg,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setDraftTitle("");
-                  setIsCreating(true);
-                }}
-                className="inline-flex items-center gap-2 text-sm"
-                style={{ color: activeTheme.sidebarText }}
-                disabled={Boolean(activeNotebook?.deletedAt) || !activeNotebook}
-              >
-                <CirclePlus className="h-4 w-4" />
-                صفحه جدید
-              </button>
-              <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div
-              className="sticky top-[57px] z-[9] border-b px-4 py-3 backdrop-blur"
-              style={{
-                borderColor: activeTheme.sidebarBorder,
-                backgroundColor: `${activeTheme.sidebarBg}f0`,
-              }}
-            >
-              <div className="mb-2 text-right text-[11px] font-semibold text-[var(--text-muted)]">
-                {activeGroup
-                  ? `زیر مجموعه‌های ${activeGroup.name}`
-                  : "زیر مجموعه‌های مجموعه"}
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {activeGroupNotebooks.map((notebook) => {
-                  const isActiveNotebook = notebook.id === activeNotebook?.id;
-                  const notebookTheme = getNotebookTheme(notebook.id, notebook.themeKey);
-
-                  return (
-                    <Link
-                      key={notebook.id}
-                      href={`/notebooks/${notebook.id}`}
-                      onClick={() => {
-                        setDraftTitle("");
-                        setIsCreating(false);
-                        setSelectedNotebookId(notebook.id);
-                      }}
-                      className="shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition"
-                      style={{
-                        backgroundColor: isActiveNotebook
-                          ? notebookTheme.sidebarActive
-                          : notebookTheme.accentSoft,
-                        borderColor: isActiveNotebook
-                          ? notebookTheme.accent
-                          : notebookTheme.editorBorder,
-                        color: notebookTheme.sidebarText,
-                      }}
-                    >
-                      {notebook.name}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            {isCreating ? (
-              <div
-                className="border-b bg-white px-4 py-3"
-                style={{ borderColor: activeTheme.sidebarBorder }}
-              >
-                <input
-                  ref={inputRef}
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  onBlur={submitCreate}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      submitCreate();
-                    }
-                  }}
-                  disabled={isPending}
-                  placeholder="صفحه بدون عنوان"
-                  className="w-full border-none bg-transparent text-right text-sm outline-none"
-                  dir="rtl"
-                />
-              </div>
-            ) : null}
-
-            <div className="max-h-[calc(78vh-138px)] overflow-y-auto">
-              {activeGroupNotebooks.length === 0 ? (
-                <div className="px-4 py-6 text-right text-sm text-[#708090]">
-                  هنوز زیر مجموعه‌ای برای این مجموعه انتخاب نشده است.
-                </div>
-              ) : activeNotebook!.pages.length > 0 ? (
-                  activeNotebook!.pages.map((page) => {
-                    const isActive = pathname === `/pages/${page.id}`;
-
-                    return (
-                      <div key={page.id} className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: activeTheme.sidebarBorder }}>
-                        <button
-                          type="button"
-                          onClick={() => setActionSheet({ type: "page", id: page.id })}
-                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-[#50607a]"
-                          aria-label={`عملیات ${page.title}`}
-                        >
-                          <EllipsisVertical className="h-4 w-4" />
-                        </button>
-                        <Link
-                          href={`/pages/${page.id}`}
-                          onClick={closeAll}
-                          className="block w-full rounded-xl px-3 py-2 text-right transition"
-                          style={{
-                            backgroundColor: isActive ? activeTheme.sidebarHover : "transparent",
-                          }}
-                          dir="rtl"
-                        >
-                          <div className="text-sm" style={{ color: activeTheme.sidebarText }}>
-                            {page.title}
-                          </div>
-                          <div className="mt-1 text-[11px]" style={{ color: activeTheme.sidebarMuted }}>
-                            {formatDate(new Date(page.updatedAt))}
-                          </div>
-                        </Link>
-                      </div>
-                    );
-                  })
-              ) : (
-                  <div
-                    className="px-4 py-6 text-right text-sm"
-                    style={{ color: activeTheme.sidebarMuted }}
-                  >
-                    این زیر مجموعه هنوز صفحه‌ای ندارد.
-                  </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {actionSheet ? (
-        <div className="fixed inset-0 z-[140] bg-black/30" onClick={closeActionSheet}>
-          <div
-            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white p-4 shadow-[0_-24px_80px_rgba(15,23,42,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-3 text-center text-sm font-semibold text-[#1f2a37]">
-              {actionGroup?.name ?? actionNotebook?.name ?? actionPage?.title}
-            </div>
-            <div className="grid gap-2">
-              {actionGroup ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => beginRenameGroup(actionGroup)}
-                    className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
-                  >
-                    تغییر نام مجموعه
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteGroup(actionGroup)}
-                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
-                  >
-                    حذف مجموعه
-                  </button>
-                </>
-              ) : null}
-
-              {actionNotebook ? (
-                <>
-                  {!actionNotebook.deletedAt ? (
-                    <button
-                      type="button"
-                      onClick={() => beginRenameNotebook(actionNotebook)}
-                      className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
-                    >
-                      تغییر نام زیر مجموعه
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => deleteNotebook(actionNotebook)}
-                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
-                  >
-                    {actionNotebook.deletedAt
-                      ? "حذف دائمی زیر مجموعه"
-                      : "انتقال زیر مجموعه به حذف‌شده‌ها"}
-                  </button>
-                </>
-              ) : null}
-
-              {actionPage ? (
-                <>
-                  {activeNotebook?.deletedAt && actionPage.originalNotebookId ? (
-                    <button
-                      type="button"
-                      onClick={() => restorePage(actionPage.id)}
-                      className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-right text-sm text-[#1f2a37]"
-                    >
-                      بازیابی صفحه
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      activeNotebook?.deletedAt
-                        ? deletePagePermanently(actionPage.id)
-                        : archivePage(actionPage.id)
-                    }
-                    className="rounded-2xl border border-[#fecaca] px-4 py-3 text-right text-sm text-[#b42318]"
-                  >
-                    {activeNotebook?.deletedAt ? "حذف دائمی صفحه" : "حذف صفحه"}
-                  </button>
-                </>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={closeActionSheet}
-                className="rounded-2xl border border-[var(--border-soft)] px-4 py-3 text-center text-sm text-[#50607a]"
-              >
-                بستن
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {profileOpen ? (
-        <>
-          <div className="fixed inset-0 z-[120] bg-black/10" />
-          <div
-            ref={profileMenuRef}
-            className="fixed z-[130] flex w-[176px] flex-col rounded-[18px] border border-[var(--border-soft)] bg-white p-1.5 shadow-[0_22px_54px_rgba(15,23,42,0.16)]"
-            style={{
-              top: `${profilePanelPosition.top}px`,
-              left: `${profilePanelPosition.left}px`,
-            }}
-          >
-            <div className="border-b border-[var(--border-soft)] px-2.5 py-2 text-center">
-              <div className="truncate text-sm font-semibold text-[#1f2a37]">
-                {currentUser.displayName}
-              </div>
-              <div className="truncate text-[11px] text-[#708090]" dir="ltr">
-                @{currentUser.username}
-              </div>
-            </div>
-
-            {installEvent ? (
-              <button
-                type="button"
-                onClick={() => handleInstall(installEvent)}
-                className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
-              >
-                نصب برنامه
-              </button>
-            ) : null}
-
-            <Link
-              href="/settings"
-              onClick={closeAll}
-              className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
-            >
-              تنظیمات
-            </Link>
-
-            <form action={logoutAndClearClientData}>
-              <button
-                type="submit"
-                className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
-              >
-                خروج از حساب
-              </button>
-            </form>
-          </div>
-        </>
-      ) : null}
-    </div>
+    <MobileShellView
+      actionGroup={actionGroup}
+      actionNotebook={actionNotebook}
+      actionPage={actionPage}
+      actionSheet={actionSheet}
+      activeGroup={activeGroup}
+      activeGroupId={activeGroupId}
+      activeGroupNotebooks={activeGroupNotebooks}
+      activeNotebook={activeNotebook}
+      activeTheme={activeTheme}
+      archivePage={archivePage}
+      beginRenameGroup={beginRenameGroup}
+      beginRenameNotebook={beginRenameNotebook}
+      closeActionSheet={closeActionSheet}
+      closeAll={closeAll}
+      currentUser={currentUser}
+      deleteGroup={deleteGroup}
+      deleteNotebook={deleteNotebook}
+      deletePagePermanently={deletePagePermanently}
+      draftGroupName={draftGroupName}
+      draftNotebookName={draftNotebookName}
+      draftTitle={draftTitle}
+      editingGroupId={editingGroupId}
+      editingNotebookId={editingNotebookId}
+      expandedGroupIds={expandedGroupIds}
+      groupedNotebooks={groupedNotebooks}
+      groupInputRef={groupInputRef}
+      handleInstall={handleInstall}
+      inputRef={inputRef}
+      installEvent={installEvent}
+      isCreating={isCreating}
+      isCreatingGroup={isCreatingGroup}
+      isPending={isPending}
+      logoutAndClearClientData={logoutAndClearClientData}
+      notebookInputRef={notebookInputRef}
+      pagesOpen={pagesOpen}
+      pathname={pathname}
+      profileMenuRef={profileMenuRef}
+      profileOpen={profileOpen}
+      profilePanelPosition={profilePanelPosition}
+      profileTriggerRef={profileTriggerRef}
+      restorePage={restorePage}
+      sectionsOpen={sectionsOpen}
+      selectNotebook={selectNotebook}
+      setActionSheet={setActionSheet}
+      setDraftGroupName={setDraftGroupName}
+      setDraftNotebookName={setDraftNotebookName}
+      setDraftTitle={setDraftTitle}
+      setEditingGroupId={setEditingGroupId}
+      setEditingNotebookId={setEditingNotebookId}
+      setIsCreating={setIsCreating}
+      setIsCreatingGroup={setIsCreatingGroup}
+      setPagesOpen={setPagesOpen}
+      setProfileOpen={setProfileOpen}
+      setSectionsOpen={setSectionsOpen}
+      setSelectedNotebookId={setSelectedNotebookId}
+      submitCreate={submitCreate}
+      submitCreateGroup={submitCreateGroup}
+      submitRenameGroup={submitRenameGroup}
+      submitRenameNotebook={submitRenameNotebook}
+      toggleGroupSelection={toggleGroupSelection}
+    />
   );
 }

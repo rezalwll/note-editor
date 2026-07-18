@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  InvalidSearchCursorError: class InvalidSearchCursorError extends Error {},
   requireUser: vi.fn(),
   clearSession: vi.fn(),
   searchWorkspace: vi.fn(),
@@ -24,7 +25,10 @@ vi.mock("@/lib/auth", () => ({
   requireUser: mocks.requireUser,
   clearSession: mocks.clearSession,
 }));
-vi.mock("@/lib/search", () => ({ searchWorkspace: mocks.searchWorkspace }));
+vi.mock("@/lib/search", () => ({
+  searchWorkspace: mocks.searchWorkspace,
+  InvalidSearchCursorError: mocks.InvalidSearchCursorError,
+}));
 vi.mock("@/lib/storage", () => ({
   readUpload: mocks.readUpload,
   storeUpload: mocks.storeUpload,
@@ -112,6 +116,30 @@ describe("small API routes", () => {
     const response = await search(new Request("https://notava.test/api/search?q=hello"));
     expect(mocks.searchWorkspace).toHaveBeenCalledWith("user-1", "hello");
     expect(await response.json()).toEqual({ results: [{ id: "page-1" }] });
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+
+    mocks.searchWorkspace.mockResolvedValue({ results: [] });
+    await search(
+      new Request("https://notava.test/api/search?q=hello&limit=10&cursor=next"),
+    );
+    expect(mocks.searchWorkspace).toHaveBeenLastCalledWith("user-1", "hello", {
+      cursor: "next",
+      limit: 10,
+    });
+
+    const invalidLimit = await search(
+      new Request("https://notava.test/api/search?q=hello&limit=100"),
+    );
+    expect(invalidLimit.status).toBe(400);
+
+    mocks.searchWorkspace.mockRejectedValueOnce(
+      new mocks.InvalidSearchCursorError("Invalid search cursor."),
+    );
+    const invalidCursor = await search(
+      new Request("https://notava.test/api/search?q=hello&cursor=broken"),
+    );
+    expect(invalidCursor.status).toBe(400);
+    expect(await invalidCursor.json()).toEqual({ error: "Invalid search cursor." });
   });
 
   it("downloads an owned attachment and returns 404 otherwise", async () => {

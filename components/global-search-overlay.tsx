@@ -48,16 +48,48 @@ function getVisibleResultCount(results: SearchResultsPayload["results"]) {
   );
 }
 
+function mergeSearchResults(
+  current: SearchResultsPayload["results"],
+  incoming: SearchResultsPayload["results"],
+) {
+  const merged = createEmptyResults();
+
+  for (const type of Object.keys(merged) as SearchResultType[]) {
+    const seen = new Set<string>();
+    merged[type] = [...current[type], ...incoming[type]].filter((item) => {
+      if (seen.has(item.id)) {
+        return false;
+      }
+      seen.add(item.id);
+      return true;
+    });
+  }
+
+  return merged;
+}
+
+function getSearchUrl(query: string, cursor?: string | null) {
+  const params = new URLSearchParams({ q: query });
+  if (cursor) {
+    params.set("cursor", cursor);
+  }
+  return `/api/search?${params.toString()}`;
+}
+
 export function GlobalSearchOverlay() {
   const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultListRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
   const previousPathnameRef = useRef(pathname);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<SearchResultsPayload["results"]>(createEmptyResults);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [resultViewport, setResultViewport] = useState({
     scrollTop: 0,
     height: 560,
@@ -65,12 +97,14 @@ export function GlobalSearchOverlay() {
 
   useEffect(() => {
     const handleOpenEvent = () => {
+      setIsLoadingMore(false);
       setOpen(true);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setIsLoadingMore(false);
         setOpen(true);
       }
 
@@ -137,12 +171,13 @@ export function GlobalSearchOverlay() {
 
     async function runSearch() {
       setIsLoading(true);
+      setNextCursor(null);
+      setLoadMoreError(false);
 
       try {
-        const response = await fetch(
-          `/api/search?q=${encodeURIComponent(debouncedQuery)}`,
-          { signal: controller.signal },
-        );
+        const response = await fetch(getSearchUrl(debouncedQuery), {
+          signal: controller.signal,
+        });
 
         if (!response.ok) {
           throw new Error("SEARCH_REQUEST_FAILED");
@@ -150,6 +185,7 @@ export function GlobalSearchOverlay() {
 
         const payload = (await response.json()) as SearchResultsPayload;
         setResults(payload.results);
+        setNextCursor(payload.nextCursor ?? null);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -157,6 +193,7 @@ export function GlobalSearchOverlay() {
 
         console.error("Failed to search workspace.", error);
         setResults(createEmptyResults());
+        setNextCursor(null);
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false);
@@ -167,6 +204,59 @@ export function GlobalSearchOverlay() {
     void runSearch();
     return () => controller.abort();
   }, [debouncedQuery, open]);
+
+  useEffect(() => {
+    return () => {
+      loadMoreControllerRef.current?.abort();
+      loadMoreControllerRef.current = null;
+    };
+  }, [debouncedQuery, open]);
+
+  async function loadMoreResults() {
+    if (
+      !nextCursor ||
+      !debouncedQuery ||
+      isLoadingMore ||
+      loadMoreControllerRef.current
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    loadMoreControllerRef.current = controller;
+    setIsLoadingMore(true);
+    setLoadMoreError(false);
+
+    try {
+      const response = await fetch(getSearchUrl(debouncedQuery, nextCursor), {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error("SEARCH_PAGE_REQUEST_FAILED");
+      }
+
+      const payload = (await response.json()) as SearchResultsPayload;
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setResults((current) => mergeSearchResults(current, payload.results));
+      setNextCursor(payload.nextCursor ?? null);
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      console.error("Failed to load more search results.", error);
+      setLoadMoreError(true);
+    } finally {
+      if (loadMoreControllerRef.current === controller) {
+        loadMoreControllerRef.current = null;
+        setIsLoadingMore(false);
+      }
+    }
+  }
 
   if (!open) {
     return null;
@@ -217,7 +307,13 @@ export function GlobalSearchOverlay() {
             ref={inputRef}
             value={query}
             onChange={(event) => {
+              loadMoreControllerRef.current?.abort();
+              loadMoreControllerRef.current = null;
               setQuery(event.target.value);
+              setIsLoading(false);
+              setIsLoadingMore(false);
+              setNextCursor(null);
+              setLoadMoreError(false);
               if (resultListRef.current) {
                 resultListRef.current.scrollTop = 0;
               }
@@ -331,6 +427,26 @@ export function GlobalSearchOverlay() {
               </div>
             </div>
           )}
+          {!shouldShowLoading && visibleCount > 0 && nextCursor ? (
+            <div className="mt-3 grid gap-2 text-center">
+              {loadMoreError ? (
+                <div role="alert" className="text-xs text-[#a33f4d]">
+                  بارگذاری نتایج بیشتر ناموفق بود. دوباره تلاش کنید.
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void loadMoreResults()}
+                disabled={isLoadingMore}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#d5dfef] bg-white px-4 text-xs font-medium text-[#486180] transition hover:bg-[#f6f9ff] disabled:cursor-wait disabled:opacity-60"
+              >
+                {isLoadingMore ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {isLoadingMore ? "در حال بارگذاری..." : "نمایش نتایج بیشتر"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   applyPullChanges,
   applySyncPushResult,
   clearOfflineStateForUser,
+  discardConflictRecords,
   enqueueNotebookArchive,
   enqueueNotebookUpsert,
   enqueuePageArchive,
@@ -1577,6 +1578,39 @@ describe("offline conflict records", () => {
     expect(await offlineDb.queue.count()).toBe(0);
   });
 
+  it("normalizes legacy remote payloads that predate embedded identity fields", async () => {
+    const legacyPage = { ...page({ updatedAt: later }) } as Record<string, unknown>;
+    const legacyNotebook = {
+      ...notebook({ updatedAt: later }),
+    } as Record<string, unknown>;
+    delete legacyPage.id;
+    delete legacyPage.userId;
+    delete legacyNotebook.id;
+    delete legacyNotebook.userId;
+    await offlineDb.conflicts.bulkPut([
+      conflict("legacy-page", { remotePayload: legacyPage }),
+      conflict("legacy-notebook", {
+        entityType: "notebook",
+        entityId: "notebook-1",
+        remotePayload: legacyNotebook,
+      }),
+    ]);
+
+    await resolveConflictWithRemote("user-1", "legacy-page");
+    await resolveConflictWithRemote("user-1", "legacy-notebook");
+
+    expect(await offlineDb.pages.get("page-1")).toMatchObject({
+      id: "page-1",
+      userId: "user-1",
+      syncStatus: "synced",
+    });
+    expect(await offlineDb.notebooks.get("notebook-1")).toMatchObject({
+      id: "notebook-1",
+      userId: "user-1",
+      syncStatus: "synced",
+    });
+  });
+
   it("validates the remote timestamp and local entity before choosing local", async () => {
     await offlineDb.conflicts.put(conflict("no-time", { remotePayload: {} }));
     await expect(resolveConflictWithLocal("user-1", "no-time")).rejects.toThrow(
@@ -1790,5 +1824,112 @@ describe("offline conflict records", () => {
         }),
       ]),
     );
+  });
+
+  it("recovers from legacy tombstones that only stored a deletion timestamp", async () => {
+    await offlineDb.pages.put(
+      page({
+        id: "standalone-page",
+        notebookId: "other-notebook",
+        syncStatus: "conflict",
+      }),
+    );
+    await offlineDb.notebooks.put(notebook({ syncStatus: "conflict" }));
+    const legacyTombstone = {
+      isTombstone: true,
+      deletedAt: later,
+    };
+    await offlineDb.conflicts.bulkPut([
+      conflict("legacy-local-tombstone", {
+        entityId: "standalone-page",
+        remotePayload: legacyTombstone,
+      }),
+      conflict("legacy-remote-tombstone", {
+        entityType: "notebook",
+        entityId: "notebook-1",
+        localPayload: notebook(),
+        remotePayload: legacyTombstone,
+      }),
+    ]);
+
+    await resolveConflictWithLocal("user-1", "legacy-local-tombstone");
+    await resolveConflictWithRemote("user-1", "legacy-remote-tombstone");
+
+    expect(await offlineDb.pages.get("standalone-page")).toMatchObject({
+      syncStatus: "pending",
+    });
+    expect(await offlineDb.notebooks.get("notebook-1")).toBeUndefined();
+    expect(await offlineDb.queue.toArray()).toEqual([
+      expect.objectContaining({
+        entityId: "standalone-page",
+        baseUpdatedAt: later,
+        status: "pending",
+      }),
+    ]);
+  });
+
+  it("discards obsolete conflict state without deleting cached entities", async () => {
+    expect(await discardConflictRecords("user-1", [])).toBe(0);
+    expect(
+      await discardConflictRecords("user-1", ["", "missing", "missing"]),
+    ).toBe(0);
+
+    await offlineDb.pages.put(page({ syncStatus: "conflict" }));
+    await offlineDb.notebooks.put(notebook({ syncStatus: "conflict" }));
+    await offlineDb.conflicts.bulkPut([
+      conflict("obsolete-page"),
+      conflict("obsolete-page-duplicate"),
+      conflict("obsolete-notebook", {
+        entityType: "notebook",
+        entityId: "notebook-1",
+        localPayload: notebook(),
+        remotePayload: notebook({ updatedAt: later }),
+      }),
+      conflict("foreign-obsolete", {
+        userId: "user-2",
+        entityId: "foreign-page",
+      }),
+    ]);
+    await offlineDb.queue.bulkAdd([
+      {
+        userId: "user-1",
+        entityType: "page",
+        entityId: "page-1",
+        operation: "upsert",
+        payload: page(),
+        createdAt: now,
+        status: "conflict",
+      },
+      {
+        userId: "user-1",
+        entityType: "notebook",
+        entityId: "notebook-1",
+        operation: "upsert",
+        payload: notebook(),
+        createdAt: now,
+        status: "conflict",
+      },
+    ]);
+
+    expect(
+      await discardConflictRecords("user-1", [
+        "obsolete-page",
+        "obsolete-page",
+        "obsolete-notebook",
+        "foreign-obsolete",
+        "missing",
+      ]),
+    ).toBe(2);
+
+    expect(await offlineDb.pages.get("page-1")).toMatchObject({
+      syncStatus: "synced",
+    });
+    expect(await offlineDb.notebooks.get("notebook-1")).toMatchObject({
+      syncStatus: "synced",
+    });
+    expect(await offlineDb.queue.count()).toBe(0);
+    expect((await offlineDb.conflicts.toArray()).map((item) => item.id)).toEqual([
+      "foreign-obsolete",
+    ]);
   });
 });

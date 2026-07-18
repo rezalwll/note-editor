@@ -186,6 +186,105 @@ describe("GlobalSearchOverlay", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("loads cursor pages, merges results without duplicates and supports retry", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          query: "alpha",
+          nextCursor: "cursor-1",
+          results: {
+            page: [
+              {
+                type: "page",
+                id: "page-1",
+                title: "Alpha one",
+                href: "/pages/page-1",
+                matchedField: "title",
+              },
+            ],
+            notebook: [],
+            group: [],
+            attachment: [],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          query: "alpha",
+          nextCursor: null,
+          results: {
+            page: [
+              {
+                type: "page",
+                id: "page-1",
+                title: "Alpha one duplicate",
+                href: "/pages/page-1",
+                matchedField: "title",
+              },
+              {
+                type: "page",
+                id: "page-2",
+                title: "Alpha two",
+                href: "/pages/page-2",
+                matchedField: "bodyText",
+              },
+            ],
+            notebook: [],
+            group: [],
+            attachment: [],
+          },
+        }),
+      });
+
+    render(<GlobalSearchOverlay />);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "alpha" },
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(275);
+      await Promise.resolve();
+    });
+
+    const loadMore = screen.getByRole("button", {
+      name: "نمایش نتایج بیشتر",
+    });
+    await act(async () => {
+      fireEvent.click(loadMore);
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/search?q=alpha&cursor=cursor-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "بارگذاری نتایج بیشتر ناموفق بود",
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "نمایش نتایج بیشتر" }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Alpha one")).toBeInTheDocument();
+    expect(screen.getByText("Alpha two")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha one duplicate")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "نمایش نتایج بیشتر" })).not.toBeInTheDocument();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Failed to load more search results.",
+      expect.any(Error),
+    );
+    errorSpy.mockRestore();
+  });
+
   it("virtualizes a payload containing four thousand search results", async () => {
     const pages = Array.from({ length: 2_000 }, (_, index) => ({
       type: "page" as const,

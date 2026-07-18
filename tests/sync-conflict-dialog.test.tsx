@@ -5,6 +5,7 @@ import { SyncConflictDialog } from "@/components/sync-conflict-dialog";
 import type { ConflictRecord } from "@/lib/offline-db/types";
 
 const mocks = vi.hoisted(() => ({
+  discardConflicts: vi.fn(),
   listConflictRecords: vi.fn(),
   processSyncQueue: vi.fn(),
   refresh: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/offline-db/client", () => ({
+  discardConflictRecords: mocks.discardConflicts,
   listConflictRecords: mocks.listConflictRecords,
   resolveConflictWithLocal: mocks.resolveLocal,
   resolveConflictWithRemote: mocks.resolveRemote,
@@ -45,6 +47,7 @@ function conflict(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.discardConflicts.mockResolvedValue(0);
   mocks.listConflictRecords.mockResolvedValue([]);
   mocks.processSyncQueue.mockResolvedValue(undefined);
   mocks.resolveLocal.mockResolvedValue(undefined);
@@ -104,6 +107,32 @@ describe("SyncConflictDialog", () => {
     view.unmount();
     await act(async () => finish([conflict("late")]));
     expect(onCountChange).not.toHaveBeenCalled();
+  });
+
+  it("reports load failures but ignores a failure that arrives after unmount", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.listConflictRecords.mockRejectedValueOnce(new Error("indexeddb"));
+    const first = render(
+      <SyncConflictDialog userId="user-1" open onClose={vi.fn()} />,
+    );
+    expect(
+      await screen.findByText("خواندن اختلاف‌های همگام‌سازی انجام نشد."),
+    ).toBeInTheDocument();
+    first.unmount();
+
+    let rejectLoad!: (cause: Error) => void;
+    mocks.listConflictRecords.mockReturnValueOnce(
+      new Promise<ConflictRecord[]>((_, reject) => {
+        rejectLoad = reject;
+      }),
+    );
+    const second = render(
+      <SyncConflictDialog userId="user-1" open onClose={vi.fn()} />,
+    );
+    second.unmount();
+    await act(async () => rejectLoad(new Error("late")));
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 
   it("renders page and notebook payload fallbacks", async () => {
@@ -247,7 +276,7 @@ describe("SyncConflictDialog", () => {
 
     expect(
       await screen.findByText(
-        "حل تعارض انجام نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.",
+        "حل اختلاف انجام نشد. اگر این مورد از نسخه‌های قدیمی باقی مانده، از گزینه «پاک‌کردن موارد قدیمی» استفاده کنید.",
       ),
     ).toBeInTheDocument();
     await waitFor(() => expect(button).toBeEnabled());
@@ -259,6 +288,101 @@ describe("SyncConflictDialog", () => {
       fireEvent.keyDown(window, { key: "Escape" });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+    consoleError.mockRestore();
+  });
+
+  it("confirms and discards every obsolete conflict before reconciling", async () => {
+    const items = [conflict("old-1"), conflict("old-2")];
+    let finishDiscard!: () => void;
+    mocks.discardConflicts.mockReturnValueOnce(
+      new Promise<number>((resolve) => {
+        finishDiscard = () => resolve(2);
+      }),
+    );
+    mocks.listConflictRecords
+      .mockResolvedValueOnce(items)
+      .mockResolvedValueOnce([]);
+    const onClose = vi.fn();
+    const onCountChange = vi.fn();
+    render(
+      <SyncConflictDialog
+        userId="user-1"
+        open
+        onClose={onClose}
+        onCountChange={onCountChange}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("conflict-discard-all"));
+    expect(
+      screen.getByText("این رکوردهای قدیمی از فهرست اختلاف‌ها پاک شوند؟"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "انصراف" }));
+    expect(
+      screen.queryByText("این رکوردهای قدیمی از فهرست اختلاف‌ها پاک شوند؟"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("conflict-discard-all"));
+    const confirm = screen.getByTestId("conflict-confirm-discard-all");
+    fireEvent.click(confirm);
+    await waitFor(() => expect(confirm).toHaveTextContent("پاک‌کردن ۲ مورد"));
+    expect(screen.getByRole("button", { name: "بستن" })).toBeDisabled();
+
+    await act(async () => finishDiscard());
+    await waitFor(() =>
+      expect(mocks.discardConflicts).toHaveBeenCalledWith("user-1", [
+        "old-1",
+        "old-2",
+      ]),
+    );
+    expect(mocks.processSyncQueue).toHaveBeenCalledWith("user-1");
+    expect(onCountChange).toHaveBeenLastCalledWith(0);
+    expect(mocks.refresh).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cleanup successful when reconciliation is offline and conflicts remain", async () => {
+    const first = conflict("old");
+    const remaining = conflict("remaining");
+    mocks.discardConflicts.mockResolvedValueOnce(1);
+    mocks.processSyncQueue.mockRejectedValueOnce(new Error("offline"));
+    mocks.listConflictRecords
+      .mockResolvedValueOnce([first])
+      .mockResolvedValueOnce([remaining]);
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onClose = vi.fn();
+    render(<SyncConflictDialog userId="user-1" open onClose={onClose} />);
+
+    fireEvent.click(await screen.findByTestId("conflict-discard-all"));
+    fireEvent.click(screen.getByTestId("conflict-confirm-discard-all"));
+
+    await waitFor(() => expect(consoleWarn).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByTestId("conflict-use-remote-remaining")).toBeEnabled(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
+  it("reports a failed obsolete-conflict cleanup", async () => {
+    mocks.listConflictRecords.mockResolvedValue([conflict("old")]);
+    mocks.discardConflicts.mockRejectedValueOnce(new Error("blocked"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<SyncConflictDialog userId="user-1" open onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByTestId("conflict-discard-all"));
+    fireEvent.click(screen.getByTestId("conflict-confirm-discard-all"));
+
+    expect(
+      await screen.findByText(
+        "پاک‌سازی اختلاف‌های قدیمی انجام نشد. دوباره تلاش کنید.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("conflict-confirm-discard-all")).toBeEnabled();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to discard stale sync conflicts.",
+      expect.any(Error),
+    );
     consoleError.mockRestore();
   });
 });
