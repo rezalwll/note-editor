@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   unregister: vi.fn(),
   register: vi.fn(),
   cacheDelete: vi.fn(),
+  pathname: "/",
 }));
 
 vi.mock("@/lib/queries", () => ({ getSidebarData: mocks.getSidebarData }));
@@ -27,6 +28,9 @@ vi.mock("@/lib/sync/client", () => ({
 }));
 vi.mock("@/lib/private-data-coordinator", () => ({
   registerPrivateDataTab: mocks.registerPrivateDataTab,
+}));
+vi.mock("next/navigation", () => ({
+  usePathname: () => mocks.pathname,
 }));
 vi.mock("next/font/local", () => ({ default: () => ({ variable: "font-variable" }) }));
 vi.mock("@/components/context-menu", () => ({ ContextMenuProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -58,6 +62,8 @@ beforeEach(() => {
   mocks.unregister.mockResolvedValue(true);
   mocks.register.mockResolvedValue(undefined);
   mocks.cacheDelete.mockResolvedValue(true);
+  mocks.pathname = "/";
+  document.cookie = "notava_last_page_user-1=; Path=/; Max-Age=0";
 });
 
 describe("application shell and runtimes", () => {
@@ -98,6 +104,16 @@ describe("application shell and runtimes", () => {
 
     view.unmount();
     expect(mocks.unregisterPrivateDataTab).toHaveBeenCalledOnce();
+  });
+
+  it("remembers the last visited page for the current user", async () => {
+    mocks.pathname = "/pages/page-9";
+
+    render(<AuthenticatedRuntime userId="user-1" />);
+
+    await waitFor(() => {
+      expect(document.cookie).toContain("notava_last_page_user-1=page-9");
+    });
   });
 
   it("cleans stale development service workers and caches", async () => {

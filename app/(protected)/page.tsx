@@ -1,10 +1,39 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
+import { getLastVisitedPageCookieName } from "@/lib/last-visited-page";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const cookieStore = await cookies();
+  const lastVisitedPageId = cookieStore.get(
+    getLastVisitedPageCookieName(user.id),
+  )?.value;
+
+  if (lastVisitedPageId) {
+    const lastVisitedPage = await prisma.page.findFirst({
+      where: {
+        id: lastVisitedPageId,
+        userId: user.id,
+        archived: false,
+        deletedAt: null,
+        notebook: {
+          is: {
+            archived: false,
+            deletedAt: null,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (lastVisitedPage) {
+      return redirect(`/pages/${lastVisitedPage.id}`);
+    }
+  }
+
   const groups = await prisma.notebookGroup.findMany({
     where: { userId: user.id, systemKey: null },
     select: { id: true, name: true },

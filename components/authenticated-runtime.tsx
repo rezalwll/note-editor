@@ -1,7 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
+import {
+  getLastVisitedPageCookieName,
+  getPageIdFromPathname,
+  LAST_VISITED_PAGE_COOKIE_MAX_AGE,
+} from "@/lib/last-visited-page";
 import {
   activateOfflineSync,
   bootstrapOfflineState,
@@ -14,6 +20,18 @@ type AuthenticatedRuntimeProps = {
 };
 
 export function AuthenticatedRuntime({ userId }: AuthenticatedRuntimeProps) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const pageId = getPageIdFromPathname(pathname);
+    if (!pageId) {
+      return;
+    }
+
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${getLastVisitedPageCookieName(userId)}=${pageId}; Path=/; Max-Age=${LAST_VISITED_PAGE_COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
+  }, [pathname, userId]);
+
   useEffect(() => {
     const unregisterPrivateDataTab = registerPrivateDataTab(userId);
     activateOfflineSync(userId);

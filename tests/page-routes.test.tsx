@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   notebookFindMany: vi.fn(),
   notebookFindFirst: vi.fn(),
   pageFindFirst: vi.fn(),
+  cookieGet: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
 }));
@@ -19,6 +20,9 @@ vi.mock("@/lib/prisma", () => ({
     notebook: { findMany: mocks.notebookFindMany, findFirst: mocks.notebookFindFirst },
     page: { findFirst: mocks.pageFindFirst },
   },
+}));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: mocks.cookieGet }),
 }));
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
@@ -65,6 +69,7 @@ const user = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireUser.mockResolvedValue(user);
+  mocks.cookieGet.mockReturnValue(undefined);
 });
 
 describe("protected page routes", () => {
@@ -73,6 +78,42 @@ describe("protected page routes", () => {
     mocks.notebookFindMany.mockResolvedValue([]);
     render(await DashboardPage());
     expect(screen.getByRole("heading")).toBeInTheDocument();
+  });
+
+  it("redirects the dashboard to the user's last valid page", async () => {
+    mocks.cookieGet.mockReturnValue({ value: "page-last" });
+    mocks.pageFindFirst.mockResolvedValue({ id: "page-last" });
+
+    await DashboardPage();
+
+    expect(mocks.cookieGet).toHaveBeenCalledWith("notava_last_page_user-1");
+    expect(mocks.pageFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "page-last",
+        userId: "user-1",
+        archived: false,
+        deletedAt: null,
+        notebook: {
+          is: { archived: false, deletedAt: null },
+        },
+      },
+      select: { id: true },
+    });
+    expect(mocks.redirect).toHaveBeenCalledWith("/pages/page-last");
+    expect(mocks.notebookFindMany).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the first available page when the remembered page is stale", async () => {
+    mocks.cookieGet.mockReturnValue({ value: "page-deleted" });
+    mocks.pageFindFirst.mockResolvedValue(null);
+    mocks.groupFindMany.mockResolvedValue([]);
+    mocks.notebookFindMany.mockResolvedValue([
+      { id: "notebook-1", pages: [{ id: "page-first" }] },
+    ]);
+
+    await DashboardPage();
+
+    expect(mocks.redirect).toHaveBeenCalledWith("/pages/page-first");
   });
 
   it("renders a notebook without pages and generates its metadata", async () => {
