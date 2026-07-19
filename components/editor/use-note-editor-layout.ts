@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
+import { getBlockGrowthPositionUpdates } from "@/lib/editor-collision";
 import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_VIEWPORT_HEIGHT,
@@ -21,12 +22,14 @@ type UseNoteEditorLayoutOptions = {
   blocks: FreeformBlock[];
   activeBlockId: string | null;
   isHydrated: boolean;
+  onBlocksDisplaced: (positions: ReadonlyMap<string, number>) => void;
 };
 
 export function useNoteEditorLayout({
   blocks,
   activeBlockId,
   isHydrated,
+  onBlocksDisplaced,
 }: UseNoteEditorLayoutOptions) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -54,6 +57,8 @@ export function useNoteEditorLayout({
   });
   const dirtyBlocksRef = useRef(new Map<string, FreeformBlock>());
   const removedBlockIdsRef = useRef(new Set<string>());
+  const pendingDisplacementsRef = useRef(new Map<string, number>());
+  const displacementFrameIdRef = useRef<number | null>(null);
   const measuredBoundsRef = useRef(
     new Map<string, { block: FreeformBlock; bottom: number }>(),
   );
@@ -171,6 +176,34 @@ export function useNoteEditorLayout({
     },
     [],
   );
+  const scheduleBlockDisplacement = useCallback(
+    (positions: ReadonlyMap<string, number>) => {
+      for (const [blockId, nextY] of positions) {
+        const pendingY = pendingDisplacementsRef.current.get(blockId);
+        pendingDisplacementsRef.current.set(
+          blockId,
+          pendingY === undefined ? nextY : Math.max(pendingY, nextY),
+        );
+      }
+
+      if (displacementFrameIdRef.current !== null) {
+        return;
+      }
+
+      displacementFrameIdRef.current = window.requestAnimationFrame(() => {
+        displacementFrameIdRef.current = null;
+        const pendingPositions = pendingDisplacementsRef.current;
+        pendingDisplacementsRef.current = new Map();
+        if (pendingPositions.size === 0) {
+          return;
+        }
+
+        setSpatialIndexRevision((current) => current + 1);
+        onBlocksDisplaced(pendingPositions);
+      });
+    },
+    [onBlocksDisplaced],
+  );
   const queueSelectionRestore = useCallback(
     (blockId: string, start: number, end: number) => {
       selectionRestoreRef.current = { id: blockId, start, end };
@@ -200,6 +233,14 @@ export function useNoteEditorLayout({
         ? current
         : { top: nextTop, bottom: nextBottom },
     );
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (displacementFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(displacementFrameIdRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -275,6 +316,13 @@ export function useNoteEditorLayout({
         : [...dirtyBlocksRef.current.values()];
     let shouldRecalculateMaximum = widthChanged;
     let nextLowestBlockBottom = lowestBlockBottomRef.current;
+    const pendingPositionUpdates = new Map(pendingDisplacementsRef.current);
+    const measuredHeights = new Map(
+      [...measuredBoundsRef.current].map(([blockId, bounds]) => [
+        blockId,
+        bounds.bottom - bounds.block.y,
+      ]),
+    );
 
     for (const removedBlockId of removedBlockIdsRef.current) {
       if (
@@ -301,9 +349,46 @@ export function useNoteEditorLayout({
             estimateBlockHeight(block, canvasWidth),
             28,
           );
-      const previousBottom = measuredBoundsRef.current.get(block.id)?.bottom;
-      const bottom = block.y + blockHeight;
-      measuredBoundsRef.current.set(block.id, { block, bottom });
+      const previousBounds = measuredBoundsRef.current.get(block.id);
+      const previousBottom = previousBounds?.bottom;
+      const previousHeight = previousBounds
+        ? previousBounds.bottom - previousBounds.block.y
+        : null;
+      measuredHeights.set(block.id, blockHeight);
+
+      if (
+        !widthChanged &&
+        !isImageBlock(block) &&
+        previousHeight !== null &&
+        blockHeight > previousHeight + 0.5
+      ) {
+        const effectiveBlocks = blocks.map((candidate) => {
+          const pendingY = pendingPositionUpdates.get(candidate.id);
+          return pendingY === undefined
+            ? candidate
+            : { ...candidate, y: pendingY };
+        });
+        const growthUpdates = getBlockGrowthPositionUpdates({
+          blocks: effectiveBlocks,
+          sourceBlockId: block.id,
+          previousHeight,
+          nextHeight: blockHeight,
+          canvasWidth,
+          measuredHeights,
+        });
+        for (const [blockId, nextY] of growthUpdates) {
+          pendingPositionUpdates.set(blockId, nextY);
+        }
+      }
+
+      const measuredY = pendingPositionUpdates.get(block.id) ?? block.y;
+      const measuredBlock =
+        measuredY === block.y ? block : { ...block, y: measuredY };
+      const bottom = measuredY + blockHeight;
+      measuredBoundsRef.current.set(block.id, {
+        block: measuredBlock,
+        bottom,
+      });
       if (
         previousBottom === lowestBlockBottomRef.current &&
         bottom < previousBottom
@@ -311,6 +396,26 @@ export function useNoteEditorLayout({
         shouldRecalculateMaximum = true;
       }
       nextLowestBlockBottom = Math.max(nextLowestBlockBottom, bottom);
+    }
+
+    if (pendingPositionUpdates.size > 0) {
+      shouldRecalculateMaximum = true;
+      for (const block of blocks) {
+        const nextY = pendingPositionUpdates.get(block.id);
+        if (nextY === undefined) {
+          continue;
+        }
+
+        const nextBlock = { ...block, y: nextY };
+        const height =
+          measuredHeights.get(block.id) ?? estimateBlockHeight(block, canvasWidth);
+        measuredBoundsRef.current.set(block.id, {
+          block: nextBlock,
+          bottom: nextY + height,
+        });
+        spatialIndex.upsert(nextBlock, { top: nextY, height });
+      }
+      scheduleBlockDisplacement(pendingPositionUpdates);
     }
 
     if (shouldRecalculateMaximum) {
@@ -331,7 +436,13 @@ export function useNoteEditorLayout({
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [blocks, canvasWidth, getTextBlockElement, spatialIndex]);
+  }, [
+    blocks,
+    canvasWidth,
+    getTextBlockElement,
+    scheduleBlockDisplacement,
+    spatialIndex,
+  ]);
 
   useEffect(() => {
     const normalizeBlockLayout = () => {

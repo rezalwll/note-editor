@@ -123,6 +123,19 @@ export function NoteEditor({
     setDocumentRevision((current) => current + 1);
     setTitle(action);
   }, []);
+  const applyAutomaticBlockPositions = useCallback(
+    (positions: ReadonlyMap<string, number>) => {
+      setEditedBlocks((current) =>
+        current.map((block) => {
+          const nextY = positions.get(block.id);
+          return nextY === undefined || nextY === block.y
+            ? block
+            : { ...block, y: nextY };
+        }),
+      );
+    },
+    [setEditedBlocks],
+  );
   const replaceDerivedDocumentState = useCallback(
     (nextBlocks: FreeformBlock[]) => {
       bodyTextIndex.replaceAll(nextBlocks);
@@ -201,7 +214,12 @@ export function NoteEditor({
     setRichTextBlockHandle,
     shouldVirtualizeBlocks,
     upsertLayoutBlock,
-  } = useNoteEditorLayout({ blocks, activeBlockId, isHydrated });
+  } = useNoteEditorLayout({
+    blocks,
+    activeBlockId,
+    isHydrated,
+    onBlocksDisplaced: applyAutomaticBlockPositions,
+  });
   useEffect(() => {
     replaceLayoutBlocksBridgeRef.current = replaceLayoutBlocks;
     return () => {

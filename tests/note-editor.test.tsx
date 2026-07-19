@@ -198,6 +198,35 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("pushes a lower text block down when the active block grows", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "growing", x: 48, y: 72, width: 240, text: "first" },
+          { id: "below", x: 48, y: 112, width: 240, text: "second" },
+          { id: "beside", x: 400, y: 112, width: 240, text: "beside" },
+        ],
+      }),
+    );
+    const growingTextarea = container.querySelector(
+      '[data-testid="note-block-growing"] textarea',
+    ) as HTMLTextAreaElement;
+
+    fireEvent.change(growingTextarea, {
+      target: { value: "first\nsecond line\nthird line" },
+    });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="note-block-below"]'),
+      ).toHaveStyle({ top: "168px" });
+      expect(
+        container.querySelector('[data-testid="note-block-beside"]'),
+      ).toHaveStyle({ top: "112px" });
+    });
+  });
+
   it.each([
     ["empty legacy HTML", "<p></p>"],
     [
