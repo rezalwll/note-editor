@@ -584,6 +584,72 @@ describe("NoteEditor freeform placement", () => {
     expect(mocks.clipboardWriteText).toHaveBeenCalledWith("hello");
   });
 
+  it("copies all text from the editor context menu", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "copy-all-target",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "hello world",
+          },
+        ],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(0, 5);
+    fireEvent.contextMenu(textarea);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const copyAllAction = menu.items.find(
+      (item: { id: string }) => item.id === "copy-all-text",
+    );
+    await copyAllAction.onSelect();
+
+    expect(copyAllAction.label).toBe("کپی همه");
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith("hello world");
+  });
+
+  it("copies all rich text as plain text from the editor context menu", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "copy-all-rich-target",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "hello world",
+            richText: "<p>hello <strong>world</strong></p>",
+          },
+        ],
+      }),
+    );
+    const richTextEditor = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-rich-text-editor="true"]',
+      ) as HTMLElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+    fireEvent.contextMenu(richTextEditor);
+
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const copyAllAction = menu.items.find(
+      (item: { id: string }) => item.id === "copy-all-text",
+    );
+    await copyAllAction.onSelect();
+
+    expect(menu.title).toBe("بلوک متن");
+    expect(copyAllAction.label).toBe("کپی همه");
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith("hello world");
+  });
+
   it("pastes clipboard text over the current editor selection", async () => {
     mocks.clipboardReadText.mockResolvedValue("Codex");
     const { container } = renderEditor(

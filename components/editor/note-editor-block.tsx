@@ -356,24 +356,30 @@ export function NoteEditorBlock({
                         onContextMenu={(event, selectedText) => {
                           selectSingleBlock(block.id);
                           openMenu(event, {
-                            title: "Ø¨Ù„ÙˆÚ© Ù…ØªÙ†",
+                            title: "بلوک متن",
                             items: [
                               {
                                 id: "copy-text",
-                                label: "Ú©Ù¾ÛŒ",
+                                label: "کپی",
                                 disabled: !selectedText,
                                 onSelect: () => copyTextToClipboard(selectedText),
                               },
                               {
+                                id: "copy-all-text",
+                                label: "کپی همه",
+                                disabled: !block.text,
+                                onSelect: () => copyTextToClipboard(block.text),
+                              },
+                              {
                                 id: "paste-text",
-                                label: "Ù¾ÛŒØ³Øª",
+                                label: "پیست",
                                 onSelect: () =>
                                   pasteFromClipboard({ targetBlockId: block.id }),
                               },
                               { id: "separator-clipboard", separator: true },
                               {
                                 id: "delete-block",
-                                label: "Ø­Ø°Ù Ø¨Ù„ÙˆÚ©",
+                                label: "حذف بلوک",
                                 danger: true,
                                 onSelect: () => deleteBlock(block.id),
                               },
@@ -435,10 +441,11 @@ export function NoteEditorBlock({
                           event.currentTarget.selectionStart ?? 0;
                         const selectionEnd =
                           event.currentTarget.selectionEnd ?? selectionStart;
+                        const allText = getSelectedBlocksText(selectedIds);
                         const selectedText =
                           selectionStart !== selectionEnd
                             ? block.text.slice(selectionStart, selectionEnd)
-                            : getSelectedBlocksText(selectedIds);
+                            : allText;
                         const clipboardItems = [
                           {
                             id: "copy-text",
@@ -446,6 +453,12 @@ export function NoteEditorBlock({
                             disabled: !selectedText,
                             onSelect: () =>
                               copyTextToClipboard(selectedText),
+                          },
+                          {
+                            id: "copy-all-text",
+                            label: "کپی همه",
+                            disabled: !allText,
+                            onSelect: () => copyTextToClipboard(allText),
                           },
                           {
                             id: "paste-text",
