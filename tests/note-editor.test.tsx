@@ -584,6 +584,84 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it.each([
+    ["bullet", "فهرست نشانه‌دار", "● "],
+    ["todo", "فهرست کارها", "☐ "],
+  ])(
+    "continues a %s item when Enter is pressed",
+    async (_kind, toolbarLabel, prefix) => {
+      const { container } = renderEditor(
+        serializeFreeformDocument({
+          type: "freeform-v1",
+          blocks: [
+            {
+              id: "continued-list",
+              x: 48,
+              y: 72,
+              width: 240,
+              text: "first item",
+            },
+          ],
+        }),
+        true,
+      );
+      const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+      fireEvent.focus(textarea);
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      fireEvent.select(textarea);
+
+      const toolbarButton = screen.getByRole("button", { name: toolbarLabel });
+      fireEvent.mouseDown(toolbarButton);
+      fireEvent.click(toolbarButton);
+
+      await waitFor(() => {
+        expect(textarea).toHaveValue(`${prefix}first item`);
+        expect(textarea.selectionStart).toBe(textarea.value.length);
+        expect(textarea.selectionEnd).toBe(textarea.value.length);
+      });
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(textarea).toHaveValue(
+          `${prefix}first item\n${prefix}`,
+        );
+        expect(textarea.selectionStart).toBe(textarea.value.length);
+        expect(textarea.selectionEnd).toBe(textarea.value.length);
+      });
+    },
+  );
+
+  it("starts the next todo unchecked and exits an empty todo item", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "completed-todo",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "☑ completed",
+          },
+        ],
+      }),
+    );
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await waitFor(() => expect(textarea).toHaveValue("☑ completed\n☐ "));
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await waitFor(() => {
+      expect(textarea).toHaveValue("☑ completed\n");
+      expect(textarea.selectionStart).toBe(textarea.value.length);
+      expect(textarea.selectionEnd).toBe(textarea.value.length);
+    });
+  });
+
   it("copies the selected text from the editor context menu", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

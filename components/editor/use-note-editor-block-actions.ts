@@ -24,6 +24,68 @@ const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
 
+type LinePrefixChange = {
+  start: number;
+  removedLength: number;
+  insertedLength: number;
+};
+
+function mapPositionThroughPrefixChanges(
+  position: number,
+  changes: readonly LinePrefixChange[],
+) {
+  let offset = 0;
+
+  for (const change of changes) {
+    if (position < change.start) {
+      break;
+    }
+
+    if (position <= change.start + change.removedLength) {
+      return change.start + offset + change.insertedLength;
+    }
+
+    offset += change.insertedLength - change.removedLength;
+  }
+
+  return position + offset;
+}
+
+function transformSelectedLines(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  transform: (line: string) => {
+    value: string;
+    removedLength: number;
+    insertedLength: number;
+  },
+) {
+  const lineStart = text.lastIndexOf("\n", selectionStart - 1) + 1;
+  const lineEndIndex = text.indexOf("\n", selectionEnd);
+  const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
+  const segment = text.slice(lineStart, lineEnd);
+  const changes: LinePrefixChange[] = [];
+  let originalLineStart = lineStart;
+  const transformedLines = segment.split("\n").map((line) => {
+    const transformed = transform(line);
+    changes.push({
+      start: originalLineStart,
+      removedLength: transformed.removedLength,
+      insertedLength: transformed.insertedLength,
+    });
+    originalLineStart += line.length + 1;
+    return transformed.value;
+  });
+  const nextSegment = transformedLines.join("\n");
+
+  return {
+    text: text.slice(0, lineStart) + nextSegment + text.slice(lineEnd),
+    selectionStart: mapPositionThroughPrefixChanges(selectionStart, changes),
+    selectionEnd: mapPositionThroughPrefixChanges(selectionEnd, changes),
+  };
+}
+
 type UseNoteEditorBlockActionsOptions = {
   blocks: FreeformBlock[];
   canvasWidth: number;
@@ -312,7 +374,11 @@ export function useNoteEditorBlockActions({
     event: KeyboardEvent<HTMLTextAreaElement>,
     block: FreeformBlock,
   ) {
-    if (event.key !== "Enter" || event.shiftKey) {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
       return;
     }
 
@@ -323,14 +389,34 @@ export function useNoteEditorBlockActions({
       return;
     }
 
-    const { lineText } = getCurrentLineRange(block.text, selectionStart);
-    const bulletMatch = lineText.match(/^([ \t]*)\u25CF\s/);
-    const todoMatch = lineText.match(/^([ \t]*)(\u2610|\u2611)\s/);
+    const { lineStart, lineEnd, lineText } = getCurrentLineRange(
+      block.text,
+      selectionStart,
+    );
+    const bulletMatch = lineText.match(/^([ \t]*)(?:\u25CF|\u2022)\s/);
+    const todoMatch = lineText.match(/^([ \t]*)(\u2610|\u2611|\u2612)\s/);
     if (!bulletMatch && !todoMatch) {
       return;
     }
 
     event.preventDefault();
+    const matchedPrefix = bulletMatch?.[0] ?? todoMatch?.[0] ?? "";
+    const indentation = bulletMatch?.[1] ?? todoMatch?.[1] ?? "";
+    if (!lineText.slice(matchedPrefix.length).trim()) {
+      const nextText =
+        block.text.slice(0, lineStart) +
+        indentation +
+        block.text.slice(lineEnd);
+      const nextCursorPosition = lineStart + indentation.length;
+      selectionRestoreRef.current = {
+        id: block.id,
+        start: nextCursorPosition,
+        end: nextCursorPosition,
+      };
+      updateBlockText(block.id, nextText);
+      return;
+    }
+
     const prefix = bulletMatch
       ? `${bulletMatch[1]}${BULLET_PREFIX}`
       : `${todoMatch?.[1] ?? ""}${TODO_PREFIX}`;
@@ -360,34 +446,45 @@ export function useNoteEditorBlockActions({
     const currentText = element.value;
     const selectionStart = element.selectionStart ?? 0;
     const selectionEnd = element.selectionEnd ?? selectionStart;
-    const lineStart = currentText.lastIndexOf("\n", selectionStart - 1) + 1;
-    const lineEndIndex = currentText.indexOf("\n", selectionEnd);
-    const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
-    const segment = currentText.slice(lineStart, lineEnd);
-    const lines = segment.split("\n");
     const removablePrefixes = [prefix, ...alternatePrefixes];
+    const selectedLineStart =
+      currentText.lastIndexOf("\n", selectionStart - 1) + 1;
+    const selectedLineEndIndex = currentText.indexOf("\n", selectionEnd);
+    const selectedLineEnd =
+      selectedLineEndIndex === -1 ? currentText.length : selectedLineEndIndex;
+    const lines = currentText
+      .slice(selectedLineStart, selectedLineEnd)
+      .split("\n");
     const shouldRemove = lines.every((line) =>
       removablePrefixes.some((candidate) => line.startsWith(candidate)),
     );
-    const transformedLines = lines.map((line) => {
-      if (shouldRemove) {
-        const removable = removablePrefixes.find((candidate) =>
-          line.startsWith(candidate),
-        );
-        return removable ? line.slice(removable.length) : line;
-      }
-      return `${prefix}${line}`;
-    });
-
-    const nextSegment = transformedLines.join("\n");
-    const nextText =
-      currentText.slice(0, lineStart) + nextSegment + currentText.slice(lineEnd);
+    const transformed = transformSelectedLines(
+      currentText,
+      selectionStart,
+      selectionEnd,
+      (line) => {
+        const removable = shouldRemove
+          ? removablePrefixes.find((candidate) => line.startsWith(candidate))
+          : undefined;
+        return removable
+          ? {
+              value: line.slice(removable.length),
+              removedLength: removable.length,
+              insertedLength: 0,
+            }
+          : {
+              value: `${prefix}${line}`,
+              removedLength: 0,
+              insertedLength: prefix.length,
+            };
+      },
+    );
     selectionRestoreRef.current = {
       id: blockId,
-      start: selectionStart,
-      end: selectionEnd + nextSegment.length - segment.length,
+      start: transformed.selectionStart,
+      end: transformed.selectionEnd,
     };
-    updateBlockText(blockId, nextText);
+    updateBlockText(blockId, transformed.text);
   }
 
   function cycleTodoLines(blockId: string) {
@@ -399,29 +496,38 @@ export function useNoteEditorBlockActions({
     const currentText = element.value;
     const selectionStart = element.selectionStart ?? 0;
     const selectionEnd = element.selectionEnd ?? selectionStart;
-    const lineStart = currentText.lastIndexOf("\n", selectionStart - 1) + 1;
-    const lineEndIndex = currentText.indexOf("\n", selectionEnd);
-    const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
-    const segment = currentText.slice(lineStart, lineEnd);
-    const transformedLines = segment.split("\n").map((line) => {
-      if (line.startsWith(TODO_PREFIX)) {
-        return `${TODO_DONE_PREFIX}${line.slice(TODO_PREFIX.length)}`;
-      }
-      if (line.startsWith(TODO_DONE_PREFIX)) {
-        return line.slice(TODO_DONE_PREFIX.length);
-      }
-      return `${TODO_PREFIX}${line}`;
-    });
-
-    const nextSegment = transformedLines.join("\n");
-    const nextText =
-      currentText.slice(0, lineStart) + nextSegment + currentText.slice(lineEnd);
+    const transformed = transformSelectedLines(
+      currentText,
+      selectionStart,
+      selectionEnd,
+      (line) => {
+        if (line.startsWith(TODO_PREFIX)) {
+          return {
+            value: `${TODO_DONE_PREFIX}${line.slice(TODO_PREFIX.length)}`,
+            removedLength: TODO_PREFIX.length,
+            insertedLength: TODO_DONE_PREFIX.length,
+          };
+        }
+        if (line.startsWith(TODO_DONE_PREFIX)) {
+          return {
+            value: line.slice(TODO_DONE_PREFIX.length),
+            removedLength: TODO_DONE_PREFIX.length,
+            insertedLength: 0,
+          };
+        }
+        return {
+          value: `${TODO_PREFIX}${line}`,
+          removedLength: 0,
+          insertedLength: TODO_PREFIX.length,
+        };
+      },
+    );
     selectionRestoreRef.current = {
       id: blockId,
-      start: selectionStart,
-      end: selectionEnd + nextSegment.length - segment.length,
+      start: transformed.selectionStart,
+      end: transformed.selectionEnd,
     };
-    updateBlockText(blockId, nextText);
+    updateBlockText(blockId, transformed.text);
   }
 
   return {
