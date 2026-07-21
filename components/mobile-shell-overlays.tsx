@@ -142,7 +142,7 @@ type MobileProfileMenuProps = {
   profileMenuRef: RefObject<HTMLDivElement | null>;
 };
 
-/** Positioned account menu, including install and data-safe logout actions. */
+/** Positioned account menu, including install and direct logout actions. */
 export function MobileProfileMenu({
   closeAll,
   currentUser,
