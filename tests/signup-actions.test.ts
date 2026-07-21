@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   userFindFirst: vi.fn(),
   transaction: vi.fn(),
   redirect: vi.fn(),
+  createWelcomeWorkspace: vi.fn(),
+  ensureWelcomeWorkspace: vi.fn(),
 }));
 
 vi.mock("argon2", () => ({
@@ -84,6 +86,11 @@ vi.mock("@/lib/storage", () => ({
   deleteUpload: vi.fn(),
 }));
 
+vi.mock("@/lib/welcome-workspace", () => ({
+  createWelcomeWorkspace: mocks.createWelcomeWorkspace,
+  ensureWelcomeWorkspace: mocks.ensureWelcomeWorkspace,
+}));
+
 import {
   completeSignupVerificationAction,
   resendSignupVerificationCodeAction,
@@ -115,6 +122,11 @@ describe("signup actions", () => {
     mocks.pendingSignupUpdate.mockResolvedValue({ id: "pending-1" });
     mocks.userFindFirst.mockResolvedValue(null);
     mocks.userCreate.mockResolvedValue({ id: "user-1" });
+    mocks.createWelcomeWorkspace.mockResolvedValue({
+      groupId: "group-1",
+      notebookId: "notebook-1",
+      pageId: "page-1",
+    });
     mocks.transaction.mockImplementation(async (input: unknown) => {
       if (typeof input === "function") {
         return input({
@@ -180,6 +192,10 @@ describe("signup actions", () => {
     expect(mocks.pendingSignupDelete).toHaveBeenCalledWith({
       where: { id: "pending-1" },
     });
+    expect(mocks.createWelcomeWorkspace).toHaveBeenCalledWith(
+      expect.any(Object),
+      "user-1",
+    );
     expect(mocks.createSession).toHaveBeenCalledWith("user-1");
     expect(mocks.redirect).toHaveBeenCalledWith("/");
   });

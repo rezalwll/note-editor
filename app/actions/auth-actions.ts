@@ -30,6 +30,10 @@ import {
   recordFailedAttempt,
 } from "@/lib/rate-limit";
 import { normalizeEmail, normalizeUsername } from "@/lib/users";
+import {
+  createWelcomeWorkspace,
+  ensureWelcomeWorkspace,
+} from "@/lib/welcome-workspace";
 
 export type AuthActionState = {
   error?: string;
@@ -201,6 +205,15 @@ export async function loginAction(
   }
 
   clearAttempts(key);
+  try {
+    await ensureWelcomeWorkspace(user.id);
+  } catch (error) {
+    return {
+      error:
+        getFriendlyDatabaseError(error) ??
+        "فضای شروع حساب کاربری ساخته نشد. لطفاً دوباره تلاش کنید.",
+    };
+  }
   await createSession(user.id);
   redirect(getSafeRedirectTarget(parsed.data.next));
 }
@@ -373,8 +386,11 @@ export async function completeSignupVerificationAction(
           displayName: pendingSignup.displayName,
           passwordHash: pendingSignup.passwordHash,
           mustChangePassword: false,
+          onboardingSeededAt: new Date(),
         },
       });
+
+      await createWelcomeWorkspace(tx, createdUser.id);
 
       await txWithPendingSignup.pendingSignup.delete({
         where: { id: pendingSignup.id },

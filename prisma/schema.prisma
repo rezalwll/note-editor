@@ -15,6 +15,7 @@ model User {
   displayName        String   @map("display_name")
   passwordHash       String   @map("password_hash")
   mustChangePassword Boolean  @default(true) @map("must_change_password")
+  onboardingSeededAt DateTime? @map("onboarding_seeded_at")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   notebookGroups     NotebookGroup[]

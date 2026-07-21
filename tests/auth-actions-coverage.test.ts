@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   userCreate: vi.fn(),
   userFindFirst: vi.fn(),
   userUpdate: vi.fn(),
+  createWelcomeWorkspace: vi.fn(),
+  ensureWelcomeWorkspace: vi.fn(),
 }));
 
 vi.mock("argon2", () => ({
@@ -72,6 +74,11 @@ vi.mock("@/lib/rate-limit", () => ({
   clearAttempts: mocks.clearAttempts,
   getRateLimitState: mocks.getRateLimitState,
   recordFailedAttempt: mocks.recordFailedAttempt,
+}));
+
+vi.mock("@/lib/welcome-workspace", () => ({
+  createWelcomeWorkspace: mocks.createWelcomeWorkspace,
+  ensureWelcomeWorkspace: mocks.ensureWelcomeWorkspace,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -166,6 +173,12 @@ beforeEach(() => {
   mocks.getUserByEmail.mockResolvedValue(null);
   mocks.getUserByUsername.mockResolvedValue(null);
   mocks.getVerificationCodeHash.mockReturnValue("code-hash");
+  mocks.createWelcomeWorkspace.mockResolvedValue({
+    groupId: "group-1",
+    notebookId: "notebook-1",
+    pageId: "page-1",
+  });
+  mocks.ensureWelcomeWorkspace.mockResolvedValue(null);
   mocks.headerGet.mockReturnValue(null);
   mocks.pendingFindUnique.mockResolvedValue(null);
   mocks.redirect.mockImplementation(() => undefined);
@@ -251,8 +264,26 @@ describe("login action", () => {
     if (next !== undefined) values.next = next;
     await loginAction({}, form(values));
     expect(mocks.clearAttempts).toHaveBeenCalled();
+    expect(mocks.ensureWelcomeWorkspace).toHaveBeenCalledWith("user-1");
     expect(mocks.createSession).toHaveBeenCalledWith("user-1");
     expect(mocks.redirect).toHaveBeenCalledWith(expected);
+  });
+
+  it("does not create a session when the welcome workspace cannot be prepared", async () => {
+    mocks.getUserByUsername.mockResolvedValue({ id: "user-1", passwordHash: "hash" });
+    mocks.ensureWelcomeWorkspace.mockRejectedValueOnce(new Error("db"));
+    mocks.getFriendlyDatabaseError.mockReturnValueOnce("friendly");
+
+    await expect(
+      loginAction({}, form({ username: "owner", password: "secret" })),
+    ).resolves.toEqual({ error: "friendly" });
+
+    expect(mocks.createSession).not.toHaveBeenCalled();
+
+    mocks.ensureWelcomeWorkspace.mockRejectedValueOnce(new Error("db"));
+    await expect(
+      loginAction({}, form({ username: "owner", password: "secret" })),
+    ).resolves.toMatchObject({ error: expect.any(String) });
   });
 
 });
@@ -355,6 +386,10 @@ describe("signup and verification actions", () => {
     mocks.pendingFindUnique.mockResolvedValue(pending());
     await completeSignupVerificationAction({}, form({ email: "test@example.com", code: "123456" }));
     expect(mocks.userCreate).toHaveBeenCalled();
+    expect(mocks.createWelcomeWorkspace).toHaveBeenCalledWith(
+      expect.any(Object),
+      "user-1",
+    );
     expect(mocks.pendingDelete).toHaveBeenCalled();
     expect(mocks.createSession).toHaveBeenCalledWith("user-1");
     expect(mocks.redirect).toHaveBeenCalledWith("/");
