@@ -123,6 +123,50 @@ test("moves a notebook between groups and keeps navigation stable", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("moves a page to another notebook from its context menu", async ({
+  page,
+  account,
+}) => {
+  const source = await createE2EWorkspace(account.id, {
+    groupName: "Page source group",
+    notebookName: "Page source notebook",
+    pages: [{ title: "Page to move" }],
+  });
+  const target = await createE2EWorkspace(account.id, {
+    groupName: "Page target group",
+    notebookName: "Page target notebook",
+  });
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await login(page, account);
+  await page.goto(`/pages/${source.pages[0].id}`);
+
+  const pageRow = page.getByTestId(`page-item-${source.pages[0].id}`);
+  await expect(pageRow).toBeVisible();
+  await pageRow.click({ button: "right" });
+  await page.locator('[data-context-menu-item-id="move-pages"]').click();
+  await page
+    .locator(
+      `[data-context-menu-item-id="move-page-${target.notebookId}"]`,
+    )
+    .click();
+
+  await expect
+    .poll(async () => (await findPage(source.pages[0].id))?.notebookId)
+    .toBe(target.notebookId);
+  await expect(page).toHaveURL(
+    new RegExp(`/pages/${source.pages[0].id}$`),
+  );
+  await expect(page.getByTestId("page-title-input")).toHaveValue(
+    "Page to move",
+  );
+  await expect(
+    page.getByTestId(`notebook-tab-${target.notebookId}`),
+  ).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
 test("autosaves editor content and restores it after reload", async ({
   page,
   account,

@@ -25,6 +25,7 @@ export {
   createPageInlineAction,
   deletePagePermanentlyInlineAction,
   emptyTrashInlineAction,
+  movePagesToNotebookInlineAction,
   reorderPagesInlineAction,
   restorePageInlineAction,
   updateTagsAction,

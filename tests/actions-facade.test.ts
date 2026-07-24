@@ -27,6 +27,7 @@ vi.mock("@/app/actions/workspace-actions", () => ({
   reorderNotebookGroupsInlineAction: delegate,
   reorderNotebooksInlineAction: delegate,
   reorderPagesInlineAction: delegate,
+  movePagesToNotebookInlineAction: delegate,
   updateNotebookAction: delegate,
   archiveNotebookAction: delegate,
   archiveNotebookInlineAction: delegate,
@@ -53,9 +54,9 @@ describe("server action facade", () => {
       (value) => typeof value === "function",
     ) as Array<() => Promise<unknown>>;
 
-    expect(publicActions).toHaveLength(34);
+    expect(publicActions).toHaveLength(35);
     await Promise.all(publicActions.map((action) => action()));
-    expect(delegate).toHaveBeenCalledTimes(34);
+    expect(delegate).toHaveBeenCalledTimes(35);
   });
 
   it("returns the non-redirecting logout result from the auth action", async () => {

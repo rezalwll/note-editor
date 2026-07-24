@@ -137,6 +137,12 @@ export async function reorderPagesInlineAction(
   return workspaceActions.reorderPagesInlineAction(...args);
 }
 
+export async function movePagesToNotebookInlineAction(
+  ...args: Parameters<typeof workspaceActions.movePagesToNotebookInlineAction>
+) {
+  return workspaceActions.movePagesToNotebookInlineAction(...args);
+}
+
 export async function updateNotebookAction(
   ...args: Parameters<typeof workspaceActions.updateNotebookAction>
 ) {

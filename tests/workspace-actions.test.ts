@@ -79,6 +79,7 @@ import {
   reorderNotebookGroupsInlineAction,
   reorderNotebooksInlineAction,
   reorderPagesInlineAction,
+  movePagesToNotebookInlineAction,
   restoreNotebookGroupInlineAction,
   restorePageInlineAction,
   updateNotebookAction,
@@ -89,6 +90,7 @@ import {
 
 const groupId = "clgroup000000000000000001";
 const notebookId = "clnotebook000000000000001";
+const targetNotebookId = "clnotebook000000000000002";
 const pageId = "clpage0000000000000000001";
 
 beforeEach(() => {
@@ -103,7 +105,7 @@ beforeEach(() => {
   );
   mocks.notebookFindFirst.mockImplementation(async (args: { where: { id?: string } }) =>
     args.where.id
-      ? { id: notebookId, userId: "user-1", groupId, archived: false, deletedAt: null, systemKey: null, themeKey: "iris" }
+      ? { id: args.where.id, userId: "user-1", groupId, archived: false, deletedAt: null, systemKey: null, themeKey: "iris" }
       : { sortOrder: 0 },
   );
   mocks.notebookFindMany.mockImplementation(async (args: { where: { id: { in: string[] } } }) =>
@@ -113,7 +115,7 @@ beforeEach(() => {
     args.where.id ? { id: pageId, notebookId, archived: false } : { sortOrder: 0 },
   );
   mocks.pageFindMany.mockImplementation(async (args: { where: { id: { in: string[] } } }) =>
-    args.where.id.in.map((id) => ({ id })),
+    args.where.id.in.map((id) => ({ id, notebookId })),
   );
   mocks.pageCreate.mockResolvedValue({ id: pageId });
   mocks.queryRaw.mockResolvedValue([]);
@@ -124,7 +126,9 @@ beforeEach(() => {
         notebook: { findFirst: mocks.notebookFindFirst },
         page: {
           findFirst: mocks.pageFindFirst,
+          findMany: mocks.pageFindMany,
           create: mocks.pageCreate,
+          update: mocks.pageUpdate,
         },
       });
     }
@@ -174,6 +178,31 @@ describe("workspace mutation actions", () => {
     await expect(reorderNotebooksInlineAction(groupId, [notebookId])).resolves.toEqual({ success: true });
     await expect(reorderPagesInlineAction(notebookId, [pageId])).resolves.toEqual({ success: true });
     expect(mocks.transaction).toHaveBeenCalledTimes(3);
+  });
+
+  it("moves live pages to another owned notebook", async () => {
+    mocks.pageFindFirst.mockResolvedValueOnce({ sortOrder: 0 });
+
+    await expect(
+      movePagesToNotebookInlineAction([pageId], targetNotebookId),
+    ).resolves.toEqual({ success: true, notebookId: targetNotebookId });
+
+    expect(mocks.pageUpdate).toHaveBeenCalledWith({
+      where: { id: pageId },
+      data: {
+        notebookId: targetNotebookId,
+        originalNotebookId: null,
+        archived: false,
+        deletedAt: null,
+        sortOrder: 1,
+      },
+    });
+    expect(mocks.revalidate).toHaveBeenCalledWith(
+      `/notebooks/${notebookId}`,
+    );
+    expect(mocks.revalidate).toHaveBeenCalledWith(
+      `/notebooks/${targetNotebookId}`,
+    );
   });
 
   it("updates notebook fields, creates pages and replaces tags", async () => {

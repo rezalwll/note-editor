@@ -9,6 +9,7 @@ import {
   archivePageInlineAction,
   createPageInlineAction,
   deletePagePermanentlyInlineAction,
+  movePagesToNotebookInlineAction,
   reorderPagesInlineAction,
   restorePageInlineAction,
 } from "@/app/actions";
@@ -31,6 +32,8 @@ const PAGE_LIST_OVERSCAN = 6;
 type NotebookSummary = {
   id: string;
   name: string;
+  groupName?: string | null;
+  systemKey?: string | null;
   themeKey?: string | null;
   deletedAt?: Date | null;
   pages: Array<{
@@ -388,6 +391,31 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     });
   }
 
+  function movePagesToNotebook(pageIds: string[], notebookId: string) {
+    if (!activeNotebook || notebookId === activeNotebook.id) {
+      return;
+    }
+
+    const previousNotebookId = activeNotebook.id;
+    setSelectedPageIds([]);
+
+    startTransition(async () => {
+      const result = await movePagesToNotebookInlineAction(pageIds, notebookId);
+      if ("error" in result) {
+        router.refresh();
+        return;
+      }
+
+      record({
+        label: pageIds.length > 1 ? "انتقال صفحه‌ها" : "انتقال صفحه",
+        undo: () =>
+          movePagesToNotebookInlineAction(pageIds, previousNotebookId),
+        redo: () => movePagesToNotebookInlineAction(pageIds, notebookId),
+      });
+      router.refresh();
+    });
+  }
+
   function deletePagesPermanently(pageIds: string[]) {
     if (!activeNotebook) {
       return;
@@ -658,6 +686,30 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                     (item) => Boolean(item.originalNotebookId),
                   );
                   const isTrashNotebook = Boolean(activeNotebook.deletedAt);
+                  const moveTargets = displayNotebooks.filter(
+                    (notebook) =>
+                      notebook.id !== activeNotebook.id &&
+                      !notebook.deletedAt &&
+                      !notebook.systemKey,
+                  );
+                  const moveMenuItem =
+                    moveTargets.length > 0
+                      ? {
+                          id: "move-pages",
+                          label:
+                            selectedIds.length > 1
+                              ? "انتقال صفحه‌های انتخاب‌شده به"
+                              : "انتقال صفحه به",
+                          submenu: moveTargets.map((notebook) => ({
+                            id: `move-page-${notebook.id}`,
+                            label: notebook.groupName
+                              ? `${notebook.name} — ${notebook.groupName}`
+                              : notebook.name,
+                            onSelect: () =>
+                              movePagesToNotebook(selectedIds, notebook.id),
+                          })),
+                        }
+                      : null;
 
                   openMenu(event, {
                   title:
@@ -691,6 +743,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                         ]
                       : selectedIds.length > 1
                         ? [
+                            ...(moveMenuItem
+                              ? [
+                                  moveMenuItem,
+                                  {
+                                    id: "separator-move",
+                                    separator: true as const,
+                                  },
+                                ]
+                              : []),
                             {
                               id: "delete-pages",
                               label: "حذف صفحه‌های انتخاب‌شده",
@@ -710,6 +771,15 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
                               onSelect: () => router.push(`/pages/${page.id}`),
                             },
                             { id: "separator-1", separator: true },
+                            ...(moveMenuItem
+                              ? [
+                                  moveMenuItem,
+                                  {
+                                    id: "separator-move",
+                                    separator: true as const,
+                                  },
+                                ]
+                              : []),
                             {
                               id: "delete-page",
                               label: "حذف صفحه",

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   archivePage: vi.fn(),
   restorePage: vi.fn(),
   deletePage: vi.fn(),
+  movePages: vi.fn(),
   reorderPages: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ vi.mock("@/app/actions", () => ({
   archivePageInlineAction: mocks.archivePage,
   createPageInlineAction: vi.fn(),
   deletePagePermanentlyInlineAction: mocks.deletePage,
+  movePagesToNotebookInlineAction: mocks.movePages,
   reorderPagesInlineAction: mocks.reorderPages,
   restorePageInlineAction: mocks.restorePage,
 }));
@@ -54,6 +56,10 @@ describe("PagesSidebar", () => {
       notebookId: "notebook-1",
     });
     mocks.deletePage.mockResolvedValue({ success: true });
+    mocks.movePages.mockResolvedValue({
+      success: true,
+      notebookId: "notebook-2",
+    });
   });
 
   it("moves a live page to trash from its context menu", async () => {
@@ -84,6 +90,56 @@ describe("PagesSidebar", () => {
     await waitFor(() => {
       expect(mocks.archivePage).toHaveBeenCalledWith("page-1");
     });
+  });
+
+  it("offers moving a page to another live notebook", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Current notebook",
+            groupName: "Current group",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "Page one",
+                updatedAt: new Date(),
+                deletedAt: null,
+              },
+            ],
+          },
+          {
+            id: "notebook-2",
+            name: "Target notebook",
+            groupName: "Target group",
+            deletedAt: null,
+            pages: [],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Page one"));
+    const menu = mocks.openMenu.mock.calls[0][1];
+    const moveMenu = menu.items.find(
+      (item: { id: string }) => item.id === "move-pages",
+    );
+    const target = moveMenu.submenu.find(
+      (item: { id: string }) => item.id === "move-page-notebook-2",
+    );
+
+    expect(target.label).toBe("Target notebook — Target group");
+    target.onSelect();
+
+    await waitFor(() => {
+      expect(mocks.movePages).toHaveBeenCalledWith(
+        ["page-1"],
+        "notebook-2",
+      );
+    });
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
   it("offers restore and permanent delete for a trashed page", async () => {

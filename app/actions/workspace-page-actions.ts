@@ -109,6 +109,131 @@ export async function reorderPagesInlineAction(
   return { success: true };
 }
 
+export async function movePagesToNotebookInlineAction(
+  pageIds: string[],
+  notebookId: string,
+) {
+  const user = await requireUser();
+  const parsedPageIds = z.array(z.string().cuid()).min(1).safeParse(pageIds);
+  const parsedNotebookId = z.string().cuid().safeParse(notebookId);
+
+  if (!parsedPageIds.success || !parsedNotebookId.success) {
+    return { error: "انتخاب صفحه یا زیرمجموعه معتبر نیست." };
+  }
+
+  const result = await prisma.$transaction(async (transaction) => {
+    const candidatePages = await transaction.page.findMany({
+      where: {
+        userId: user.id,
+        id: { in: parsedPageIds.data },
+        archived: false,
+        deletedAt: null,
+      },
+      select: { id: true, notebookId: true },
+    });
+    if (candidatePages.length !== parsedPageIds.data.length) {
+      return null;
+    }
+
+    const sourceNotebookIds = [
+      ...new Set(candidatePages.map((page) => page.notebookId)),
+    ];
+    await acquireSyncEntityLocks(transaction, user.id, [
+      ...sourceNotebookIds.map((entityId) => ({
+        entityType: "notebook" as const,
+        entityId,
+      })),
+      { entityType: "notebook", entityId: parsedNotebookId.data },
+      ...parsedPageIds.data.map((entityId) => ({
+        entityType: "page" as const,
+        entityId,
+      })),
+    ]);
+
+    const [targetNotebook, lockedPages] = await Promise.all([
+      transaction.notebook.findFirst({
+        where: {
+          id: parsedNotebookId.data,
+          userId: user.id,
+          systemKey: null,
+          archived: false,
+          deletedAt: null,
+        },
+        select: { id: true },
+      }),
+      transaction.page.findMany({
+        where: {
+          userId: user.id,
+          id: { in: parsedPageIds.data },
+          archived: false,
+          deletedAt: null,
+        },
+        select: { id: true, notebookId: true },
+      }),
+    ]);
+    const candidateNotebookByPage = new Map(
+      candidatePages.map((page) => [page.id, page.notebookId]),
+    );
+    if (
+      !targetNotebook ||
+      lockedPages.length !== parsedPageIds.data.length ||
+      lockedPages.some(
+        (page) => candidateNotebookByPage.get(page.id) !== page.notebookId,
+      )
+    ) {
+      return null;
+    }
+
+    const lastTargetPage = await transaction.page.findFirst({
+      where: {
+        userId: user.id,
+        notebookId: targetNotebook.id,
+        id: { notIn: parsedPageIds.data },
+        archived: false,
+        deletedAt: null,
+      },
+      orderBy: [
+        { sortOrder: "desc" },
+        { updatedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+      select: { sortOrder: true },
+    });
+    const firstSortOrder = (lastTargetPage?.sortOrder ?? -1) + 1;
+
+    await Promise.all(
+      parsedPageIds.data.map((id, index) =>
+        transaction.page.update({
+          where: { id },
+          data: {
+            notebookId: targetNotebook.id,
+            originalNotebookId: null,
+            archived: false,
+            deletedAt: null,
+            sortOrder: firstSortOrder + index,
+          },
+        }),
+      ),
+    );
+
+    return { sourceNotebookIds, notebookId: targetNotebook.id };
+  });
+
+  if (!result) {
+    return { error: "صفحه یا زیرمجموعهٔ مقصد پیدا نشد." };
+  }
+
+  for (const sourceNotebookId of result.sourceNotebookIds) {
+    revalidatePath(`/notebooks/${sourceNotebookId}`);
+  }
+  revalidatePath(`/notebooks/${result.notebookId}`);
+  for (const pageId of parsedPageIds.data) {
+    revalidatePath(`/pages/${pageId}`);
+  }
+  revalidatePath("/");
+  return { success: true, notebookId: result.notebookId };
+}
+
 export async function createPageAction(formData: FormData) {
   const user = await requireUser();
 
