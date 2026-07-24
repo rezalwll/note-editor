@@ -422,7 +422,12 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         groupId,
         groupName: nextGroupName,
       });
-      await assignNotebookGroupInlineAction(notebookIds, groupId);
+      const result = await assignNotebookGroupInlineAction(notebookIds, groupId);
+      if ("error" in result) {
+        setManualGroupKey(null);
+        router.refresh();
+        return;
+      }
       record({
         label: "انتقال زیرمجموعه",
         undo: async () => {
@@ -432,6 +437,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
         },
         redo: () => assignNotebookGroupInlineAction(notebookIds, groupId),
       });
+      router.refresh();
     });
   }
 

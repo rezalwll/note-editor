@@ -168,20 +168,23 @@ export async function restoreNotebooksToGroup(
       where: {
         userId,
         id: { in: notebookIds },
-        deletedAt: { not: null },
+        systemKey: null,
       },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     });
-    const restorableNotebookIds = notebooks.map((notebook) => notebook.id);
-    if (restorableNotebookIds.length === 0) {
+    const assignableNotebookIds = notebooks.map((notebook) => notebook.id);
+    if (assignableNotebookIds.length === 0) {
       return;
     }
+    const restoredNotebookIds = notebooks
+      .filter((notebook) => notebook.deletedAt !== null)
+      .map((notebook) => notebook.id);
 
     await transaction.notebook.updateMany({
       where: {
         userId,
-        id: { in: restorableNotebookIds },
-        deletedAt: { not: null },
+        id: { in: assignableNotebookIds },
+        systemKey: null,
       },
       data: {
         groupId,
@@ -189,10 +192,13 @@ export async function restoreNotebooksToGroup(
         deletedAt: null,
       },
     });
-    await transaction.page.updateMany({
-      where: { userId, notebookId: { in: restorableNotebookIds } },
-      data: { archived: false, deletedAt: null },
-    });
+
+    if (restoredNotebookIds.length > 0) {
+      await transaction.page.updateMany({
+        where: { userId, notebookId: { in: restoredNotebookIds } },
+        data: { archived: false, deletedAt: null },
+      });
+    }
   });
 }
 

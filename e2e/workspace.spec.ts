@@ -78,6 +78,51 @@ test("creates a group, notebook and page through the workspace UI", async ({
   await expect(page.getByTestId("page-title-input")).toHaveValue(pageTitle);
 });
 
+test("moves a notebook between groups and keeps navigation stable", async ({
+  page,
+  account,
+}) => {
+  const source = await createE2EWorkspace(account.id, {
+    groupName: "Source group",
+    notebookName: "Notebook to move",
+    pages: [{ title: "Page after move" }],
+  });
+  const target = await createE2EWorkspace(account.id, {
+    groupName: "Target group",
+    notebookName: "Existing target notebook",
+  });
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await login(page, account);
+  await page.goto(`/pages/${source.pages[0].id}`);
+
+  const notebookTab = page.getByTestId(`notebook-tab-${source.notebookId}`);
+  await expect(notebookTab).toBeVisible();
+  await notebookTab.click({ button: "right" });
+  await page
+    .locator(`[data-context-menu-item-id="move-${target.groupId}"]`)
+    .click();
+
+  await expect
+    .poll(() =>
+      findNotebook(account.id, target.groupId, "Notebook to move"),
+    )
+    .not.toBeNull();
+
+  await page.getByTestId(`group-tab-${source.groupId}`).click();
+  await expect(notebookTab).toBeHidden();
+  await page.getByTestId(`group-tab-${target.groupId}`).click();
+  await expect(notebookTab).toBeVisible();
+  await notebookTab.getByRole("link", { name: "Notebook to move" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/pages/${source.pages[0].id}$`));
+  await expect(page.getByTestId("page-title-input")).toHaveValue(
+    "Page after move",
+  );
+  expect(pageErrors).toEqual([]);
+});
+
 test("autosaves editor content and restores it after reload", async ({
   page,
   account,

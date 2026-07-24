@@ -8,6 +8,7 @@ import { SectionTabs } from "@/components/section-tabs";
 const mocks = vi.hoisted(() => ({
   createNotebook: vi.fn(),
   createGroup: vi.fn(),
+  assignNotebookGroup: vi.fn(),
   emptyTrash: vi.fn(),
   archiveNotebook: vi.fn(),
   deleteGroup: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock("@/components/context-menu", () => ({
 
 vi.mock("@/app/actions", () => ({
   archiveNotebookInlineAction: mocks.archiveNotebook,
-  assignNotebookGroupInlineAction: vi.fn(),
+  assignNotebookGroupInlineAction: mocks.assignNotebookGroup,
   createNotebookGroupInlineAction: mocks.createGroup,
   createNotebookInlineAction: mocks.createNotebook,
   deleteNotebookPermanentlyInlineAction: vi.fn(),
@@ -59,6 +60,7 @@ describe("SectionTabs", () => {
       id: "notebook-2",
       pageId: "page-2",
     });
+    mocks.assignNotebookGroup.mockResolvedValue({ success: true });
     mocks.archiveNotebook.mockResolvedValue({
       success: true,
       trashGroupId: "trash-group",
@@ -97,6 +99,60 @@ describe("SectionTabs", () => {
 
     expect(link).toHaveClass("inline-flex", "h-full", "px-4");
     expect(tab).not.toHaveClass("px-4");
+  });
+
+  it("moves a live notebook to another group and refreshes server data", async () => {
+    const view = render(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 1, systemKey: null },
+          { id: "group-2", name: "Archive", notebookCount: 0, systemKey: null },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-1",
+            pageIds: ["page-1"],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: "Inbox" }));
+    const menu = mocks.openMenu.mock.calls.at(-1)?.[1];
+    const moveAction = menu.items.find(
+      (item: { id: string; onSelect?: () => void }) =>
+        item.id === "move-group-2",
+    );
+
+    moveAction.onSelect();
+
+    await waitFor(() => {
+      expect(mocks.assignNotebookGroup).toHaveBeenCalledWith(
+        ["notebook-1"],
+        "group-2",
+      );
+    });
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    view.rerender(
+      <SectionTabs
+        groups={[
+          { id: "group-1", name: "Work", notebookCount: 0, systemKey: null },
+          { id: "group-2", name: "Archive", notebookCount: 1, systemKey: null },
+        ]}
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Inbox",
+            groupId: "group-2",
+            pageIds: ["page-1"],
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Inbox" })).toBeVisible();
   });
 
   it("creates a new notebook and opens its untitled page on Enter", async () => {

@@ -181,8 +181,8 @@ describe("trash lifecycle", () => {
 
   it("restores notebook and page deletion markers when moved out of trash", async () => {
     mocks.notebookFindMany.mockResolvedValue([
-      { id: "notebook-1" },
-      { id: "notebook-2" },
+      { id: "notebook-1", deletedAt: new Date("2026-07-01T00:00:00.000Z") },
+      { id: "notebook-2", deletedAt: new Date("2026-07-01T00:00:00.000Z") },
     ]);
     mocks.pageFindMany.mockResolvedValue([{ id: "page-1" }]);
 
@@ -196,7 +196,7 @@ describe("trash lifecycle", () => {
       where: {
         userId: "user-1",
         id: { in: ["notebook-1", "notebook-2"] },
-        deletedAt: { not: null },
+        systemKey: null,
       },
       data: { groupId: "group-1", archived: false, deletedAt: null },
     });
@@ -214,6 +214,28 @@ describe("trash lifecycle", () => {
     expect(mocks.notebookUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.pageUpdateMany.mock.invocationCallOrder[0],
     );
+  });
+
+  it("moves a live notebook between regular groups", async () => {
+    mocks.notebookFindMany.mockResolvedValue([
+      { id: "notebook-1", deletedAt: null },
+    ]);
+
+    await restoreNotebooksToGroup(
+      "user-1",
+      ["notebook-1"],
+      "group-2",
+    );
+
+    expect(mocks.notebookUpdateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        id: { in: ["notebook-1"] },
+        systemKey: null,
+      },
+      data: { groupId: "group-2", archived: false, deletedAt: null },
+    });
+    expect(mocks.pageUpdateMany).not.toHaveBeenCalled();
   });
 
   it("moves an individual page to the system trash notebook", async () => {

@@ -255,6 +255,7 @@ function ContextMenuOverlay({
         key={item.id}
         type="button"
         role="menuitem"
+        data-context-menu-item-id={item.id}
         disabled={item.disabled}
         aria-haspopup={hasSubmenu ? "menu" : undefined}
         aria-expanded={

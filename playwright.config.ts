@@ -14,7 +14,8 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:3107",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video:
+      process.env.PLAYWRIGHT_USE_EDGE === "1" ? "off" : "retain-on-failure",
   },
   webServer: {
     command:
@@ -26,7 +27,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(process.env.PLAYWRIGHT_USE_EDGE === "1"
+          ? { channel: "msedge" as const }
+          : {}),
+      },
     },
   ],
 });
