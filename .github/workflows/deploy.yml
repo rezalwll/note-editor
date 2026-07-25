@@ -50,6 +50,7 @@ jobs:
           ssh "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}" \
             "chmod +x /root/deploy-notebook.sh && \
             DOMAIN='${{ secrets.PROD_DOMAIN }}' \
+            DOMAIN_ALIASES='www.${{ secrets.PROD_DOMAIN }}' \
             SSL_EMAIL='${{ secrets.PROD_SSL_EMAIL }}' \
             PORT='${{ secrets.PROD_PORT }}' \
             APP_DIR='${{ secrets.PROD_APP_DIR }}' \

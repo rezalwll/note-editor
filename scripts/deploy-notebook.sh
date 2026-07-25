@@ -17,6 +17,7 @@ NODE_MAJOR=${NODE_MAJOR:-22}
 DOMAIN=${DOMAIN:-}
 DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
 SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
+CERT_NAME=${CERT_NAME:-${DOMAIN}}
 DEPLOY_LOCK_FILE=${DEPLOY_LOCK_FILE:-/var/lock/notebook-deploy.lock}
 VERIFY_ON_SERVER=${VERIFY_ON_SERVER:-true}
 
@@ -262,9 +263,82 @@ activate_release() {
   mv "${STAGING_DIR}" "${APP_DIR}"
 }
 
+certificate_covers_domains() {
+  local domain
+  local certificate_path="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
+  local private_key_path="/etc/letsencrypt/live/${CERT_NAME}/privkey.pem"
+
+  if [[ -z "${DOMAIN}" || ! -s "${certificate_path}" || ! -s "${private_key_path}" ]]; then
+    return 1
+  fi
+
+  for domain in ${DOMAIN} ${DOMAIN_ALIASES}; do
+    if ! openssl x509 -checkhost "${domain}" -noout -in "${certificate_path}" >/dev/null 2>&1; then
+      return 1
+    fi
+  done
+}
+
+certificate_is_currently_valid() {
+  local certificate_path="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
+
+  certificate_covers_domains &&
+    openssl x509 -checkend 0 -noout -in "${certificate_path}" >/dev/null 2>&1
+}
+
+certificate_is_usable() {
+  local certificate_path="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
+
+  certificate_covers_domains &&
+    openssl x509 -checkend 86400 -noout -in "${certificate_path}" >/dev/null 2>&1
+}
+
+install_nginx_candidate() {
+  local candidate=$1
+  local config_path=/etc/nginx/sites-available/notebook
+  local backup_path="${config_path}.last-good"
+  local had_previous=false
+
+  if [[ -f "${config_path}" ]]; then
+    cp -a "${config_path}" "${backup_path}"
+    had_previous=true
+  fi
+
+  mv "${candidate}" "${config_path}"
+  chown root:root "${config_path}"
+  chmod 644 "${config_path}"
+  ln -sf "${config_path}" /etc/nginx/sites-enabled/notebook
+  rm -f /etc/nginx/sites-enabled/default
+
+  if ! nginx -t; then
+    if [[ "${had_previous}" == "true" ]]; then
+      cp -a "${backup_path}" "${config_path}"
+    else
+      rm -f "${config_path}" /etc/nginx/sites-enabled/notebook
+    fi
+    nginx -t
+    return 1
+  fi
+
+  systemctl enable nginx
+  if systemctl is-active --quiet nginx; then
+    if ! systemctl reload nginx; then
+      if [[ "${had_previous}" == "true" ]]; then
+        cp -a "${backup_path}" "${config_path}"
+        nginx -t
+        systemctl reload nginx
+      fi
+      return 1
+    fi
+  else
+    systemctl start nginx
+  fi
+}
+
 configure_nginx() {
   local server_name="_"
   local -a domains=()
+  local candidate
 
   if [[ -n "${DOMAIN}" ]]; then
     domains+=("${DOMAIN}")
@@ -280,7 +354,52 @@ configure_nginx() {
     server_name="${domains[*]}"
   fi
 
-  cat >/etc/nginx/sites-available/notebook <<NGINXEOF
+  candidate=$(mktemp /etc/nginx/sites-available/notebook.XXXXXX)
+
+  # Keep serving an existing, still-valid certificate while renewal is attempted.
+  # This prevents a transient ACME outage from replacing HTTPS with HTTP-only.
+  if certificate_is_currently_valid; then
+    cat >"${candidate}" <<NGINXEOF
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name ${server_name};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://${DOMAIN}\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name ${server_name};
+
+    ssl_certificate /etc/letsencrypt/live/${CERT_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CERT_NAME}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 20M;
+
+    location / {
+        proxy_pass http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINXEOF
+  else
+    cat >"${candidate}" <<NGINXEOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -304,16 +423,9 @@ server {
     }
 }
 NGINXEOF
-
-  ln -sf /etc/nginx/sites-available/notebook /etc/nginx/sites-enabled/notebook
-  rm -f /etc/nginx/sites-enabled/default
-  nginx -t
-  systemctl enable nginx
-  if systemctl is-active --quiet nginx; then
-    systemctl reload nginx
-  else
-    systemctl start nginx
   fi
+
+  install_nginx_candidate "${candidate}"
 }
 
 configure_ssl() {
@@ -336,16 +448,27 @@ configure_ssl() {
     done
   fi
 
-  certbot --nginx \
-    --non-interactive \
-    --agree-tos \
-    --redirect \
-    --email "${SSL_EMAIL}" \
-    "${certbot_domains[@]}"
+  if ! certificate_is_usable; then
+    certbot certonly \
+      --webroot \
+      --webroot-path /var/www/html \
+      --non-interactive \
+      --agree-tos \
+      --cert-name "${CERT_NAME}" \
+      --email "${SSL_EMAIL}" \
+      "${certbot_domains[@]}"
+  fi
+
+  if ! certificate_is_usable; then
+    echo "A valid TLS certificate covering every configured domain is unavailable." >&2
+    return 1
+  fi
+
+  configure_nginx
 
   if grep -q '^SESSION_COOKIE_SECURE="false"' "${APP_DIR}/.env"; then
     sed -i 's/^SESSION_COOKIE_SECURE="false"/SESSION_COOKIE_SECURE="true"/' "${APP_DIR}/.env"
-    pm2 restart notebook --update-env
+    runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 restart notebook --update-env
   fi
 }
 

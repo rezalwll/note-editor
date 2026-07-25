@@ -126,10 +126,31 @@ describe("deploy workflow", () => {
       "github.event.workflow_run.head_repository.full_name == github.repository",
     );
     expect(workflow).toContain('${RUNNER_TEMP}/notebook-deploy.tgz');
+    expect(workflow).toContain("DOMAIN_ALIASES='www.${{ secrets.PROD_DOMAIN }}'");
     expect(workflow).not.toContain("DEPLOY_ARCHIVE: ${{ runner.temp }}");
     expect(workflow).toContain(
       "(systemctl disable --now notebook-auto-deploy.timer >/dev/null 2>&1 || true)",
     );
     expect(workflow).not.toMatch(/bash \/root\/deploy-notebook\.sh && \\\n\s*systemctl[^\n]+\|\| true/);
+  });
+
+  it("preserves a usable TLS certificate and provisions new certificates without editing nginx", async () => {
+    const deployScript = await readFile(
+      path.resolve("scripts/deploy-notebook.sh"),
+      "utf8",
+    );
+
+    expect(deployScript).toContain("certificate_is_usable()");
+    expect(deployScript).toContain("certificate_is_currently_valid()");
+    expect(deployScript).toContain("openssl x509 -checkend 86400");
+    expect(deployScript).toContain("openssl x509 -checkend 0");
+    expect(deployScript).toContain("openssl x509 -checkhost");
+    expect(deployScript).toContain("install_nginx_candidate");
+    expect(deployScript).toContain("certbot certonly");
+    expect(deployScript).toContain("--webroot-path /var/www/html");
+    expect(deployScript).not.toContain("certbot --nginx");
+    expect(deployScript).toContain(
+      'runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 restart notebook --update-env',
+    );
   });
 });

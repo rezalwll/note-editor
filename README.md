@@ -101,6 +101,9 @@ GitHub Actions remains responsible for production deploys.
 ## Deployment notes
 
 - Put the app behind HTTPS and a reverse proxy.
+- Production deploys also serve `www.${PROD_DOMAIN}`. A still-valid certificate
+  is reused without contacting Certbot, and Nginx configuration changes are
+  validated and rolled back before reload if necessary.
 - Persist both Postgres data and the `uploads/` directory.
 - Run `npm run prisma:deploy` during deployment.
 - Run `npm run prisma:seed` once on first deploy.
