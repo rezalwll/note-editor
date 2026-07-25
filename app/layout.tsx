@@ -8,7 +8,7 @@ const iranYekanSans = localFont({
   variable: "--font-sans",
   src: [
     {
-      path: "./fonts/iranyekan.woff2",
+      path: "./fonts/iranyekan-fanum.woff2",
       weight: "400",
       style: "normal",
     },
@@ -20,7 +20,7 @@ const iranYekanSerif = localFont({
   variable: "--font-serif",
   src: [
     {
-      path: "./fonts/iranyekan.woff2",
+      path: "./fonts/iranyekan-fanum.woff2",
       weight: "400",
       style: "normal",
     },
