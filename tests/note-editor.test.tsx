@@ -554,7 +554,7 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
-  it("keeps the active block commandable when clicking toolbar buttons", async () => {
+  it("keeps the active block commandable and bolds only selected text", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
@@ -570,17 +570,29 @@ describe("NoteEditor freeform placement", () => {
       }),
       true,
     );
+    await waitForHydration();
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     const boldButton = container.querySelector(
       'button[aria-label="پررنگ"]',
     ) as HTMLButtonElement;
 
     fireEvent.focus(textarea);
+    await waitFor(() => expect(boldButton).toBeEnabled());
+    textarea.setSelectionRange(0, 4);
+    fireEvent.select(textarea);
     fireEvent.mouseDown(boldButton);
     fireEvent.click(boldButton);
 
     await waitFor(() => {
-      expect(textarea).toHaveStyle({ fontWeight: "700" });
+      const richTextEditor = container.querySelector(
+        '[data-rich-text-editor="true"]',
+      ) as HTMLElement | null;
+      const strong = richTextEditor?.querySelector("strong");
+
+      expect(richTextEditor).toHaveTextContent("bold me");
+      expect(richTextEditor).toHaveStyle({ fontWeight: "400" });
+      expect(strong).toHaveTextContent("bold");
+      expect(strong).not.toHaveTextContent("bold me");
     });
   });
 

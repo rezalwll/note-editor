@@ -169,17 +169,29 @@ export function createRichTextSelectionHtml(
   text: string,
   start: number,
   end: number,
-  style: { textColor?: string; highlightColor?: string; fontSize?: number },
+  style: {
+    textColor?: string;
+    highlightColor?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+  },
 ) {
   const styleValue = [
     style.textColor ? `color: ${style.textColor}` : "",
     style.fontSize ? `font-size: ${style.fontSize}px` : "",
   ].filter(Boolean).join("; ");
-  const selectedText = textToHtml(text.slice(start, end));
-  const styledSelection =
+  let styledSelection = textToHtml(text.slice(start, end));
+  if (style.bold) {
+    styledSelection = `<strong>${styledSelection}</strong>`;
+  }
+  if (style.italic) {
+    styledSelection = `<em>${styledSelection}</em>`;
+  }
+  styledSelection =
     style.highlightColor && style.highlightColor !== "transparent"
-      ? `<mark data-color="${style.highlightColor}" style="background-color: ${style.highlightColor}">${selectedText}</mark>`
-      : selectedText;
+      ? `<mark data-color="${style.highlightColor}" style="background-color: ${style.highlightColor}">${styledSelection}</mark>`
+      : styledSelection;
   return `<p>${textToHtml(text.slice(0, start))}<span style="${styleValue}">${styledSelection}</span>${textToHtml(text.slice(end))}</p>`;
 }
 

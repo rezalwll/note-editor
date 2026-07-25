@@ -92,10 +92,18 @@ export function useNoteEditorCommands({
 }: UseNoteEditorCommandsOptions) {
   function applyInlineTextStyle(
     blockId: string,
-    style: { textColor?: string; highlightColor?: string; fontSize?: number },
+    style: {
+      textColor?: string;
+      highlightColor?: string;
+      fontSize?: number;
+      bold?: boolean;
+      italic?: boolean;
+    },
   ) {
     const richTextHandle = richTextBlockRefs.current[blockId];
     if (richTextHandle) {
+      if (style.bold) return richTextHandle.toggleBold();
+      if (style.italic) return richTextHandle.toggleItalic();
       if (style.textColor) richTextHandle.setTextColor(style.textColor);
       if (style.highlightColor) {
         richTextHandle.setHighlightColor(style.highlightColor);
@@ -153,12 +161,14 @@ export function useNoteEditorCommands({
 
     switch (command) {
       case "toggle-bold":
+        if (applyInlineTextStyle(primaryBlockId, { bold: true })) return;
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
           bold: !(block.bold ?? false),
         }));
         return;
       case "toggle-italic":
+        if (applyInlineTextStyle(primaryBlockId, { italic: true })) return;
         updateBlocksByIds(targetIds, (block) => ({
           ...block,
           italic: !(block.italic ?? false),

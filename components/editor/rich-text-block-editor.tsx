@@ -61,6 +61,8 @@ export type RichTextBlockHandle = {
   setTextColor: (color: string) => void;
   setHighlightColor: (color: string) => void;
   setFontSize: (fontSize: number) => void;
+  toggleBold: () => boolean;
+  toggleItalic: () => boolean;
 };
 
 type RichTextBlockEditorProps = {
@@ -217,6 +219,26 @@ export const RichTextBlockEditor = forwardRef<
           ?.chain()
           .focus(undefined, { scrollIntoView: false })
           .setMark("fontSize", { fontSize: `${fontSize}px` })
+          .run();
+      },
+      toggleBold: () => {
+        if (!editor || editor.state.selection.empty) {
+          return false;
+        }
+        return editor
+          .chain()
+          .focus(undefined, { scrollIntoView: false })
+          .toggleBold()
+          .run();
+      },
+      toggleItalic: () => {
+        if (!editor || editor.state.selection.empty) {
+          return false;
+        }
+        return editor
+          .chain()
+          .focus(undefined, { scrollIntoView: false })
+          .toggleItalic()
           .run();
       },
     }),
