@@ -23,6 +23,32 @@ import type { FreeformBlock } from "@/lib/notes";
 const BULLET_PREFIX = "\u25CF ";
 const TODO_PREFIX = "\u2610 ";
 const TODO_DONE_PREFIX = "\u2611 ";
+const PERSIAN_DIGITS =
+  "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+const ARABIC_INDIC_DIGITS =
+  "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
+
+function incrementListNumber(value: string) {
+  const asciiValue = Array.from(value, (digit) => {
+    const persianIndex = PERSIAN_DIGITS.indexOf(digit);
+    if (persianIndex >= 0) return String(persianIndex);
+    const arabicIndicIndex = ARABIC_INDIC_DIGITS.indexOf(digit);
+    return arabicIndicIndex >= 0 ? String(arabicIndicIndex) : digit;
+  }).join("");
+  const nextAsciiValue = String(Number.parseInt(asciiValue, 10) + 1).padStart(
+    asciiValue.length,
+    "0",
+  );
+  const digitSet = PERSIAN_DIGITS.includes(value[0])
+    ? PERSIAN_DIGITS
+    : ARABIC_INDIC_DIGITS.includes(value[0])
+      ? ARABIC_INDIC_DIGITS
+      : null;
+
+  return digitSet
+    ? Array.from(nextAsciiValue, (digit) => digitSet[Number(digit)]).join("")
+    : nextAsciiValue;
+}
 
 type LinePrefixChange = {
   start: number;
@@ -395,13 +421,18 @@ export function useNoteEditorBlockActions({
     );
     const bulletMatch = lineText.match(/^([ \t]*)(?:\u25CF|\u2022)\s/);
     const todoMatch = lineText.match(/^([ \t]*)(\u2610|\u2611|\u2612)\s/);
-    if (!bulletMatch && !todoMatch) {
+    const numberedMatch = lineText.match(
+      /^([ \t]*)([0-9\u06F0-\u06F9\u0660-\u0669]+)(\s*-\s+)/,
+    );
+    if (!bulletMatch && !todoMatch && !numberedMatch) {
       return;
     }
 
     event.preventDefault();
-    const matchedPrefix = bulletMatch?.[0] ?? todoMatch?.[0] ?? "";
-    const indentation = bulletMatch?.[1] ?? todoMatch?.[1] ?? "";
+    const matchedPrefix =
+      bulletMatch?.[0] ?? todoMatch?.[0] ?? numberedMatch?.[0] ?? "";
+    const indentation =
+      bulletMatch?.[1] ?? todoMatch?.[1] ?? numberedMatch?.[1] ?? "";
     if (!lineText.slice(matchedPrefix.length).trim()) {
       const nextText =
         block.text.slice(0, lineStart) +
@@ -417,9 +448,14 @@ export function useNoteEditorBlockActions({
       return;
     }
 
+    const numberedPrefix = numberedMatch
+      ? `${numberedMatch[1]}${incrementListNumber(numberedMatch[2])}${numberedMatch[3]}`
+      : "";
     const prefix = bulletMatch
       ? `${bulletMatch[1]}${BULLET_PREFIX}`
-      : `${todoMatch?.[1] ?? ""}${TODO_PREFIX}`;
+      : todoMatch
+        ? `${todoMatch[1]}${TODO_PREFIX}`
+        : numberedPrefix;
     const beforeCursor = block.text.slice(0, selectionStart);
     const afterCursor = block.text.slice(selectionStart);
     const nextText = `${beforeCursor}\n${prefix}${afterCursor}`;

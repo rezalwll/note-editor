@@ -674,6 +674,47 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it.each([
+    ["Latin", "1- first item", "1- first item\n2- "],
+    ["Persian", "۹ - first item", "۹ - first item\n۱۰ - "],
+  ])(
+    "continues and exits a %s numbered-dash list",
+    async (_digitSet, initialText, continuedText) => {
+      const { container } = renderEditor(
+        serializeFreeformDocument({
+          type: "freeform-v1",
+          blocks: [
+            {
+              id: "continued-numbered-list",
+              x: 48,
+              y: 72,
+              width: 240,
+              text: initialText,
+            },
+          ],
+        }),
+      );
+      await waitForHydration();
+      const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+      fireEvent.focus(textarea);
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(textarea).toHaveValue(continuedText);
+        expect(textarea.selectionStart).toBe(continuedText.length);
+      });
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(textarea).toHaveValue(`${initialText}\n`);
+        expect(textarea.selectionStart).toBe(initialText.length + 1);
+      });
+    },
+  );
+
   it("copies the selected text from the editor context menu", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
