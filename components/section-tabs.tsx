@@ -314,7 +314,6 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
             redo: () => assignNotebookGroupInlineAction([result.id], notebookGroupId),
           });
           router.push(`/pages/${result.pageId}`);
-          router.refresh();
         } finally {
           createNotebookInFlightRef.current = false;
         }
@@ -389,8 +388,9 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
 
       if (shouldRedirect) {
         router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/");
+      } else {
+        router.refresh();
       }
-      router.refresh();
     });
   }
 

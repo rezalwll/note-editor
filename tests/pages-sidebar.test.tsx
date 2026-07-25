@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   openMenu: vi.fn(),
   archivePage: vi.fn(),
+  createPage: vi.fn(),
   restorePage: vi.fn(),
   deletePage: vi.fn(),
   movePages: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock("@/components/context-menu", () => ({
 
 vi.mock("@/app/actions", () => ({
   archivePageInlineAction: mocks.archivePage,
-  createPageInlineAction: vi.fn(),
+  createPageInlineAction: mocks.createPage,
   deletePagePermanentlyInlineAction: mocks.deletePage,
   movePagesToNotebookInlineAction: mocks.movePages,
   reorderPagesInlineAction: mocks.reorderPages,
@@ -51,6 +52,7 @@ describe("PagesSidebar", () => {
       success: true,
       notebookId: "notebook-1",
     });
+    mocks.createPage.mockResolvedValue({ id: "page-2" });
     mocks.restorePage.mockResolvedValue({
       success: true,
       notebookId: "notebook-1",
@@ -60,6 +62,40 @@ describe("PagesSidebar", () => {
       success: true,
       notebookId: "notebook-2",
     });
+  });
+
+  it("navigates to a newly created page without racing a refresh", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Notebook",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "Existing page",
+                updatedAt: new Date(),
+                deletedAt: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("create-page"));
+    fireEvent.change(screen.getByTestId("new-page-title"), {
+      target: { value: "New page" },
+    });
+    fireEvent.keyDown(screen.getByTestId("new-page-title"), { key: "Enter" });
+
+    await waitFor(() => {
+      expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "New page");
+    });
+    expect(mocks.push).toHaveBeenCalledWith("/pages/page-2");
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("moves a live page to trash from its context menu", async () => {

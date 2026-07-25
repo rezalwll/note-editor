@@ -190,7 +190,7 @@ describe("SectionTabs", () => {
     });
     expect(mocks.createNotebook).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith("/pages/page-2");
-    expect(mocks.refresh).toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("hides new notebook creation when no writable group exists", () => {
@@ -219,7 +219,7 @@ describe("SectionTabs", () => {
       );
     });
     expect(mocks.push).toHaveBeenCalledWith("/pages/page-3");
-    expect(mocks.refresh).toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("hides the new notebook button when the active page belongs to trash", () => {
@@ -329,7 +329,7 @@ describe("SectionTabs", () => {
       expect(mocks.emptyTrash).toHaveBeenCalledTimes(1);
     });
     expect(mocks.push).toHaveBeenCalledWith("/trash");
-    expect(mocks.refresh).toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("keeps the trash tab active on the trash route after reload", () => {

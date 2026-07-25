@@ -367,7 +367,7 @@ describe("MobileShell notebook workflows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "دفتر اول" }));
     expect(mocks.push).toHaveBeenCalledWith("/notebooks/notebook-1");
-    expect(mocks.refresh).toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
 
     openSections();
     fireEvent.click(screen.getByRole("button", { name: "عملیات دفتر اول" }));
@@ -451,6 +451,7 @@ describe("MobileShell page workflows", () => {
 
     await waitFor(() => expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "صفحه تازه"));
     expect(mocks.push).toHaveBeenCalledWith("/pages/new-page");
+    expect(mocks.refresh).not.toHaveBeenCalled();
     await runHistoryCallbacks();
     expect(mocks.archivePage).toHaveBeenCalledWith("new-page");
     expect(mocks.restorePage).toHaveBeenCalledWith("new-page");
@@ -501,6 +502,32 @@ describe("MobileShell page workflows", () => {
     await waitFor(() => expect(mocks.deletePagePermanently).toHaveBeenCalledWith("trash-page"));
     expect(mocks.clear).toHaveBeenCalled();
     expect(mocks.push).toHaveBeenCalledWith("/notebooks/trash-pages");
+  });
+
+  it("refreshes in place after changing pages that are not active", async () => {
+    mocks.pathname = "/pages/page-2";
+    const activeNotebookView = renderShell();
+    openPages();
+
+    fireEvent.click(screen.getByRole("button", { name: "عملیات صفحه اول" }));
+    fireEvent.click(screen.getByRole("button", { name: "حذف صفحه" }));
+    await waitFor(() => expect(mocks.archivePage).toHaveBeenCalledWith("page-1"));
+
+    activeNotebookView.unmount();
+    mocks.pathname = "/notebooks/trash-pages";
+    renderShell();
+    openPages();
+
+    fireEvent.click(screen.getByRole("button", { name: "عملیات صفحه حذف شده" }));
+    fireEvent.click(screen.getByRole("button", { name: "بازیابی صفحه" }));
+    await waitFor(() => expect(mocks.restorePage).toHaveBeenCalledWith("trash-page"));
+
+    fireEvent.click(screen.getByRole("button", { name: "عملیات صفحه حذف شده" }));
+    fireEvent.click(screen.getByRole("button", { name: "حذف دائمی صفحه" }));
+    await waitFor(() => expect(mocks.deletePagePermanently).toHaveBeenCalledWith("trash-page"));
+
+    expect(mocks.refresh).toHaveBeenCalledTimes(3);
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it("renders the no-page and no-selection states", () => {

@@ -209,7 +209,6 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
         setIsCreating(false);
         setPagesOpen(false);
         router.push(`/pages/${result.id}`);
-        router.refresh();
       }
     });
   }
@@ -295,7 +294,6 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     setSelectedNotebookId(notebook.id);
     closeAll();
     router.push(`/notebooks/${notebook.id}`);
-    router.refresh();
   }
 
   function submitCreateGroup() {
@@ -348,7 +346,6 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       });
       closeAll();
       router.push(`/pages/${result.pageId}`);
-      router.refresh();
     });
   }
 
@@ -406,13 +403,13 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
       if (routeNotebook?.id === notebook.id || activePageId) {
         router.push("/");
+      } else {
+        router.refresh();
       }
 
       if (selectedNotebookId === notebook.id) {
         setSelectedNotebookId(null);
       }
-
-      router.refresh();
     });
   }
 
@@ -428,8 +425,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       });
       if ("notebookId" in result && result.notebookId && activePageId === pageId) {
         router.push(`/notebooks/${result.notebookId}`);
+      } else {
+        router.refresh();
       }
-      router.refresh();
     });
   }
 
@@ -445,8 +443,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       });
       if (activePageId === pageId) {
         router.push(`/pages/${pageId}`);
+      } else {
+        router.refresh();
       }
-      router.refresh();
     });
   }
 
@@ -458,8 +457,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       await deletePagePermanentlyInlineAction(pageId);
       if (activePageId === pageId) {
         router.push(`/notebooks/${activeNotebook!.id}`);
+      } else {
+        router.refresh();
       }
-      router.refresh();
     });
   }
 

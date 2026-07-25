@@ -289,7 +289,6 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         setIsCreating(false);
         setDraftTitle("");
         router.push(`/pages/${result.id}`);
-        router.refresh();
       }
     });
   }
@@ -320,9 +319,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             ? `/pages/${fallbackPage.id}`
             : `/notebooks/${result.notebookId}`,
         );
+      } else {
+        router.refresh();
       }
-
-      router.refresh();
     });
   }
 
@@ -356,9 +355,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             ? `/pages/${fallbackPage.id}`
             : `/notebooks/${activeNotebook.id}`,
         );
+      } else {
+        router.refresh();
       }
-
-      router.refresh();
     });
   }
 
@@ -385,9 +384,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
       if (activePageId && pageIds.includes(activePageId) && restored) {
         router.push(`/pages/${activePageId}`);
+      } else {
+        router.refresh();
       }
-
-      router.refresh();
     });
   }
 
@@ -440,9 +439,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
             ? `/pages/${fallbackPage.id}`
             : `/notebooks/${activeNotebook.id}`,
         );
+      } else {
+        router.refresh();
       }
-
-      router.refresh();
     });
   }
 

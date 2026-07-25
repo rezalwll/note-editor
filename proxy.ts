@@ -4,6 +4,7 @@ import { getSessionCookieName, verifySession } from "@/lib/auth";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 const safeIdPattern = /^[a-zA-Z0-9._:-]{1,128}$/;
+const serverActionIdPattern = /^[a-f0-9]{40,128}$/i;
 
 function safeRequestId(value: string | null) {
   return value && safeIdPattern.test(value) ? value : null;
@@ -32,6 +33,18 @@ export async function proxy(request: NextRequest) {
     return response;
   };
   const pathname = request.nextUrl.pathname;
+  const serverActionId = request.headers.get("next-action");
+
+  if (serverActionId && !serverActionIdPattern.test(serverActionId)) {
+    const response = NextResponse.json(
+      { error: "Invalid server action identifier." },
+      { status: 400 },
+    );
+    response.headers.set("x-request-id", requestId);
+    response.headers.set("x-correlation-id", correlationId);
+    return response;
+  }
+
   if (pathname === "/api/health") {
     return next();
   }

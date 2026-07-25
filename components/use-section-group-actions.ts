@@ -171,7 +171,6 @@ export function useSectionGroupActions({
               }),
           });
           router.push(`/pages/${result.pageId}`);
-          router.refresh();
         }
       });
       return;
@@ -261,7 +260,6 @@ export function useSectionGroupActions({
       updateNotebooks({ type: "remove-many", notebookIds: trashNotebookIds });
       await emptyTrashInlineAction();
       router.push("/trash");
-      router.refresh();
     });
   }
 
