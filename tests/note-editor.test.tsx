@@ -675,11 +675,17 @@ describe("NoteEditor freeform placement", () => {
   });
 
   it.each([
-    ["Latin", "1- first item", "1- first item\n2- "],
-    ["Persian", "۹ - first item", "۹ - first item\n۱۰ - "],
+    ["Latin", "1- first item", "۱- first item\n۲- ", "۱- first item\n"],
+    ["Persian", "۹ - first item", "۹ - first item\n۱۰ - ", "۹ - first item\n"],
+    [
+      "Arabic-Indic",
+      "٩- first item",
+      "۹- first item\n۱۰- ",
+      "۹- first item\n",
+    ],
   ])(
-    "continues and exits a %s numbered-dash list",
-    async (_digitSet, initialText, continuedText) => {
+    "normalizes, continues, and exits a %s numbered-dash list",
+    async (_digitSet, initialText, continuedText, exitedText) => {
       const { container } = renderEditor(
         serializeFreeformDocument({
           type: "freeform-v1",
@@ -709,8 +715,8 @@ describe("NoteEditor freeform placement", () => {
       fireEvent.keyDown(textarea, { key: "Enter" });
 
       await waitFor(() => {
-        expect(textarea).toHaveValue(`${initialText}\n`);
-        expect(textarea.selectionStart).toBe(initialText.length + 1);
+        expect(textarea).toHaveValue(exitedText);
+        expect(textarea.selectionStart).toBe(exitedText.length);
       });
     },
   );

@@ -28,26 +28,29 @@ const PERSIAN_DIGITS =
 const ARABIC_INDIC_DIGITS =
   "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
 
-function incrementListNumber(value: string) {
-  const asciiValue = Array.from(value, (digit) => {
+function toAsciiDigits(value: string) {
+  return Array.from(value, (digit) => {
     const persianIndex = PERSIAN_DIGITS.indexOf(digit);
     if (persianIndex >= 0) return String(persianIndex);
     const arabicIndicIndex = ARABIC_INDIC_DIGITS.indexOf(digit);
     return arabicIndicIndex >= 0 ? String(arabicIndicIndex) : digit;
   }).join("");
+}
+
+function toPersianDigits(value: string) {
+  return Array.from(toAsciiDigits(value), (digit) => {
+    return PERSIAN_DIGITS[Number(digit)];
+  }).join("");
+}
+
+function incrementListNumber(value: string) {
+  const asciiValue = toAsciiDigits(value);
   const nextAsciiValue = String(Number.parseInt(asciiValue, 10) + 1).padStart(
     asciiValue.length,
     "0",
   );
-  const digitSet = PERSIAN_DIGITS.includes(value[0])
-    ? PERSIAN_DIGITS
-    : ARABIC_INDIC_DIGITS.includes(value[0])
-      ? ARABIC_INDIC_DIGITS
-      : null;
 
-  return digitSet
-    ? Array.from(nextAsciiValue, (digit) => digitSet[Number(digit)]).join("")
-    : nextAsciiValue;
+  return toPersianDigits(nextAsciiValue);
 }
 
 type LinePrefixChange = {
@@ -456,7 +459,12 @@ export function useNoteEditorBlockActions({
       : todoMatch
         ? `${todoMatch[1]}${TODO_PREFIX}`
         : numberedPrefix;
-    const beforeCursor = block.text.slice(0, selectionStart);
+    const beforeCursor = numberedMatch
+      ? `${block.text.slice(0, lineStart + numberedMatch[1].length)}${toPersianDigits(numberedMatch[2])}${block.text.slice(
+          lineStart + numberedMatch[1].length + numberedMatch[2].length,
+          selectionStart,
+        )}`
+      : block.text.slice(0, selectionStart);
     const afterCursor = block.text.slice(selectionStart);
     const nextText = `${beforeCursor}\n${prefix}${afterCursor}`;
     const nextCursorPosition = selectionStart + 1 + prefix.length;
