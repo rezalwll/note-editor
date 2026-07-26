@@ -15,7 +15,10 @@ import { getNotebookTheme } from "@/lib/notebook-theme";
 type MobileSectionsPanelProps = {
   activeGroupId: string | null;
   activeNotebook: MobileNotebook | null;
+  beginCreateNotebook: (groupId: string) => void;
+  cancelCreateNotebook: () => void;
   closeAll: () => void;
+  creatingNotebookGroupId: string | null;
   draftGroupName: string;
   draftNotebookName: string;
   editingGroupId: string | null;
@@ -34,6 +37,7 @@ type MobileSectionsPanelProps = {
   setEditingNotebookId: Dispatch<SetStateAction<string | null>>;
   setIsCreatingGroup: Dispatch<SetStateAction<boolean>>;
   submitCreateGroup: () => void;
+  submitCreateNotebook: () => void;
   submitRenameGroup: () => void;
   submitRenameNotebook: () => void;
   toggleGroupSelection: (groupId: string) => void;
@@ -42,7 +46,10 @@ type MobileSectionsPanelProps = {
 export function MobileSectionsPanel({
   activeGroupId,
   activeNotebook,
+  beginCreateNotebook,
+  cancelCreateNotebook,
   closeAll,
+  creatingNotebookGroupId,
   draftGroupName,
   draftNotebookName,
   editingGroupId,
@@ -61,6 +68,7 @@ export function MobileSectionsPanel({
   setEditingNotebookId,
   setIsCreatingGroup,
   submitCreateGroup,
+  submitCreateNotebook,
   submitRenameGroup,
   submitRenameNotebook,
   toggleGroupSelection,
@@ -133,17 +141,30 @@ export function MobileSectionsPanel({
                     <div key={group.id}>
                       <div className="flex items-center gap-2">
                         {canManageGroup ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setActionSheet({ type: "group", id: group.id });
-                            }}
-                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
-                            aria-label={`عملیات ${group.name}`}
-                          >
-                            <EllipsisVertical className="h-4 w-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                beginCreateNotebook(group.id);
+                              }}
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
+                              aria-label={`افزودن زیر مجموعه به ${group.name}`}
+                            >
+                              <FolderPlus className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setActionSheet({ type: "group", id: group.id });
+                              }}
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
+                              aria-label={`عملیات ${group.name}`}
+                            >
+                              <EllipsisVertical className="h-4 w-4" />
+                            </button>
+                          </>
                         ) : null}
 
                         <button
@@ -201,6 +222,32 @@ export function MobileSectionsPanel({
 
                       {expandedGroupIds.includes(group.id) ? (
                         <div className="mt-2 grid gap-2 pr-3">
+                          {creatingNotebookGroupId === group.id ? (
+                            <div className="rounded-2xl border border-dashed border-[#b5baff] bg-[#f8f8ff] px-4 py-3">
+                              <input
+                                ref={notebookInputRef}
+                                value={draftNotebookName}
+                                onChange={(event) =>
+                                  setDraftNotebookName(event.target.value)
+                                }
+                                onBlur={submitCreateNotebook}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    submitCreateNotebook();
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    cancelCreateNotebook();
+                                  }
+                                }}
+                                disabled={isPending}
+                                placeholder="نام زیر مجموعه جدید"
+                                className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#708090]"
+                                dir="rtl"
+                              />
+                            </div>
+                          ) : null}
                           {group.notebooks.length > 0 ? (
                             group.notebooks.map((notebook) => {
                               const theme = getNotebookTheme(notebook.id, notebook.themeKey);

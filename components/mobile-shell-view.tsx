@@ -31,11 +31,14 @@ type MobileShellViewProps = {
   activeNotebook: MobileNotebook | null;
   activeTheme: NotebookTheme;
   archivePage: (pageId: string) => void;
+  beginCreateNotebook: (groupId: string) => void;
   beginRenameGroup: (group: MobileGroupSection) => void;
   beginRenameNotebook: (notebook: MobileNotebook) => void;
+  cancelCreateNotebook: () => void;
   closeActionSheet: () => void;
   closeAll: () => void;
   currentUser: MobileCurrentUser;
+  creatingNotebookGroupId: string | null;
   deleteGroup: (group: MobileGroupSection) => void;
   deleteNotebook: (notebook: MobileNotebook) => void;
   deletePagePermanently: (pageId: string) => void;
@@ -78,6 +81,7 @@ type MobileShellViewProps = {
   setSelectedNotebookId: Dispatch<SetStateAction<string | null>>;
   submitCreate: () => void;
   submitCreateGroup: () => void;
+  submitCreateNotebook: () => void;
   submitRenameGroup: () => void;
   submitRenameNotebook: () => void;
   toggleGroupSelection: (groupId: string) => void;
@@ -94,11 +98,14 @@ export function MobileShellView({
   activeNotebook,
   activeTheme,
   archivePage,
+  beginCreateNotebook,
   beginRenameGroup,
   beginRenameNotebook,
+  cancelCreateNotebook,
   closeActionSheet,
   closeAll,
   currentUser,
+  creatingNotebookGroupId,
   deleteGroup,
   deleteNotebook,
   deletePagePermanently,
@@ -141,6 +148,7 @@ export function MobileShellView({
   setSelectedNotebookId,
   submitCreate,
   submitCreateGroup,
+  submitCreateNotebook,
   submitRenameGroup,
   submitRenameNotebook,
   toggleGroupSelection,
@@ -159,7 +167,10 @@ export function MobileShellView({
         <MobileSectionsPanel
           activeGroupId={activeGroupId}
           activeNotebook={activeNotebook}
+          beginCreateNotebook={beginCreateNotebook}
+          cancelCreateNotebook={cancelCreateNotebook}
           closeAll={closeAll}
+          creatingNotebookGroupId={creatingNotebookGroupId}
           draftGroupName={draftGroupName}
           draftNotebookName={draftNotebookName}
           editingGroupId={editingGroupId}
@@ -178,6 +189,7 @@ export function MobileShellView({
           setEditingNotebookId={setEditingNotebookId}
           setIsCreatingGroup={setIsCreatingGroup}
           submitCreateGroup={submitCreateGroup}
+          submitCreateNotebook={submitCreateNotebook}
           submitRenameGroup={submitRenameGroup}
           submitRenameNotebook={submitRenameNotebook}
           toggleGroupSelection={toggleGroupSelection}

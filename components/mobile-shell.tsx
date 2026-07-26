@@ -7,6 +7,7 @@ import {
   archiveNotebookInlineAction,
   assignNotebookGroupInlineAction,
   archivePageInlineAction,
+  createNotebookInlineAction,
   createNotebookGroupInlineAction,
   createPageInlineAction,
   deleteNotebookGroupInlineAction,
@@ -55,6 +56,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [isCreating, setIsCreating] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [creatingNotebookGroupId, setCreatingNotebookGroupId] = useState<
+    string | null
+  >(null);
   const [draftGroupName, setDraftGroupName] = useState("");
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingNotebookId, setEditingNotebookId] = useState<string | null>(null);
@@ -123,11 +127,11 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }, [editingGroupId]);
 
   useEffect(() => {
-    if (editingNotebookId) {
+    if (editingNotebookId || creatingNotebookGroupId) {
       notebookInputRef.current?.focus();
       notebookInputRef.current?.select();
     }
-  }, [editingNotebookId]);
+  }, [creatingNotebookGroupId, editingNotebookId]);
 
 
   useEffect(() => {
@@ -242,9 +246,65 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   }
 
   function beginRenameNotebook(notebook: MobileNotebook) {
+    setCreatingNotebookGroupId(null);
     setDraftNotebookName(notebook.name);
     setEditingNotebookId(notebook.id);
     closeActionSheet();
+  }
+
+  function beginCreateNotebook(groupId: string) {
+    setEditingNotebookId(null);
+    setDraftNotebookName("");
+    setCreatingNotebookGroupId(groupId);
+    setExpandedGroupIds((current) =>
+      current.includes(groupId) ? current : [...current, groupId],
+    );
+  }
+
+  function cancelCreateNotebook() {
+    setCreatingNotebookGroupId(null);
+    setDraftNotebookName("");
+  }
+
+  function submitCreateNotebook() {
+    if (!creatingNotebookGroupId) {
+      return;
+    }
+
+    const targetGroupId = creatingNotebookGroupId;
+    const nextName = draftNotebookName.trim() || "زیر مجموعه جدید";
+
+    setCreatingNotebookGroupId(null);
+    setDraftNotebookName("");
+
+    startTransition(async () => {
+      const result = await createNotebookInlineAction(
+        nextName,
+        targetGroupId,
+        getRandomThemeKey(`notebook-${targetGroupId}-${nextName}`),
+      );
+
+      if (
+        !("id" in result) ||
+        !result.id ||
+        !("pageId" in result) ||
+        !result.pageId
+      ) {
+        return;
+      }
+
+      const notebookId = result.id;
+      record({
+        label: "ایجاد زیر مجموعه",
+        undo: () => archiveNotebookInlineAction(notebookId),
+        redo: () =>
+          assignNotebookGroupInlineAction([notebookId], targetGroupId),
+      });
+      setSelectedGroupId(targetGroupId);
+      setSelectedNotebookId(notebookId);
+      closeAll();
+      router.push(`/pages/${result.pageId}`);
+    });
   }
 
   function submitRenameNotebook() {
@@ -482,6 +542,8 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       archivePage={archivePage}
       beginRenameGroup={beginRenameGroup}
       beginRenameNotebook={beginRenameNotebook}
+      beginCreateNotebook={beginCreateNotebook}
+      cancelCreateNotebook={cancelCreateNotebook}
       closeActionSheet={closeActionSheet}
       closeAll={closeAll}
       currentUser={currentUser}
@@ -493,6 +555,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       draftTitle={draftTitle}
       editingGroupId={editingGroupId}
       editingNotebookId={editingNotebookId}
+      creatingNotebookGroupId={creatingNotebookGroupId}
       expandedGroupIds={expandedGroupIds}
       groupedNotebooks={groupedNotebooks}
       groupInputRef={groupInputRef}
@@ -527,6 +590,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       setSelectedNotebookId={setSelectedNotebookId}
       submitCreate={submitCreate}
       submitCreateGroup={submitCreateGroup}
+      submitCreateNotebook={submitCreateNotebook}
       submitRenameGroup={submitRenameGroup}
       submitRenameNotebook={submitRenameNotebook}
       toggleGroupSelection={toggleGroupSelection}

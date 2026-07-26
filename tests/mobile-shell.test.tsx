@@ -42,6 +42,7 @@ vi.mock("@/app/actions", () => ({
   archivePageInlineAction: vi.fn(),
   assignNotebookGroupInlineAction: vi.fn(),
   createNotebookGroupInlineAction: vi.fn(),
+  createNotebookInlineAction: vi.fn(),
   createPageInlineAction: vi.fn(),
   deleteNotebookGroupInlineAction: vi.fn(),
   deleteNotebookPermanentlyInlineAction: vi.fn(),

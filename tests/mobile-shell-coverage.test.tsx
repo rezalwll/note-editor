@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   assignNotebookGroup: vi.fn(),
   clear: vi.fn(),
   createGroup: vi.fn(),
+  createNotebook: vi.fn(),
   createPage: vi.fn(),
   deleteGroup: vi.fn(),
   deleteNotebookPermanently: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock("@/app/actions", () => ({
   archivePageInlineAction: mocks.archivePage,
   assignNotebookGroupInlineAction: mocks.assignNotebookGroup,
   createNotebookGroupInlineAction: mocks.createGroup,
+  createNotebookInlineAction: mocks.createNotebook,
   createPageInlineAction: mocks.createPage,
   deleteNotebookGroupInlineAction: mocks.deleteGroup,
   deleteNotebookPermanentlyInlineAction: mocks.deleteNotebookPermanently,
@@ -182,6 +184,11 @@ beforeEach(() => {
     notebookId: "new-notebook",
     pageId: "new-page",
     themeKey: "sky",
+  });
+  mocks.createNotebook.mockResolvedValue({
+    id: "new-mobile-notebook",
+    pageId: "new-mobile-page",
+    themeKey: "mint",
   });
   mocks.createPage.mockResolvedValue({ id: "new-page" });
   mocks.deleteGroup.mockResolvedValue({ notebookIds: ["notebook-1"], wasEmpty: false });
@@ -361,6 +368,63 @@ describe("MobileShell group workflows", () => {
 });
 
 describe("MobileShell notebook workflows", () => {
+  it("creates a notebook inside a group and records reversible history", async () => {
+    openSectionsAfterRender();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "افزودن زیر مجموعه به گروه اول" }),
+    );
+    const input = screen.getByPlaceholderText("نام زیر مجموعه جدید");
+    fireEvent.change(input, { target: { value: "دفتر موبایل" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(mocks.createNotebook).toHaveBeenCalledWith(
+        "دفتر موبایل",
+        "group-1",
+        expect.any(String),
+      ),
+    );
+    expect(mocks.push).toHaveBeenCalledWith("/pages/new-mobile-page");
+    await runHistoryCallbacks();
+    expect(mocks.archiveNotebook).toHaveBeenCalledWith("new-mobile-notebook");
+    expect(mocks.assignNotebookGroup).toHaveBeenCalledWith(
+      ["new-mobile-notebook"],
+      "group-1",
+    );
+  });
+
+  it("cancels notebook creation and ignores incomplete server results", async () => {
+    openSectionsAfterRender();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "افزودن زیر مجموعه به گروه اول" }),
+    );
+    fireEvent.keyDown(screen.getByPlaceholderText("نام زیر مجموعه جدید"), {
+      key: "Escape",
+    });
+    expect(
+      screen.queryByPlaceholderText("نام زیر مجموعه جدید"),
+    ).not.toBeInTheDocument();
+
+    mocks.createNotebook.mockResolvedValueOnce({ error: "failed" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "افزودن زیر مجموعه به گروه اول" }),
+    );
+    const input = screen.getByPlaceholderText("نام زیر مجموعه جدید");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(mocks.createNotebook).toHaveBeenCalledWith(
+        "زیر مجموعه جدید",
+        "group-1",
+        expect.any(String),
+      ),
+    );
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it("selects and renames a notebook with reversible history", async () => {
     openSectionsAfterRender();
     expandGroup("گروه اول");
