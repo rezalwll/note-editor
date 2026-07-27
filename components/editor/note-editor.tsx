@@ -100,6 +100,8 @@ export function NoteEditor({
   >({});
   const [activeRichTextStyle, setActiveRichTextStyle] = useState<{
     blockId: string;
+    bold: boolean;
+    italic: boolean;
     textColor: string;
     highlightColor: string;
     fontSize: number;

@@ -156,7 +156,7 @@ function ColorPalette({
 
 function ToolbarButton({
   children,
-  active = false,
+  active,
   disabled = false,
   label,
   onClick,
@@ -171,6 +171,7 @@ function ToolbarButton({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onMouseDown={(event) => {
         event.preventDefault();

@@ -29,6 +29,8 @@ export type EditorCommandPayload = {
 
 type ActiveRichTextStyle = {
   blockId: string;
+  bold: boolean;
+  italic: boolean;
   textColor: string;
   highlightColor: string;
   fontSize: number;
@@ -257,8 +259,16 @@ export function useNoteEditorCommands({
             canRedo: historyRef.current.future.length > 0,
             align: activeBlock?.align ?? "right",
             direction: activeBlock?.direction ?? "rtl",
-            bold: activeBlock?.bold ?? false,
-            italic: activeBlock?.italic ?? false,
+            bold:
+              activeRichTextStyle &&
+              activeRichTextStyle.blockId === activeBlock?.id
+                ? activeRichTextStyle.bold
+                : activeBlock?.bold ?? false,
+            italic:
+              activeRichTextStyle &&
+              activeRichTextStyle.blockId === activeBlock?.id
+                ? activeRichTextStyle.italic
+                : activeBlock?.italic ?? false,
             textColor:
               activeRichTextStyle &&
               activeRichTextStyle.blockId === activeBlock?.id

@@ -80,6 +80,8 @@ type RichTextBlockEditorProps = {
   onBlur: () => void;
   onUpdate: (text: string, html: string) => void;
   onSelectionStyleChange: (style: {
+    bold: boolean;
+    italic: boolean;
     textColor: string;
     highlightColor: string;
     fontSize: number;
@@ -117,6 +119,8 @@ export const RichTextBlockEditor = forwardRef<
     const highlightColor = currentEditor.getAttributes("highlight").color;
     const fontSize = currentEditor.getAttributes("fontSize").fontSize;
     onSelectionStyleChange({
+      bold: bold || currentEditor.isActive("bold"),
+      italic: italic || currentEditor.isActive("italic"),
       textColor: typeof color === "string" ? color : defaultColor,
       highlightColor:
         typeof highlightColor === "string" ? highlightColor : "transparent",

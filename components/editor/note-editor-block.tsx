@@ -91,6 +91,8 @@ type NoteEditorBlockProps = {
   setActiveRichTextStyle: React.Dispatch<
     React.SetStateAction<{
       blockId: string;
+      bold: boolean;
+      italic: boolean;
       textColor: string;
       highlightColor: string;
       fontSize: number;

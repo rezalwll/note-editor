@@ -593,6 +593,19 @@ describe("NoteEditor freeform placement", () => {
       expect(richTextEditor).toHaveStyle({ fontWeight: "400" });
       expect(strong).toHaveTextContent("bold");
       expect(strong).not.toHaveTextContent("bold me");
+      expect(boldButton).toHaveAttribute("aria-pressed", "true");
+    });
+
+    fireEvent.mouseDown(boldButton);
+    fireEvent.click(boldButton);
+
+    await waitFor(() => {
+      const richTextEditor = container.querySelector(
+        '[data-rich-text-editor="true"]',
+      ) as HTMLElement | null;
+
+      expect(richTextEditor?.querySelector("strong")).toBeNull();
+      expect(boldButton).toHaveAttribute("aria-pressed", "false");
     });
   });
 
