@@ -73,34 +73,75 @@ export function MobileSectionsPanel({
   submitRenameNotebook,
   toggleGroupSelection,
 }: MobileSectionsPanelProps) {
+  const createNotebookGroup =
+    groupedNotebooks.find(
+      (group) =>
+        group.id === activeGroupId &&
+        group.id !== UNGROUPED_ID &&
+        group.systemKey !== TRASH_GROUP_KEY,
+    ) ??
+    groupedNotebooks.find(
+      (group) =>
+        group.id !== UNGROUPED_ID && group.systemKey !== TRASH_GROUP_KEY,
+    ) ??
+    null;
+
   return (
         <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
           <div
             className="absolute inset-x-0 top-0 max-h-[72vh] overflow-hidden rounded-b-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-soft)] bg-white px-4 py-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingGroupId(null);
-                  setDraftGroupName("");
-                  setIsCreatingGroup((current) => !current);
-                }}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-soft)] px-3 py-1.5 text-xs font-semibold text-[#33406d]"
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-                مجموعه جدید
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="text-sm font-semibold text-[var(--text-strong)]">مجموعه‌ها</div>
-                <button type="button" onClick={closeAll} className="text-[var(--text-muted)]">
+            <div className="sticky top-0 z-10 border-b border-[var(--border-soft)] bg-white px-4 py-3">
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={closeAll}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--bg-softer)]"
+                  aria-label="بستن فهرست مجموعه‌ها"
+                >
                   <X className="h-5 w-5" />
+                </button>
+                <div className="text-sm font-semibold text-[var(--text-strong)]">مجموعه‌ها</div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2" dir="rtl">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (createNotebookGroup) {
+                      beginCreateNotebook(createNotebookGroup.id);
+                    }
+                  }}
+                  disabled={!createNotebookGroup || isPending}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#6977e8] px-3 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(105,119,232,0.24)] transition hover:bg-[#5c69d6] disabled:cursor-not-allowed disabled:opacity-45"
+                  title={
+                    createNotebookGroup
+                      ? `افزودن به ${createNotebookGroup.name}`
+                      : "ابتدا یک مجموعه بسازید"
+                  }
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  زیر مجموعه جدید
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setEditingGroupId(null);
+                    setDraftGroupName("");
+                    setIsCreatingGroup((current) => !current);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border-soft)] bg-white px-3 text-xs font-semibold text-[#33406d] transition hover:bg-[var(--bg-softer)]"
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  مجموعه جدید
                 </button>
               </div>
             </div>
 
-            <div className="max-h-[calc(72vh-58px)] overflow-y-auto p-4">
+            <div className="max-h-[calc(72vh-116px)] overflow-y-auto p-4">
               <div className="grid gap-4">
                 {isCreatingGroup ? (
                   <div className="rounded-2xl border border-dashed border-[#b5baff] bg-[#f8f8ff] px-4 py-3">

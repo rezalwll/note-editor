@@ -368,6 +368,21 @@ describe("MobileShell group workflows", () => {
 });
 
 describe("MobileShell notebook workflows", () => {
+  it("shows a clear mobile action for creating a notebook", () => {
+    openSectionsAfterRender();
+
+    const createButton = screen.getByRole("button", {
+      name: "زیر مجموعه جدید",
+    });
+    expect(createButton).toBeVisible();
+
+    fireEvent.click(createButton);
+
+    expect(
+      screen.getByPlaceholderText("نام زیر مجموعه جدید"),
+    ).toBeInTheDocument();
+  });
+
   it("creates a notebook inside a group and records reversible history", async () => {
     openSectionsAfterRender();
 
