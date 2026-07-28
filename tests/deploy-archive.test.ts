@@ -160,4 +160,19 @@ describe("deploy workflow", () => {
       'runuser -u "${APP_USER}" -- env HOME="${APP_USER_HOME}" pm2 restart notebook --update-env',
     );
   });
+
+  it("gives the production build enough heap for Next.js type checking", async () => {
+    const deployScript = await readFile(
+      path.resolve("scripts/deploy-notebook.sh"),
+      "utf8",
+    );
+
+    expect(deployScript).toContain(
+      "BUILD_NODE_HEAP_MB=${BUILD_NODE_HEAP_MB:-1024}",
+    );
+    expect(deployScript).toContain(
+      'NODE_OPTIONS="${build_node_options}" npx next build --webpack',
+    );
+    expect(deployScript).not.toContain("--max-old-space-size=512");
+  });
 });

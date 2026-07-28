@@ -14,6 +14,7 @@ DB_PASS=${DB_PASS:-}
 PORT=${PORT:-3000}
 BOOTSTRAP_PASSWORD=${BOOTSTRAP_PASSWORD:-change-me-now}
 NODE_MAJOR=${NODE_MAJOR:-22}
+BUILD_NODE_HEAP_MB=${BUILD_NODE_HEAP_MB:-1024}
 DOMAIN=${DOMAIN:-}
 DOMAIN_ALIASES=${DOMAIN_ALIASES:-}
 SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN:-localhost}}
@@ -235,6 +236,8 @@ ENVEOF
 }
 
 build_app() {
+  local build_node_options
+
   cd "${STAGING_DIR}"
   rm -rf node_modules .next
   npm ci --include=dev --no-audit --no-fund --prefer-offline
@@ -251,7 +254,9 @@ build_app() {
     npm run test
   fi
 
-  NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512} npx next build --webpack
+  build_node_options=${NODE_OPTIONS:-"--max-old-space-size=${BUILD_NODE_HEAP_MB}"}
+  echo "Building production release with a ${BUILD_NODE_HEAP_MB} MB Node heap limit."
+  NODE_OPTIONS="${build_node_options}" npx next build --webpack
 }
 
 activate_release() {
