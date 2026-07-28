@@ -127,6 +127,13 @@ describe("deploy workflow", () => {
     );
     expect(workflow).toContain('${RUNNER_TEMP}/notebook-deploy.tgz');
     expect(workflow).toContain("DOMAIN_ALIASES='www.${{ secrets.PROD_DOMAIN }}'");
+    expect(workflow).toContain("Host notava-production");
+    expect(workflow).toContain("ServerAliveInterval 15");
+    expect(workflow).toContain("ServerAliveCountMax 40");
+    expect(workflow).toContain("ConnectionAttempts 3");
+    expect(workflow).toContain("scp \"${RUNNER_TEMP}/notebook-deploy.tgz\" scripts/deploy-notebook.sh");
+    expect(workflow).toContain("notava-production:/root/");
+    expect(workflow).toContain("ssh notava-production");
     expect(workflow).not.toContain("DEPLOY_ARCHIVE: ${{ runner.temp }}");
     expect(workflow).toContain(
       "(systemctl disable --now notebook-auto-deploy.timer >/dev/null 2>&1 || true)",

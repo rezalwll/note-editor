@@ -38,16 +38,29 @@ jobs:
           printf '%s\n' "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<'SSHCONFIG'
+          Host notava-production
+            HostName ${{ secrets.PROD_SSH_HOST }}
+            User ${{ secrets.PROD_SSH_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+            ConnectTimeout 30
+            ConnectionAttempts 3
+            ServerAliveInterval 15
+            ServerAliveCountMax 40
+            TCPKeepAlive yes
+          SSHCONFIG
+          chmod 600 ~/.ssh/config
 
       - name: Upload release files
         run: |
           scp "${RUNNER_TEMP}/notebook-deploy.tgz" scripts/deploy-notebook.sh \
-            "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:/root/"
+            notava-production:/root/
 
       - name: Deploy on server
         shell: bash
         run: |
-          ssh "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}" \
+          ssh notava-production \
             "chmod +x /root/deploy-notebook.sh && \
             DOMAIN='${{ secrets.PROD_DOMAIN }}' \
             DOMAIN_ALIASES='www.${{ secrets.PROD_DOMAIN }}' \
