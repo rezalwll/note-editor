@@ -6,7 +6,7 @@ test("authenticates a real user through the login form", async ({
 }) => {
   await login(page, account);
 
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/pages\/[^/]+\/?$/);
   await expect(page.getByTestId("create-group")).toBeVisible();
 });
 

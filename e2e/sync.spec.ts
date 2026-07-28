@@ -210,8 +210,12 @@ test("propagates a permanent deletion tombstone to a second device", async ({
     await expect(async () => {
       await trashTargetRow.click({ button: "right" });
       await expect(permanentDeleteItem).toBeVisible({ timeout: 1_000 });
+      await permanentDeleteItem.click({
+        force: true,
+        noWaitAfter: true,
+        timeout: 2_000,
+      });
     }).toPass({ timeout: 10_000 });
-    await permanentDeleteItem.click({ noWaitAfter: true });
 
     await expect
       .poll(() => findPage(target.id))

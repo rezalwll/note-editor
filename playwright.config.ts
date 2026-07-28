@@ -18,8 +18,9 @@ export default defineConfig({
       process.env.PLAYWRIGHT_USE_EDGE === "1" ? "off" : "retain-on-failure",
   },
   webServer: {
-    command:
-      "npm run prisma:deploy && npm run dev -- --hostname 127.0.0.1 --port 3107",
+    command: process.env.CI
+      ? "npm run prisma:deploy && npm run start -- --hostname 127.0.0.1 --port 3107"
+      : "npm run prisma:deploy && npm run dev -- --webpack --hostname 127.0.0.1 --port 3107",
     url: "http://127.0.0.1:3107/login",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

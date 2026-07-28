@@ -33,7 +33,7 @@ export async function login(page: Page, account: E2EAccount) {
   await page.locator("#username").fill(account.username);
   await page.locator("#password").fill(account.password);
   await Promise.all([
-    page.waitForURL((url) => url.pathname !== "/login"),
+    page.waitForURL((url) => /^\/pages\/[^/]+\/?$/.test(url.pathname)),
     page.getByRole("button", { name: "ورود", exact: true }).click(),
   ]);
 }

@@ -55,6 +55,7 @@ export function useSectionGroupActions({
   const [draftGroupName, setDraftGroupName] = useState("");
   const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
   const groupInputRef = useRef<HTMLInputElement | null>(null);
+  const createGroupInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!editingGroupId) {
@@ -110,69 +111,81 @@ export function useSectionGroupActions({
     const nextName = draftGroupName.trim() || "مجموعه بدون عنوان";
 
     if (editingGroupId === "__new__") {
-      setEditingGroupId(null);
-      setDraftGroupName("");
+      if (createGroupInFlightRef.current) {
+        return;
+      }
 
-      startTransition(async () => {
-        const result = await createNotebookGroupInlineAction(
-          nextName,
-          getRandomThemeKey(`group-${nextName}`),
-          getRandomThemeKey(`notebook-${nextName}`),
-        );
+      createGroupInFlightRef.current = true;
+      void (async () => {
+        try {
+          const result = await createNotebookGroupInlineAction(
+            nextName,
+            getRandomThemeKey(`group-${nextName}`),
+            getRandomThemeKey(`notebook-${nextName}`),
+          );
 
-        if (
-          "id" in result &&
-          result.id &&
-          "notebookId" in result &&
-          result.notebookId &&
-          "pageId" in result &&
-          result.pageId
-        ) {
-          const groupSortOrder = groupItems.filter(
-            (group) => group.systemKey !== TRASH_GROUP_KEY,
-          ).length;
-          updateGroups({
-            type: "append",
-            group: {
-              id: result.id,
-              name: nextName,
-              notebookCount: 1,
-              sortOrder: groupSortOrder,
-              themeKey: "themeKey" in result ? result.themeKey : null,
-            },
-          });
-          updateNotebooks({
-            type: "append",
-            notebook: {
-              id: result.notebookId,
-              name: "زیر مجموعه بدون عنوان",
-              groupId: result.id,
-              sortOrder: 0,
-              themeKey:
-                "notebookThemeKey" in result
-                  ? result.notebookThemeKey
-                  : null,
-              groupName: nextName,
-              pageIds: [result.pageId],
-            },
-          });
-          setManualGroupKey(result.id);
-          setSelectedNotebookIds([result.notebookId]);
-          record({
-            label: "ایجاد مجموعه",
-            undo: () => deleteNotebookGroupInlineAction(result.id),
-            redo: () =>
-              restoreNotebookGroupInlineAction({
+          if (
+            !("id" in result) ||
+            !result.id ||
+            !("notebookId" in result) ||
+            !result.notebookId ||
+            !("pageId" in result) ||
+            !result.pageId
+          ) {
+            return;
+          }
+
+          startTransition(() => {
+            const groupSortOrder = groupItems.filter(
+              (group) => group.systemKey !== TRASH_GROUP_KEY,
+            ).length;
+            updateGroups({
+              type: "append",
+              group: {
                 id: result.id,
                 name: nextName,
-                themeKey: "themeKey" in result ? result.themeKey : null,
                 sortOrder: groupSortOrder,
-                notebookIds: [result.notebookId],
-              }),
+                notebookCount: 1,
+                themeKey: "themeKey" in result ? result.themeKey : null,
+              },
+            });
+            updateNotebooks({
+              type: "append",
+              notebook: {
+                id: result.notebookId,
+                name: "زیر مجموعه بدون عنوان",
+                groupId: result.id,
+                sortOrder: 0,
+                themeKey:
+                  "notebookThemeKey" in result
+                    ? result.notebookThemeKey
+                    : null,
+                groupName: nextName,
+                pageIds: [result.pageId],
+              },
+            });
+            setEditingGroupId(null);
+            setDraftGroupName("");
+            setManualGroupKey(result.id);
+            setSelectedNotebookIds([result.notebookId]);
+            record({
+              label: "ایجاد مجموعه",
+              undo: () => deleteNotebookGroupInlineAction(result.id),
+              redo: () =>
+                restoreNotebookGroupInlineAction({
+                  id: result.id,
+                  name: nextName,
+                  themeKey: "themeKey" in result ? result.themeKey : null,
+                  sortOrder: groupSortOrder,
+                  notebookIds: [result.notebookId],
+                }),
+            });
+            router.push(`/pages/${result.pageId}`);
           });
-          router.push(`/pages/${result.pageId}`);
+        } finally {
+          createGroupInFlightRef.current = false;
         }
-      });
+      })();
       return;
     }
 
