@@ -75,7 +75,15 @@ describe("welcome workspace", () => {
 
     const document = parseFreeformDocument(welcomeWorkspaceContent.bodyHtml);
     expect(document?.blocks).toHaveLength(4);
+    expect(document?.blocks.every((block) => block.x === 432)).toBe(true);
+    expect(document?.blocks.every((block) => block.width === 720)).toBe(true);
     expect(welcomeWorkspaceContent.bodyText).toContain("خوش آمدید");
+    expect(welcomeWorkspaceContent.bodyText).toContain(
+      "یک‌بار روی فضای خالی صفحه",
+    );
+    expect(welcomeWorkspaceContent.bodyText).toContain(
+      "تغییرات به‌طور خودکار ذخیره می‌شوند",
+    );
   });
 
   it("does nothing after onboarding was already handled", async () => {

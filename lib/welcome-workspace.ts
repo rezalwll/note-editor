@@ -1,19 +1,27 @@
 import type { Prisma } from "@/generated/prisma/client";
 import {
+  DEFAULT_CANVAS_WIDTH,
+  PAGE_SIDE_PADDING_DESKTOP,
+} from "@/lib/editor-document";
+import {
   extractFreeformPlainText,
   serializeFreeformDocument,
   type FreeformDocument,
 } from "@/lib/notes";
 import { prisma } from "@/lib/prisma";
 
+const WELCOME_BLOCK_WIDTH = 720;
+const WELCOME_BLOCK_X =
+  DEFAULT_CANVAS_WIDTH - PAGE_SIDE_PADDING_DESKTOP - WELCOME_BLOCK_WIDTH;
+
 const welcomeDocument: FreeformDocument = {
   type: "freeform-v1",
   blocks: [
     {
       id: "welcome-title",
-      x: 48,
+      x: WELCOME_BLOCK_X,
       y: 48,
-      width: 620,
+      width: WELCOME_BLOCK_WIDTH,
       text: "به نوتاوا خوش آمدید 👋",
       bold: true,
       fontSize: 28,
@@ -22,30 +30,31 @@ const welcomeDocument: FreeformDocument = {
     },
     {
       id: "welcome-intro",
-      x: 48,
+      x: WELCOME_BLOCK_X,
       y: 120,
-      width: 620,
-      text: "این صفحه‌ی نمونه برای شروع ساخته شده است. می‌توانید متن‌ها را تغییر دهید، جابه‌جا کنید یا هر زمان خواستید این صفحه را حذف کنید.",
+      width: WELCOME_BLOCK_WIDTH,
+      text: "نوتاوا فضای شخصی شما برای نوشتن، دسته‌بندی و ساختن ایده‌هاست. این صفحه فقط یک راهنمای کوتاه است؛ می‌توانید همه‌ی بلوک‌های آن را ویرایش، جابه‌جا یا حذف کنید.",
       fontSize: 17,
       direction: "rtl",
       align: "right",
     },
     {
       id: "welcome-features",
-      x: 48,
-      y: 220,
-      width: 620,
-      text: "● با دوبار کلیک در فضای خالی، یک بلوک جدید بسازید\n● بلوک‌ها را بکشید و در جای دلخواه قرار دهید\n● از نوار ابزار برای قالب‌بندی، رنگ و فهرست‌ها استفاده کنید",
+      x: WELCOME_BLOCK_X,
+      y: 225,
+      width: WELCOME_BLOCK_WIDTH,
+      text: "شروع سریع\n• برای ساختن یک بلوک متن، یک‌بار روی فضای خالی صفحه بزنید.\n• بلوک را از دستگیره‌ی کناری جابه‌جا کنید و با کشیدن مرز چپ، عرض آن را تغییر دهید.\n• بخشی از متن را انتخاب کنید و از نوار ابزار برای پررنگ‌کردن، رنگ، هایلایت و فهرست‌ها کمک بگیرید.\n• یادداشت‌ها را در مجموعه و زیرمجموعه‌های دلخواه مرتب کنید؛ تغییرات به‌طور خودکار ذخیره می‌شوند.",
       fontSize: 16,
+      bold: false,
       direction: "rtl",
       align: "right",
     },
     {
       id: "welcome-todos",
-      x: 48,
-      y: 350,
-      width: 620,
-      text: "☐ اولین یادداشت خودم را بنویسم\n☐ یک مجموعه و زیرمجموعه‌ی دلخواه بسازم\n☐ این صفحه‌ی نمونه را شخصی‌سازی کنم",
+      x: WELCOME_BLOCK_X,
+      y: 410,
+      width: WELCOME_BLOCK_WIDTH,
+      text: "چند کار پیشنهادی برای شروع\n☐ اولین یادداشت واقعی‌ام را بنویسم\n☐ یک مجموعه و زیرمجموعه‌ی دلخواه بسازم\n☐ ظاهر متن را با رنگ و هایلایت شخصی‌سازی کنم\n☐ بعد از انجام هر مورد، روی مربع کنار آن بزنم",
       fontSize: 16,
       direction: "rtl",
       align: "right",
@@ -56,7 +65,7 @@ const welcomeDocument: FreeformDocument = {
 export const welcomeWorkspaceContent = {
   groupName: "شروع کار",
   notebookName: "راهنمای نوتاوا",
-  notebookDescription: "یک راهنمای کوتاه برای شروع کار با نوتاوا",
+  notebookDescription: "راهنمای شروع سریع و آشنایی با امکانات اصلی نوتاوا",
   pageTitle: "به نوتاوا خوش آمدید",
   bodyHtml: serializeFreeformDocument(welcomeDocument),
   bodyText: extractFreeformPlainText(welcomeDocument),
