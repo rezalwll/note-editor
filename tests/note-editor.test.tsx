@@ -723,6 +723,75 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("checks and unchecks a todo marker by clicking it", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "clickable-todos",
+            x: 48,
+            y: 72,
+            width: 320,
+            text: "☐ کار اول\n☑ کار دوم",
+          },
+        ],
+      }),
+    );
+    await waitForHydration();
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    textarea.setSelectionRange(0, 0);
+    fireEvent.select(textarea);
+    fireEvent.click(textarea);
+    await waitFor(() => {
+      expect(textarea).toHaveValue("☑ کار اول\n☑ کار دوم");
+    });
+
+    const secondMarkerPosition = textarea.value.indexOf("☑", 1);
+    textarea.setSelectionRange(secondMarkerPosition, secondMarkerPosition);
+    fireEvent.select(textarea);
+    fireEvent.click(textarea);
+    await waitFor(() => {
+      expect(textarea).toHaveValue("☑ کار اول\n☐ کار دوم");
+    });
+
+    textarea.setSelectionRange(3, 3);
+    fireEvent.select(textarea);
+    fireEvent.click(textarea);
+    expect(textarea).toHaveValue("☑ کار اول\n☐ کار دوم");
+  });
+
+  it("includes todo clicks in global undo and redo history", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "todo-history",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "☐ انجام کار",
+          },
+        ],
+      }),
+    );
+    await waitForHydration();
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    textarea.setSelectionRange(0, 0);
+    fireEvent.select(textarea);
+    fireEvent.click(textarea);
+    await waitFor(() => expect(textarea).toHaveValue("☑ انجام کار"));
+
+    fireEvent.keyDown(textarea, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(textarea).toHaveValue("☐ انجام کار"));
+
+    fireEvent.keyDown(textarea, { key: "y", ctrlKey: true });
+    await waitFor(() => expect(textarea).toHaveValue("☑ انجام کار"));
+  });
+
   it.each([
     ["Latin", "1- first item", "۱- first item\n۲- ", "۱- first item\n"],
     ["Persian", "۹ - first item", "۹ - first item\n۱۰ - ", "۹ - first item\n"],

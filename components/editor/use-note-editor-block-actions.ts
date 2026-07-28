@@ -16,6 +16,7 @@ import {
   getCurrentLineRange,
   getRenderedBlockWidth,
   measureBlockWidth,
+  toggleTodoMarkerAtPosition,
 } from "@/lib/editor-document";
 import type { IncrementalBodyTextIndex } from "@/lib/incremental-body-text";
 import type { FreeformBlock } from "@/lib/notes";
@@ -574,6 +575,29 @@ export function useNoteEditorBlockActions({
     updateBlockText(blockId, transformed.text);
   }
 
+  function toggleTodoAtPosition(blockId: string, position: number) {
+    const block = blocks.find((candidate) => candidate.id === blockId);
+    if (!block || block.richText) {
+      return false;
+    }
+
+    const toggled = toggleTodoMarkerAtPosition(block.text, position);
+    if (!toggled) {
+      return false;
+    }
+
+    selectionRestoreRef.current = {
+      id: blockId,
+      start: toggled.selectionPosition,
+      end: toggled.selectionPosition,
+    };
+    updateBlock(blockId, (current) => ({
+      ...current,
+      text: toggled.text,
+    }));
+    return true;
+  }
+
   return {
     addBlockAt,
     cycleTodoLines,
@@ -587,6 +611,7 @@ export function useNoteEditorBlockActions({
     setBlockRef,
     setRichTextBlockRef,
     toggleBlockSelection,
+    toggleTodoAtPosition,
     toggleSelectedLines,
     updateBlock,
     updateBlocksByIds,

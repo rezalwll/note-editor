@@ -152,6 +152,32 @@ export function isEmptyTextBlock(block: FreeformBlock) {
   return block.type !== "image" && !block.text.trim();
 }
 
+export function toggleTodoMarkerAtPosition(text: string, position: number) {
+  const safePosition = Math.min(text.length, Math.max(0, position));
+  const lineStart = text.lastIndexOf("\n", Math.max(0, safePosition - 1)) + 1;
+  const nextLineBreak = text.indexOf("\n", safePosition);
+  const lineEnd = nextLineBreak === -1 ? text.length : nextLineBreak;
+  const lineText = text.slice(lineStart, lineEnd);
+  const match = lineText.match(/^([ \t]*)(\u2610|\u2611|\u2612)(?=\s)/);
+  if (!match) {
+    return null;
+  }
+
+  const markerIndex = lineStart + match[1].length;
+  if (safePosition < markerIndex || safePosition > markerIndex + 1) {
+    return null;
+  }
+
+  const nextMarker = match[2] === "\u2610" ? "\u2611" : "\u2610";
+  return {
+    text: `${text.slice(0, markerIndex)}${nextMarker}${text.slice(
+      markerIndex + 1,
+    )}`,
+    selectionPosition: markerIndex + 1,
+    checked: nextMarker === "\u2611",
+  };
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")

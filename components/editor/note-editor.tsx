@@ -241,6 +241,7 @@ export function NoteEditor({
     setBlockRef,
     setRichTextBlockRef,
     toggleBlockSelection,
+    toggleTodoAtPosition,
     toggleSelectedLines,
     updateBlock,
     updateBlocksByIds,
@@ -543,6 +544,7 @@ export function NoteEditor({
                 copyTextToClipboard={copyTextToClipboard}
                 handleBlockKeyDown={handleBlockKeyDown}
                 toggleBlockSelection={toggleBlockSelection}
+                toggleTodoAtPosition={toggleTodoAtPosition}
                 getSelectedBlocksText={getSelectedBlocksText}
                 runEditorCommand={runEditorCommand}
                 setSelectedBlockIds={setSelectedBlockIds}

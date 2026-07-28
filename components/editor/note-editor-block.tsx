@@ -105,6 +105,7 @@ type NoteEditorBlockProps = {
     block: FreeformBlock,
   ) => void;
   toggleBlockSelection: (blockId: string) => void;
+  toggleTodoAtPosition: (blockId: string, position: number) => boolean;
   getSelectedBlocksText: (blockIds: string[]) => string;
   runEditorCommand: (
     command: EditorCommand,
@@ -139,6 +140,7 @@ export function NoteEditorBlock({
   copyTextToClipboard,
   handleBlockKeyDown,
   toggleBlockSelection,
+  toggleTodoAtPosition,
   getSelectedBlocksText,
   runEditorCommand,
   setSelectedBlockIds,
@@ -426,6 +428,10 @@ export function NoteEditorBlock({
                         }
   
                         selectSingleBlock(block.id);
+                        toggleTodoAtPosition(
+                          block.id,
+                          event.currentTarget.selectionStart ?? 0,
+                        );
                       }}
                       onContextMenu={(event) => {
                         event.preventDefault();
