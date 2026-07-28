@@ -8,26 +8,33 @@ datasource db {
 }
 
 model User {
-  id                    String               @id @default(cuid())
-  username              String               @unique
-  email                 String?              @unique
-  emailVerifiedAt       DateTime?            @map("email_verified_at")
-  displayName           String               @map("display_name")
-  passwordHash          String               @map("password_hash")
-  mustChangePassword    Boolean              @default(true) @map("must_change_password")
-  appLockPatternHash    String?              @map("app_lock_pattern_hash")
-  appLockVersion        Int                  @default(0) @map("app_lock_version")
-  appLockFailedAttempts Int                  @default(0) @map("app_lock_failed_attempts")
-  appLockBlockedUntil   DateTime?            @map("app_lock_blocked_until")
-  onboardingSeededAt    DateTime?            @map("onboarding_seeded_at")
-  createdAt             DateTime             @default(now()) @map("created_at")
-  updatedAt             DateTime             @updatedAt @map("updated_at")
+  id                    String                 @id @default(cuid())
+  username              String                 @unique
+  email                 String?                @unique
+  emailVerifiedAt       DateTime?              @map("email_verified_at")
+  displayName           String                 @map("display_name")
+  passwordHash          String                 @map("password_hash")
+  mustChangePassword    Boolean                @default(true) @map("must_change_password")
+  appLockPatternHash    String?                @map("app_lock_pattern_hash")
+  appLockVersion        Int                    @default(0) @map("app_lock_version")
+  appLockFailedAttempts Int                    @default(0) @map("app_lock_failed_attempts")
+  appLockBlockedUntil   DateTime?              @map("app_lock_blocked_until")
+  isAdmin               Boolean                @default(false) @map("is_admin")
+  lastSeenAt            DateTime?              @map("last_seen_at")
+  totalPageViews        Int                    @default(0) @map("total_page_views")
+  totalActiveSeconds    Int                    @default(0) @map("total_active_seconds")
+  onboardingSeededAt    DateTime?              @map("onboarding_seeded_at")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
   notebookGroups        NotebookGroup[]
   notebooks             Notebook[]
   pages                 Page[]
   attachments           Attachment[]
   passwordResetTokens   PasswordResetToken[]
   appLockResetCode      AppLockResetCode?
+  supportTickets        SupportTicket[]
+  supportMessages       SupportTicketMessage[] @relation("SupportMessageAuthor")
+  usageDaily            UserUsageDaily[]
   entityTombstones      EntityTombstone[]
 
   @@map("users")
@@ -171,6 +178,67 @@ model AppLockResetCode {
 
   @@index([expiresAt])
   @@map("app_lock_reset_codes")
+}
+
+model SupportTicket {
+  id            String                 @id @default(cuid())
+  userId        String                 @map("user_id")
+  category      String
+  subject       String
+  status        String                 @default("OPEN")
+  priority      String                 @default("NORMAL")
+  lastMessageAt DateTime               @default(now()) @map("last_message_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      SupportTicketMessage[]
+
+  @@index([userId, lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id        String        @id @default(cuid())
+  ticketId  String        @map("ticket_id")
+  authorId  String        @map("author_id")
+  body      String        @db.Text
+  isStaff   Boolean       @default(false) @map("is_staff")
+  createdAt DateTime      @default(now()) @map("created_at")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    User          @relation("SupportMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_messages")
+}
+
+model UserUsageDaily {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  day           DateTime @db.Date
+  pageViews     Int      @default(0) @map("page_views")
+  activeSeconds Int      @default(0) @map("active_seconds")
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([day])
+  @@map("user_usage_daily")
+}
+
+model RouteUsageDaily {
+  id        String   @id @default(cuid())
+  day       DateTime @db.Date
+  path      String
+  pageViews Int      @default(0) @map("page_views")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([day, path])
+  @@index([day])
+  @@map("route_usage_daily")
 }
 
 model EntityTombstone {

@@ -24,6 +24,7 @@ type AppShellProps = {
     displayName: string;
     appLockConfigured?: boolean;
     appLockRecoveryAvailable?: boolean;
+    isAdmin?: boolean;
   };
 };
 

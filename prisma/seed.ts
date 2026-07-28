@@ -23,6 +23,7 @@ async function main() {
         displayName: "Owner",
         passwordHash: await argon2.hash(password),
         mustChangePassword: true,
+        isAdmin: true,
       },
     });
 

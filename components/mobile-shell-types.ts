@@ -4,6 +4,7 @@ export type MobileCurrentUser = {
   displayName: string;
   appLockConfigured?: boolean;
   appLockRecoveryAvailable?: boolean;
+  isAdmin?: boolean;
 };
 
 export type InstallPromptEvent = Event & {

@@ -187,6 +187,24 @@ export function MobileProfileMenu({
           تنظیمات
         </Link>
 
+        <Link
+          href="/support"
+          onClick={closeAll}
+          className="rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+        >
+          پشتیبانی
+        </Link>
+
+        {currentUser.isAdmin ? (
+          <Link
+            href="/admin"
+            onClick={closeAll}
+            className="rounded-xl px-2.5 py-2 text-center text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+          >
+            مرکز مدیریت
+          </Link>
+        ) : null}
+
         <form action={logoutAndClearClientData}>
           <button
             type="submit"

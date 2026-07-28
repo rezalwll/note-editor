@@ -78,6 +78,7 @@ export async function createBootstrapOwnerIfNeeded() {
         displayName: "Owner",
         passwordHash: await argon2.hash(env.BOOTSTRAP_PASSWORD),
         mustChangePassword: true,
+        isAdmin: true,
       },
     });
   } catch (error) {

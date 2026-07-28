@@ -1,6 +1,7 @@
 "use client";
 
-import { FileText, Menu, NotebookTabs, UserRound } from "lucide-react";
+import { FileText, Menu, MessageCircleQuestion, NotebookTabs, UserRound } from "lucide-react";
+import Link from "next/link";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import { AppLockButton } from "@/components/app-lock-button";
@@ -80,7 +81,7 @@ export function MobileShellNavigation({
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_30%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
-        <div className="grid grid-cols-4 gap-2 px-3 py-2">
+        <div className="grid grid-cols-5 gap-1 px-2 py-2">
           <button
             type="button"
             onClick={toggleSections}
@@ -102,6 +103,18 @@ export function MobileShellNavigation({
             recoveryAvailable={Boolean(currentUser.appLockRecoveryAvailable)}
             variant="navigation"
           />
+          <Link
+            href="/support"
+            onClick={() => {
+              setSectionsOpen(false);
+              setPagesOpen(false);
+              setProfileOpen(false);
+            }}
+            className="inline-flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-[#33406d]"
+          >
+            <MessageCircleQuestion className="h-5 w-5" />
+            پشتیبانی
+          </Link>
           <button
             type="button"
             onClick={toggleProfile}

@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import {
+  ChevronDown,
+  Headphones,
+  MessageCircleQuestion,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -16,6 +21,7 @@ type DesktopProfileMenuProps = {
     displayName: string;
     appLockConfigured?: boolean;
     appLockRecoveryAvailable?: boolean;
+    isAdmin?: boolean;
   };
   userAccent: string;
   userInitials: string;
@@ -95,6 +101,14 @@ export function DesktopProfileMenu({
         configured={Boolean(currentUser.appLockConfigured)}
         recoveryAvailable={Boolean(currentUser.appLockRecoveryAvailable)}
       />
+      <Link
+        href="/support"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#d6dee8] bg-white text-[#4f5f89] shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition hover:bg-[#f7fbff] hover:text-indigo-700"
+        aria-label="پشتیبانی و ارتباط با توسعه‌دهنده"
+        title="پشتیبانی"
+      >
+        <MessageCircleQuestion className="h-5 w-5" />
+      </Link>
 
       <button
         ref={triggerRef}
@@ -141,6 +155,30 @@ export function DesktopProfileMenu({
                 >
                   تنظیمات
                 </Link>
+
+                <Link
+                  href="/support"
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl px-2.5 py-2 text-center text-sm text-[#32406d] transition hover:bg-[#f7fbff]"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Headphones className="h-4 w-4" />
+                    پشتیبانی
+                  </span>
+                </Link>
+
+                {currentUser.isAdmin ? (
+                  <Link
+                    href="/admin"
+                    onClick={() => setOpen(false)}
+                    className="rounded-xl px-2.5 py-2 text-center text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      مرکز مدیریت
+                    </span>
+                  </Link>
+                ) : null}
 
                 <form action={logoutAndClearClientData}>
                   <button

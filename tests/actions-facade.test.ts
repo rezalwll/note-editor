@@ -41,6 +41,13 @@ vi.mock("@/app/actions/workspace-actions", () => ({
   updateTagsAction: delegate,
   emptyTrashInlineAction: delegate,
 }));
+vi.mock("@/app/actions/support-actions", () => ({
+  createSupportTicketAction: delegate,
+  addSupportReplyAction: delegate,
+  resolveOwnSupportTicketAction: delegate,
+  addAdminSupportReplyAction: delegate,
+  updateSupportTicketAction: delegate,
+}));
 
 import * as actions from "@/app/actions";
 
@@ -54,9 +61,9 @@ describe("server action facade", () => {
       (value) => typeof value === "function",
     ) as Array<() => Promise<unknown>>;
 
-    expect(publicActions).toHaveLength(35);
+    expect(publicActions).toHaveLength(40);
     await Promise.all(publicActions.map((action) => action()));
-    expect(delegate).toHaveBeenCalledTimes(35);
+    expect(delegate).toHaveBeenCalledTimes(40);
   });
 
   it("returns the non-redirecting logout result from the auth action", async () => {

@@ -1,6 +1,7 @@
 "use server";
 
 import * as authActions from "@/app/actions/auth-actions";
+import * as supportActions from "@/app/actions/support-actions";
 import * as workspaceActions from "@/app/actions/workspace-actions";
 
 export type {
@@ -10,6 +11,7 @@ export type {
   ProfileActionState,
   ResetPasswordActionState,
 } from "@/app/actions/auth-actions";
+export type { SupportActionState } from "@/app/actions/support-actions";
 
 export async function loginAction(...args: Parameters<typeof authActions.loginAction>) {
   return authActions.loginAction(...args);
@@ -213,4 +215,34 @@ export async function emptyTrashInlineAction(
   ...args: Parameters<typeof workspaceActions.emptyTrashInlineAction>
 ) {
   return workspaceActions.emptyTrashInlineAction(...args);
+}
+
+export async function createSupportTicketAction(
+  ...args: Parameters<typeof supportActions.createSupportTicketAction>
+) {
+  return supportActions.createSupportTicketAction(...args);
+}
+
+export async function addSupportReplyAction(
+  ...args: Parameters<typeof supportActions.addSupportReplyAction>
+) {
+  return supportActions.addSupportReplyAction(...args);
+}
+
+export async function resolveOwnSupportTicketAction(
+  ...args: Parameters<typeof supportActions.resolveOwnSupportTicketAction>
+) {
+  return supportActions.resolveOwnSupportTicketAction(...args);
+}
+
+export async function addAdminSupportReplyAction(
+  ...args: Parameters<typeof supportActions.addAdminSupportReplyAction>
+) {
+  return supportActions.addAdminSupportReplyAction(...args);
+}
+
+export async function updateSupportTicketAction(
+  ...args: Parameters<typeof supportActions.updateSupportTicketAction>
+) {
+  return supportActions.updateSupportTicketAction(...args);
 }
