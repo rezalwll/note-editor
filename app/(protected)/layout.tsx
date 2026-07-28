@@ -18,6 +18,8 @@ export default async function ProtectedLayout({
           id: user.id,
           username: user.username,
           displayName: user.displayName,
+          appLockConfigured: Boolean(user.appLockPatternHash),
+          appLockRecoveryAvailable: Boolean(user.email),
         }}
       >
         {children}

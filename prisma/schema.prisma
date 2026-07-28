@@ -8,22 +8,27 @@ datasource db {
 }
 
 model User {
-  id                 String   @id @default(cuid())
-  username           String   @unique
-  email              String?  @unique
-  emailVerifiedAt    DateTime? @map("email_verified_at")
-  displayName        String   @map("display_name")
-  passwordHash       String   @map("password_hash")
-  mustChangePassword Boolean  @default(true) @map("must_change_password")
-  onboardingSeededAt DateTime? @map("onboarding_seeded_at")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-  notebookGroups     NotebookGroup[]
-  notebooks          Notebook[]
-  pages              Page[]
-  attachments        Attachment[]
-  passwordResetTokens PasswordResetToken[]
-  entityTombstones   EntityTombstone[]
+  id                    String               @id @default(cuid())
+  username              String               @unique
+  email                 String?              @unique
+  emailVerifiedAt       DateTime?            @map("email_verified_at")
+  displayName           String               @map("display_name")
+  passwordHash          String               @map("password_hash")
+  mustChangePassword    Boolean              @default(true) @map("must_change_password")
+  appLockPatternHash    String?              @map("app_lock_pattern_hash")
+  appLockVersion        Int                  @default(0) @map("app_lock_version")
+  appLockFailedAttempts Int                  @default(0) @map("app_lock_failed_attempts")
+  appLockBlockedUntil   DateTime?            @map("app_lock_blocked_until")
+  onboardingSeededAt    DateTime?            @map("onboarding_seeded_at")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  notebookGroups        NotebookGroup[]
+  notebooks             Notebook[]
+  pages                 Page[]
+  attachments           Attachment[]
+  passwordResetTokens   PasswordResetToken[]
+  appLockResetCode      AppLockResetCode?
+  entityTombstones      EntityTombstone[]
 
   @@map("users")
 }
@@ -47,26 +52,26 @@ model PendingSignup {
 }
 
 model Notebook {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  groupId     String   @map("group_id")
-  systemKey   String?  @map("system_key")
-  themeKey    String?  @map("theme_key")
+  id          String        @id @default(cuid())
+  userId      String        @map("user_id")
+  groupId     String        @map("group_id")
+  systemKey   String?       @map("system_key")
+  themeKey    String?       @map("theme_key")
   name        String
   description String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  archived    Boolean  @default(false)
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sortOrder   Int           @default(0) @map("sort_order")
+  archived    Boolean       @default(false)
+  deletedAt   DateTime?     @map("deleted_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   group       NotebookGroup @relation(fields: [groupId], references: [id])
   pages       Page[]
 
+  @@unique([userId, systemKey])
   @@index([userId, groupId, archived])
   @@index([userId, updatedAt])
   @@index([userId, deletedAt])
-  @@unique([userId, systemKey])
   @@map("notebooks")
 }
 
@@ -89,22 +94,22 @@ model NotebookGroup {
 }
 
 model Page {
-  id         String       @id @default(cuid())
-  userId     String       @map("user_id")
-  notebookId String       @map("notebook_id")
-  originalNotebookId String? @map("original_notebook_id")
-  title      String
-  bodyHtml   String       @db.Text @map("body_html")
-  bodyText   String       @db.Text @map("body_text")
-  sortOrder  Int          @default(0) @map("sort_order")
-  archived   Boolean      @default(false)
-  deletedAt  DateTime?    @map("deleted_at")
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notebook   Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
-  tags       PageTag[]
-  attachments Attachment[]
+  id                 String       @id @default(cuid())
+  userId             String       @map("user_id")
+  notebookId         String       @map("notebook_id")
+  originalNotebookId String?      @map("original_notebook_id")
+  title              String
+  bodyHtml           String       @map("body_html") @db.Text
+  bodyText           String       @map("body_text") @db.Text
+  sortOrder          Int          @default(0) @map("sort_order")
+  archived           Boolean      @default(false)
+  deletedAt          DateTime?    @map("deleted_at")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notebook           Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  tags               PageTag[]
+  attachments        Attachment[]
 
   @@index([userId, notebookId, archived])
   @@index([userId, originalNotebookId])
@@ -124,16 +129,16 @@ model PageTag {
 }
 
 model Attachment {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  pageId      String   @map("page_id")
-  fileName    String   @map("file_name")
-  mimeType    String   @map("mime_type")
-  sizeBytes   Int      @map("size_bytes")
-  storageKey  String   @unique @map("storage_key")
-  createdAt   DateTime @default(now()) @map("created_at")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  pageId     String   @map("page_id")
+  fileName   String   @map("file_name")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  storageKey String   @unique @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@index([userId, pageId])
   @@map("attachments")
@@ -141,16 +146,31 @@ model Attachment {
 
 model PasswordResetToken {
   id        String   @id @default(cuid())
-  userId     String   @map("user_id")
-  email      String
-  tokenHash  String   @unique @map("token_hash")
-  expiresAt  DateTime @map("expires_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  email     String
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
   @@index([email, expiresAt])
   @@map("password_reset_tokens")
+}
+
+model AppLockResetCode {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  codeHash       String   @map("code_hash")
+  expiresAt      DateTime @map("expires_at")
+  lastSentAt     DateTime @default(now()) @map("last_sent_at")
+  failedAttempts Int      @default(0) @map("failed_attempts")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("app_lock_reset_codes")
 }
 
 model EntityTombstone {

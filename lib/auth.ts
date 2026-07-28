@@ -5,6 +5,10 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  clearAppLockCookie,
+  isAppLockUnlocked,
+} from "@/lib/app-lock";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { normalizeEmail, normalizeUsername } from "@/lib/users";
@@ -90,6 +94,7 @@ export async function createSession(userId: string) {
 
   const cookieStore = await cookies();
 
+  await clearAppLockCookie();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -102,6 +107,7 @@ export async function createSession(userId: string) {
 export async function clearSession() {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
+  await clearAppLockCookie();
 }
 
 export async function verifySession(token?: string | null) {
@@ -131,7 +137,7 @@ export const getCurrentUser = cache(async () => {
   });
 });
 
-export async function requireUser() {
+export async function requireAuthenticatedUser() {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -144,6 +150,16 @@ export async function requireUser() {
     }
 
     redirect("/login");
+  }
+
+  return user;
+}
+
+export async function requireUser() {
+  const user = await requireAuthenticatedUser();
+
+  if (!(await isAppLockUnlocked(user))) {
+    redirect("/lock");
   }
 
   return user;

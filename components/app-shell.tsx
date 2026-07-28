@@ -22,6 +22,8 @@ type AppShellProps = {
     id: string;
     username: string;
     displayName: string;
+    appLockConfigured?: boolean;
+    appLockRecoveryAvailable?: boolean;
   };
 };
 

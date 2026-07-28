@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { AppLockButton } from "@/components/app-lock-button";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import { performSafeLogout } from "@/lib/safe-logout";
 
@@ -13,6 +14,8 @@ type DesktopProfileMenuProps = {
     id: string;
     username: string;
     displayName: string;
+    appLockConfigured?: boolean;
+    appLockRecoveryAvailable?: boolean;
   };
   userAccent: string;
   userInitials: string;
@@ -88,6 +91,10 @@ export function DesktopProfileMenu({
   return (
     <div className="relative flex items-center gap-2">
       <SyncStatusIndicator userId={currentUser.id} />
+      <AppLockButton
+        configured={Boolean(currentUser.appLockConfigured)}
+        recoveryAvailable={Boolean(currentUser.appLockRecoveryAvailable)}
+      />
 
       <button
         ref={triggerRef}

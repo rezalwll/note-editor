@@ -3,6 +3,7 @@
 import { FileText, Menu, NotebookTabs, UserRound } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
+import { AppLockButton } from "@/components/app-lock-button";
 import { BrandLogo } from "@/components/brand-logo";
 import { EditorToolbar } from "@/components/editor-toolbar";
 import { SearchTrigger } from "@/components/search-trigger";
@@ -79,7 +80,7 @@ export function MobileShellNavigation({
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_30%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
-        <div className="grid grid-cols-3 gap-2 px-3 py-2">
+        <div className="grid grid-cols-4 gap-2 px-3 py-2">
           <button
             type="button"
             onClick={toggleSections}
@@ -96,6 +97,11 @@ export function MobileShellNavigation({
             <FileText className="h-5 w-5" />
             صفحه‌ها
           </button>
+          <AppLockButton
+            configured={Boolean(currentUser.appLockConfigured)}
+            recoveryAvailable={Boolean(currentUser.appLockRecoveryAvailable)}
+            variant="navigation"
+          />
           <button
             type="button"
             onClick={toggleProfile}
