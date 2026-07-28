@@ -12,7 +12,6 @@ import {
   SUPPORT_PRIORITIES,
   SUPPORT_STATUSES,
 } from "@/lib/support";
-import { sendSupportReplyEmail } from "@/lib/support-email";
 
 export type SupportActionState = {
   error?: string;
@@ -159,6 +158,7 @@ export async function addAdminSupportReplyAction(
 
   if (ticket.user.email) {
     try {
+      const { sendSupportReplyEmail } = await import("@/lib/support-email");
       await sendSupportReplyEmail({
         email: ticket.user.email,
         displayName: ticket.user.displayName,
