@@ -1631,7 +1631,7 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
-  it("clamps text block resize to the minimum width", async () => {
+  it("clamps text block resize to the width of its longest word", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
@@ -1668,7 +1668,7 @@ describe("NoteEditor freeform placement", () => {
     fireEvent.pointerUp(window, { pointerId: 22 });
 
     await waitFor(() => {
-      expect(textBlock).toHaveStyle({ left: "300px", width: "180px" });
+      expect(textBlock).toHaveStyle({ left: "417px", width: "63px" });
     });
   });
 

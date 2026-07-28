@@ -12,13 +12,13 @@ import {
 
 import {
   BLOCK_DEFAULT_WIDTH,
-  BLOCK_MIN_WIDTH,
   BLOCK_RTL_CLICK_ANCHOR,
   IMAGE_MIN_WIDTH,
   getBlockMaxWidth,
   getBlockRightGutter,
   getCanvasInset,
   getRenderedBlockWidth,
+  getTextBlockMinWidth,
   isImageBlock,
 } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
@@ -219,7 +219,7 @@ export function useNoteEditorCanvasInteractions({
     const resizeState = resizeStateRef.current;
     const minWidth = isImageBlock(currentBlock)
       ? IMAGE_MIN_WIDTH
-      : BLOCK_MIN_WIDTH;
+      : getTextBlockMinWidth(currentBlock);
     const pointerDelta = event.clientX - resizeState.startClientX;
     const rightEdge = resizeState.startX + resizeState.startWidth;
     const maxWidth =

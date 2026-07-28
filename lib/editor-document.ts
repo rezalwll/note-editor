@@ -15,12 +15,32 @@ export const PAGE_SIDE_PADDING_MOBILE = 16;
 export const DEFAULT_CANVAS_WIDTH = 1200;
 export const DEFAULT_VIEWPORT_HEIGHT = 900;
 export const BLOCK_MIN_WIDTH = 180;
+export const TEXT_BLOCK_RESIZE_MIN_WIDTH = 48;
 export const BLOCK_DEFAULT_WIDTH = 240;
 export const BLOCK_MAX_WIDTH = 900;
 export const BLOCK_RTL_CLICK_ANCHOR = 12;
 export const IMAGE_DEFAULT_WIDTH = 420;
 export const IMAGE_MIN_WIDTH = 160;
 export const IMAGE_DEFAULT_ASPECT_RATIO = 4 / 3;
+
+export function getTextBlockMinWidth(
+  block: Pick<FreeformBlock, "text" | "fontSize">,
+) {
+  const longestWordLength = block.text
+    .trim()
+    .split(/\s+/u)
+    .reduce(
+      (longest, word) => Math.max(longest, Array.from(word).length),
+      0,
+    );
+  const fontSize = block.fontSize ?? 15;
+  const estimatedWordWidth = longestWordLength * fontSize * 0.62;
+
+  return Math.max(
+    TEXT_BLOCK_RESIZE_MIN_WIDTH,
+    Math.ceil(estimatedWordWidth + 16),
+  );
+}
 
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 

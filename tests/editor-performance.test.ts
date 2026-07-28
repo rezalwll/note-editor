@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { serializeEditorContent } from "@/lib/editor-serialization";
 import { serializeEditorContentSync } from "@/lib/editor-serialization-core";
+import { getTextBlockMinWidth } from "@/lib/editor-document";
 import { IncrementalBodyTextIndex } from "@/lib/incremental-body-text";
 import type { FreeformBlock } from "@/lib/notes";
 import { SpatialItemIndex } from "@/lib/virtualization";
@@ -17,6 +18,16 @@ function makeBlocks(count: number): FreeformBlock[] {
 }
 
 describe("editor CPU helpers", () => {
+  it("allows compact text blocks down to their longest visible word", () => {
+    expect(getTextBlockMinWidth({ text: "", fontSize: 15 })).toBe(48);
+    expect(getTextBlockMinWidth({ text: "SCSS\nSass", fontSize: 15 })).toBe(
+      54,
+    );
+    expect(
+      getTextBlockMinWidth({ text: "کلمه کوتاه‌تر", fontSize: 15 }),
+    ).toBeGreaterThan(54);
+  });
+
   it("updates body text incrementally and preserves document order", () => {
     const blocks = makeBlocks(5_000);
     const index = new IncrementalBodyTextIndex(blocks);
