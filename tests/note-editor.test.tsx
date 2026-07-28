@@ -398,6 +398,42 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("stacks side-by-side desktop blocks when the mobile canvas makes them collide", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "left", x: 48, y: 72, width: 300, text: "left block" },
+          { id: "right", x: 600, y: 72, width: 300, text: "right block" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    syncLayout();
+    const leftBlock = container.querySelector(
+      '[data-testid="note-block-left"]',
+    ) as HTMLDivElement;
+    const rightBlock = container.querySelector(
+      '[data-testid="note-block-right"]',
+    ) as HTMLDivElement;
+
+    await waitFor(() => {
+      expect(rightBlock).toHaveStyle({
+        left: "74px",
+        top: "72px",
+        width: "300px",
+      });
+      expect(leftBlock).toHaveStyle({
+        left: "48px",
+        top: "112px",
+        width: "300px",
+      });
+    });
+  });
+
   it("does not add a block for textarea interaction or drags beyond the placement threshold", async () => {
     setViewport(390);
     const { container } = renderEditor(

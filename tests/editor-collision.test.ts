@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getBlockGrowthPositionUpdates } from "@/lib/editor-collision";
+import {
+  BLOCK_COLLISION_GAP,
+  getBlockGrowthPositionUpdates,
+  getResponsiveBlockLayout,
+} from "@/lib/editor-collision";
+import { estimateBlockHeight } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
 
 function textBlock(
@@ -50,5 +55,72 @@ describe("editor block collision handling", () => {
         canvasWidth: 1_200,
       }).size,
     ).toBe(0);
+  });
+
+  it("stacks desktop columns when a narrow canvas forces them to overlap", () => {
+    const right = textBlock("right", 600, 72, 300);
+    const left = textBlock("left", 48, 72, 300);
+
+    const layout = getResponsiveBlockLayout({
+      blocks: [left, right],
+      canvasWidth: 390,
+    });
+
+    expect(layout[1]).toMatchObject({
+      id: "right",
+      x: 74,
+      y: 72,
+    });
+    expect(layout[0]).toMatchObject({
+      id: "left",
+      x: 48,
+      y:
+        72 +
+        estimateBlockHeight(right, 390) +
+        BLOCK_COLLISION_GAP,
+    });
+    expect(left).toMatchObject({ x: 48, y: 72 });
+    expect(right).toMatchObject({ x: 600, y: 72 });
+  });
+
+  it("preserves fitting and intentionally overlapping freeform positions", () => {
+    const fitting = [
+      textBlock("right", 400, 72, 240),
+      textBlock("left", 48, 72, 240),
+    ];
+    const overlapping = [
+      textBlock("first", 48, 160, 240),
+      textBlock("second", 100, 160, 240),
+    ];
+
+    expect(
+      getResponsiveBlockLayout({ blocks: fitting, canvasWidth: 900 }),
+    ).toEqual(fitting);
+    expect(
+      getResponsiveBlockLayout({ blocks: overlapping, canvasWidth: 900 }),
+    ).toEqual(overlapping);
+  });
+
+  it("cascades responsive displacement through blocks below it", () => {
+    const topRight = textBlock("top-right", 600, 72, 300);
+    const topLeft = textBlock("top-left", 48, 72, 300);
+    const belowLeft = textBlock("below-left", 48, 112, 300);
+    const heights = new Map([
+      ["top-right", 28],
+      ["top-left", 28],
+      ["below-left", 28],
+    ]);
+
+    const layout = getResponsiveBlockLayout({
+      blocks: [topLeft, belowLeft, topRight],
+      canvasWidth: 390,
+      measuredHeights: heights,
+    });
+
+    expect(layout.map(({ id, y }) => ({ id, y }))).toEqual([
+      { id: "top-left", y: 112 },
+      { id: "below-left", y: 152 },
+      { id: "top-right", y: 72 },
+    ]);
   });
 });

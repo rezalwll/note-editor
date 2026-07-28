@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
-import { getBlockGrowthPositionUpdates } from "@/lib/editor-collision";
+import {
+  getBlockGrowthPositionUpdates,
+  getResponsiveBlockLayout,
+} from "@/lib/editor-collision";
 import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_VIEWPORT_HEIGHT,
@@ -79,24 +82,34 @@ export function useNoteEditorLayout({
 
   const shouldVirtualizeBlocks =
     blocks.length >= BLOCK_VIRTUALIZATION_THRESHOLD;
+  const layoutBlocks = useMemo(
+    () => getResponsiveBlockLayout({ blocks, canvasWidth }),
+    [blocks, canvasWidth],
+  );
+  const layoutBlocksById = useMemo(
+    () => new Map(layoutBlocks.map((block) => [block.id, block])),
+    [layoutBlocks],
+  );
   const renderedBlocks = useMemo(() => {
     void spatialIndexRevision;
-    return shouldVirtualizeBlocks
-        ? spatialIndex.query(
-            { ...blockViewport, overscan: BLOCK_VIRTUALIZATION_OVERSCAN },
-            activeBlockId,
-          )
-        : blocks;
-  },
-    [
-      activeBlockId,
-      blockViewport,
-      blocks,
-      shouldVirtualizeBlocks,
-      spatialIndex,
-      spatialIndexRevision,
-    ],
-  );
+    const visibleBlocks = shouldVirtualizeBlocks
+      ? spatialIndex.query(
+          { ...blockViewport, overscan: BLOCK_VIRTUALIZATION_OVERSCAN },
+          activeBlockId,
+        )
+      : blocks;
+    return visibleBlocks.map(
+      (block) => layoutBlocksById.get(block.id) ?? block,
+    );
+  }, [
+    activeBlockId,
+    blockViewport,
+    blocks,
+    layoutBlocksById,
+    shouldVirtualizeBlocks,
+    spatialIndex,
+    spatialIndexRevision,
+  ]);
 
   const upsertLayoutBlock = useCallback(
     (block: FreeformBlock) => {
@@ -304,17 +317,46 @@ export function useNoteEditorLayout({
 
     const widthChanged = lastMeasuredCanvasWidthRef.current !== canvasWidth;
     lastMeasuredCanvasWidthRef.current = canvasWidth;
+    const hasResponsivePositions = layoutBlocks.some(
+      (block, index) => block !== blocks[index],
+    );
+    const positionChangedBlocks = layoutBlocks.filter((block) => {
+      const previousBlock = measuredBoundsRef.current.get(block.id)?.block;
+      return (
+        !previousBlock ||
+        previousBlock.x !== block.x ||
+        previousBlock.y !== block.y
+      );
+    });
+    const blocksToRefresh = new Map(
+      [...dirtyBlocksRef.current.values()].map((block) => {
+        const layoutBlock = layoutBlocksById.get(block.id) ?? block;
+        return [layoutBlock.id, layoutBlock] as const;
+      }),
+    );
+    for (const block of positionChangedBlocks) {
+      blocksToRefresh.set(block.id, block);
+    }
+
     if (widthChanged) {
-      spatialIndex.replaceAll(blocks, (block) => ({
+      spatialIndex.replaceAll(layoutBlocks, (block) => ({
         top: block.y,
         height: estimateBlockHeight(block, canvasWidth),
       }));
+    } else {
+      for (const block of blocksToRefresh.values()) {
+        spatialIndex.upsert(block, {
+          top: block.y,
+          height: estimateBlockHeight(block, canvasWidth),
+        });
+      }
     }
     const blocksToMeasure =
       widthChanged || measuredBoundsRef.current.size === 0
-        ? blocks
-        : [...dirtyBlocksRef.current.values()];
-    let shouldRecalculateMaximum = widthChanged;
+        ? layoutBlocks
+        : [...blocksToRefresh.values()];
+    let shouldRecalculateMaximum =
+      widthChanged || positionChangedBlocks.length > 0;
     let nextLowestBlockBottom = lowestBlockBottomRef.current;
     const pendingPositionUpdates = new Map(pendingDisplacementsRef.current);
     const measuredHeights = new Map(
@@ -357,12 +399,13 @@ export function useNoteEditorLayout({
       measuredHeights.set(block.id, blockHeight);
 
       if (
+        !hasResponsivePositions &&
         !widthChanged &&
         !isImageBlock(block) &&
         previousHeight !== null &&
         blockHeight > previousHeight + 0.5
       ) {
-        const effectiveBlocks = blocks.map((candidate) => {
+        const effectiveBlocks = layoutBlocks.map((candidate) => {
           const pendingY = pendingPositionUpdates.get(candidate.id);
           return pendingY === undefined
             ? candidate
@@ -400,7 +443,7 @@ export function useNoteEditorLayout({
 
     if (pendingPositionUpdates.size > 0) {
       shouldRecalculateMaximum = true;
-      for (const block of blocks) {
+      for (const block of layoutBlocks) {
         const nextY = pendingPositionUpdates.get(block.id);
         if (nextY === undefined) {
           continue;
@@ -431,7 +474,7 @@ export function useNoteEditorLayout({
 
     const frameId = window.requestAnimationFrame(() => {
       setLowestBlockBottom(nextLowestBlockBottom);
-      if (widthChanged) {
+      if (widthChanged || blocksToRefresh.size > 0) {
         setSpatialIndexRevision((current) => current + 1);
       }
     });
@@ -440,6 +483,8 @@ export function useNoteEditorLayout({
     blocks,
     canvasWidth,
     getTextBlockElement,
+    layoutBlocks,
+    layoutBlocksById,
     scheduleBlockDisplacement,
     spatialIndex,
   ]);

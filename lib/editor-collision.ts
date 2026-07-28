@@ -1,5 +1,7 @@
 import {
   estimateBlockHeight,
+  getBlockRightGutter,
+  getCanvasInset,
   getRenderedBlockWidth,
 } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
@@ -9,6 +11,7 @@ export const BLOCK_COLLISION_GAP = 12;
 type BlockBounds = {
   left: number;
   right: number;
+  top: number;
   bottom: number;
 };
 
@@ -17,6 +20,114 @@ function overlapsHorizontally(
   second: Pick<BlockBounds, "left" | "right">,
 ) {
   return first.left < second.right && first.right > second.left;
+}
+
+function getBoundedBlockX(
+  canvasWidth: number,
+  desiredX: number,
+  blockWidth: number,
+) {
+  const inset = getCanvasInset(canvasWidth);
+  const rightGutter = getBlockRightGutter(canvasWidth);
+
+  return Math.min(
+    Math.max(inset, desiredX),
+    Math.max(inset, canvasWidth - blockWidth - rightGutter),
+  );
+}
+
+function overlapsVertically(first: BlockBounds, second: BlockBounds) {
+  return first.top < second.bottom && first.bottom > second.top;
+}
+
+/**
+ * Creates a display-only layout for a narrower canvas. Blocks retain their
+ * persisted desktop coordinates, but blocks forced into each other by width
+ * clamping are stacked vertically with a stable gap.
+ */
+export function getResponsiveBlockLayout({
+  blocks,
+  canvasWidth,
+  measuredHeights,
+  gap = BLOCK_COLLISION_GAP,
+}: {
+  blocks: readonly FreeformBlock[];
+  canvasWidth: number;
+  measuredHeights?: ReadonlyMap<string, number>;
+  gap?: number;
+}) {
+  if (blocks.length < 2) {
+    return blocks.map((block) => {
+      const width = getRenderedBlockWidth(block, canvasWidth);
+      const x = getBoundedBlockX(canvasWidth, block.x, width);
+      return x === block.x ? block : { ...block, x };
+    });
+  }
+
+  const placed: Array<
+    BlockBounds & { constrained: boolean; displaced: boolean }
+  > = [];
+  const positions = new Map<string, { x: number; y: number }>();
+  const orderedBlocks = [...blocks].sort(
+    (first, second) =>
+      first.y - second.y ||
+      second.x - first.x ||
+      first.id.localeCompare(second.id),
+  );
+
+  for (const block of orderedBlocks) {
+    const width = getRenderedBlockWidth(block, canvasWidth);
+    const x = getBoundedBlockX(canvasWidth, block.x, width);
+    const height =
+      measuredHeights?.get(block.id) ?? estimateBlockHeight(block, canvasWidth);
+    const constrained =
+      x !== block.x ||
+      (typeof block.width === "number" && width !== block.width);
+    let y = block.y;
+    let displaced = false;
+
+    for (;;) {
+      const bounds = {
+        left: x,
+        right: x + width,
+        top: y,
+        bottom: y + height,
+      };
+      const collision = placed.find(
+        (obstacle) =>
+          overlapsHorizontally(bounds, obstacle) &&
+          overlapsVertically(bounds, obstacle) &&
+          (constrained || displaced || obstacle.constrained || obstacle.displaced),
+      );
+      if (!collision) {
+        break;
+      }
+
+      y = collision.bottom + gap;
+      displaced = true;
+    }
+
+    positions.set(block.id, { x, y });
+    placed.push({
+      left: x,
+      right: x + width,
+      top: y,
+      bottom: y + height,
+      constrained,
+      displaced,
+    });
+    placed.sort(
+      (first, second) =>
+        first.top - second.top || first.bottom - second.bottom,
+    );
+  }
+
+  return blocks.map((block) => {
+    const position = positions.get(block.id);
+    return !position || (position.x === block.x && position.y === block.y)
+      ? block
+      : { ...block, ...position };
+  });
 }
 
 /**
@@ -57,6 +168,7 @@ export function getBlockGrowthPositionUpdates({
     {
       left: source.x,
       right: source.x + sourceWidth,
+      top: source.y,
       bottom: source.y + nextHeight,
     },
   ];
@@ -92,6 +204,7 @@ export function getBlockGrowthPositionUpdates({
       measuredHeights?.get(block.id) ?? estimateBlockHeight(block, canvasWidth);
     affectedBounds.push({
       ...horizontalBounds,
+      top: nextY,
       bottom: nextY + height,
     });
   }
