@@ -47,6 +47,74 @@ type EditorCommandPayload = {
   primaryBlockId?: string | null;
 };
 
+type TodoPointerOverlayProps = {
+  block: FreeformBlock;
+  onToggle: (position: number) => void;
+};
+
+function getTextLineEntries(text: string) {
+  let lineStart = 0;
+
+  return text.split("\n").map((line) => {
+    const entry = { line, lineStart };
+    lineStart += line.length + 1;
+    return entry;
+  });
+}
+
+function TodoPointerOverlay({ block, onToggle }: TodoPointerOverlayProps) {
+  const lineEntries = getTextLineEntries(block.text);
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[1] min-h-7 w-full overflow-hidden whitespace-pre-wrap break-words px-1 py-0 text-right text-[15px] leading-7 text-transparent"
+      dir={block.direction ?? "rtl"}
+      style={{
+        textAlign: block.align ?? "right",
+        fontWeight: block.bold ? 700 : 400,
+        fontStyle: block.italic ? "italic" : "normal",
+        fontSize: `${block.fontSize ?? 15}px`,
+      }}
+    >
+      {lineEntries.map(({ line, lineStart }, lineIndex) => {
+        const match = line.match(/^([ \t]*)(\u2610|\u2611|\u2612)(?=\s)/);
+
+        if (!match) {
+          return (
+            <React.Fragment key={`${lineStart}-${lineIndex}`}>
+              {line}
+              {lineIndex < lineEntries.length - 1 ? "\n" : null}
+            </React.Fragment>
+          );
+        }
+
+        const markerOffset = match[1].length;
+        const markerPosition = lineStart + markerOffset;
+
+        return (
+          <React.Fragment key={`${lineStart}-${lineIndex}`}>
+            {line.slice(0, markerOffset)}
+            <span
+              data-todo-marker-position={markerPosition}
+              className="pointer-events-auto relative cursor-pointer after:absolute after:-inset-1"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggle(markerPosition);
+              }}
+            >
+              {match[2]}
+            </span>
+            {line.slice(markerOffset + 1)}
+            {lineIndex < lineEntries.length - 1 ? "\n" : null}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 type NoteEditorBlockProps = {
   block: FreeformBlock;
   canvasWidth: number;
@@ -671,6 +739,15 @@ export function NoteEditorBlock({
                       dir={block.direction ?? "rtl"}
                     />
                     )}
+                    {!block.richText ? (
+                      <TodoPointerOverlay
+                        block={block}
+                        onToggle={(position) => {
+                          selectSingleBlock(block.id);
+                          toggleTodoAtPosition(block.id, position);
+                        }}
+                      />
+                    ) : null}
                   </div>
                   );
 }

@@ -762,6 +762,37 @@ describe("NoteEditor freeform placement", () => {
     expect(textarea).toHaveValue("☑ کار اول\n☐ کار دوم");
   });
 
+  it("uses a pointer cursor only on clickable todo markers", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "todo-pointer",
+            x: 48,
+            y: 72,
+            width: 320,
+            text: "متن معمولی\n☐ کار قابل انجام",
+          },
+        ],
+      }),
+    );
+    await waitForHydration();
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const marker = container.querySelector(
+      '[data-todo-marker-position="11"]',
+    ) as HTMLElement;
+
+    expect(marker).toHaveClass("cursor-pointer");
+    expect(textarea).not.toHaveClass("cursor-pointer");
+
+    fireEvent.pointerDown(marker);
+    await waitFor(() => {
+      expect(textarea).toHaveValue("متن معمولی\n☑ کار قابل انجام");
+    });
+  });
+
   it("includes todo clicks in global undo and redo history", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
