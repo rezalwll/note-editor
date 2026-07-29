@@ -22,6 +22,7 @@ describe("pattern lock interface", () => {
       />,
     );
     const grid = screen.getByTestId("pattern-lock-grid");
+    expect(grid).toHaveAttribute("dir", "ltr");
     vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({
       x: 0,
       y: 0,

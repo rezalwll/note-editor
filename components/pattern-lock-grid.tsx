@@ -107,6 +107,7 @@ export function PatternLockGrid({
       role="application"
       aria-label={label}
       aria-disabled={disabled}
+      dir="ltr"
       data-testid="pattern-lock-grid"
       className={`relative mx-auto aspect-square w-full max-w-[280px] touch-none select-none rounded-[32px] border p-4 transition ${
         invalid
