@@ -67,6 +67,7 @@ const usernameSchema = z
   .min(1)
   .max(120)
   .transform(normalizeUsername);
+const loginIdentifierSchema = z.string().trim().min(1).max(320);
 const normalizedEmailSchema = z
   .string()
   .trim()
@@ -151,7 +152,7 @@ export async function loginAction(
 ): Promise<AuthActionState> {
   const parsed = z
     .object({
-      username: usernameSchema,
+      username: loginIdentifierSchema,
       password: z.string().min(1),
       next: z.string().optional(),
     })
@@ -162,14 +163,19 @@ export async function loginAction(
     });
 
   if (!parsed.success) {
-    return { error: "نام کاربری و رمز عبور الزامی است." };
+    return { error: "نام کاربری یا ایمیل و رمز عبور الزامی است." };
   }
+
+  const normalizedEmail = normalizedEmailSchema.safeParse(parsed.data.username);
+  const loginIdentifier = normalizedEmail.success
+    ? normalizedEmail.data
+    : normalizeUsername(parsed.data.username);
 
   const headerList = await headers();
   const key =
     headerList.get("x-forwarded-for") ??
     headerList.get("x-real-ip") ??
-    `local-user:${parsed.data.username}`;
+    `local-user:${loginIdentifier}`;
 
   const rateLimit = getRateLimitState(key);
 
@@ -183,7 +189,9 @@ export async function loginAction(
   let user;
 
   try {
-    user = await getUserByUsername(parsed.data.username);
+    user = normalizedEmail.success
+      ? await getUserByEmail(normalizedEmail.data)
+      : await getUserByUsername(loginIdentifier);
   } catch (error) {
     return {
       error:
@@ -194,14 +202,14 @@ export async function loginAction(
 
   if (!user) {
     recordFailedAttempt(key);
-    return { error: "نام کاربری یا رمز عبور نادرست است." };
+    return { error: "نام کاربری/ایمیل یا رمز عبور نادرست است." };
   }
 
   const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
 
   if (!isValid) {
     recordFailedAttempt(key);
-    return { error: "نام کاربری یا رمز عبور نادرست است." };
+    return { error: "نام کاربری/ایمیل یا رمز عبور نادرست است." };
   }
 
   clearAttempts(key);

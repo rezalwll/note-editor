@@ -69,6 +69,10 @@ describe("authentication and settings forms", () => {
     expect(container.querySelector<HTMLInputElement>('input[name="next"]')?.value).toBe("/settings");
     expect(container.querySelector<HTMLInputElement>('input[name="token"]')?.value).toBe("reset-token");
     expect(container.querySelector<HTMLInputElement>('input[name="username"][value="owner"]')).toBeTruthy();
+    expect(screen.getByLabelText("نام کاربری یا ایمیل")).toHaveAttribute(
+      "placeholder",
+      "نام کاربری یا ایمیل خود را وارد کنید",
+    );
     expect(screen.getAllByRole("button").length).toBeGreaterThan(7);
     expect(screen.getAllByRole("link").some((link) => link.getAttribute("href") === "mailto:help@example.com")).toBe(true);
   });

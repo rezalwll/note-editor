@@ -19,7 +19,7 @@ export function LoginForm() {
       <input type="hidden" name="next" value={next} />
       <div className="space-y-3">
         <label htmlFor="username" className="mb-3 block text-sm font-medium text-stone-700">
-          نام کاربری
+          نام کاربری یا ایمیل
         </label>
         <input
           id="username"
@@ -30,7 +30,7 @@ export function LoginForm() {
           autoCapitalize="none"
           dir="ltr"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-right text-stone-900 shadow-sm outline-none ring-0 transition placeholder:text-right placeholder:text-stone-400 focus:border-amber-500"
-          placeholder="نام کاربری خود را وارد کنید"
+          placeholder="نام کاربری یا ایمیل خود را وارد کنید"
         />
       </div>
       <div className="space-y-3">

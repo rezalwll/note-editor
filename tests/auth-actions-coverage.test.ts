@@ -231,6 +231,26 @@ describe("login action", () => {
     expect(mocks.recordFailedAttempt).toHaveBeenCalledWith("local-user:owner");
   });
 
+  it("logs in with a normalized email address", async () => {
+    mocks.getUserByEmail.mockResolvedValue({
+      id: "email-user",
+      passwordHash: "hash",
+    });
+
+    await loginAction(
+      {},
+      form({ username: "  Owner@Example.COM  ", password: "secret" }),
+    );
+
+    expect(mocks.getUserByEmail).toHaveBeenCalledWith("owner@example.com");
+    expect(mocks.getUserByUsername).not.toHaveBeenCalled();
+    expect(mocks.getRateLimitState).toHaveBeenCalledWith(
+      "local-user:owner@example.com",
+    );
+    expect(mocks.ensureWelcomeWorkspace).toHaveBeenCalledWith("email-user");
+    expect(mocks.createSession).toHaveBeenCalledWith("email-user");
+  });
+
   it("returns friendly and fallback lookup failures", async () => {
     mocks.getUserByUsername.mockRejectedValueOnce(new Error("db"));
     mocks.getFriendlyDatabaseError.mockReturnValueOnce("friendly");
