@@ -274,9 +274,9 @@ describe("login action", () => {
   });
 
   it.each([
-    [undefined, "/"],
-    ["https://evil.test", "/"],
-    ["//evil.test", "/"],
+    [undefined, "/workspace"],
+    ["https://evil.test", "/workspace"],
+    ["//evil.test", "/workspace"],
     ["/pages/1", "/pages/1"],
   ])("logs in and sanitizes redirect %#", async (next, expected) => {
     mocks.getUserByUsername.mockResolvedValue({ id: "user-1", passwordHash: "hash" });
@@ -412,7 +412,7 @@ describe("signup and verification actions", () => {
     );
     expect(mocks.pendingDelete).toHaveBeenCalled();
     expect(mocks.createSession).toHaveBeenCalledWith("user-1");
-    expect(mocks.redirect).toHaveBeenCalledWith("/");
+    expect(mocks.redirect).toHaveBeenCalledWith("/workspace");
   });
 
   it("reports duplicate, friendly and fallback verification failures", async () => {
@@ -482,7 +482,7 @@ describe("account maintenance actions", () => {
       displayName: "Owner",
     }))).resolves.toMatchObject({ success: expect.any(String) });
     expect(mocks.userUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "user-1" } }));
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/workspace");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/settings");
   });
 

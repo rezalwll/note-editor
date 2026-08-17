@@ -58,7 +58,7 @@ export async function createNotebookAction(formData: FormData) {
     },
   });
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
 }
 
 export async function createNotebookInlineAction(
@@ -114,7 +114,7 @@ export async function createNotebookInlineAction(
     return { notebook, page };
   });
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${notebook.id}`);
   revalidatePath(`/pages/${page.id}`);
   return { id: notebook.id, pageId: page.id, themeKey: nextThemeKey };
@@ -159,7 +159,7 @@ export async function assignNotebookGroupInlineAction(
     parsedGroupId.data,
   );
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true };
 }
 
@@ -184,7 +184,7 @@ export async function renameNotebookInlineAction(id: string, name: string) {
     data: { name: notebookName.data },
   });
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${notebookId.data}`);
   return { success: true };
 }
@@ -211,7 +211,7 @@ export async function updateNotebookThemeInlineAction(
     data: { themeKey },
   });
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${notebook.id}`);
   return { success: true };
 }
@@ -257,7 +257,7 @@ export async function reorderNotebooksInlineAction(
     ),
   );
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${parsedNotebookIds.data[0]}`);
   return { success: true };
 }
@@ -286,7 +286,7 @@ export async function updateNotebookAction(formData: FormData) {
     data: parsed.data,
   });
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${id.data}`);
 }
 
@@ -306,8 +306,8 @@ export async function archiveNotebookAction(formData: FormData) {
 
   await moveNotebookToTrash(user.id, notebook.id);
 
-  revalidatePath("/");
-  redirect("/");
+  revalidatePath("/workspace");
+  redirect("/workspace");
 }
 
 export async function archiveNotebookInlineAction(id: string) {
@@ -326,7 +326,7 @@ export async function archiveNotebookInlineAction(id: string) {
 
   const trashGroupId = await moveNotebookToTrash(user.id, notebook.id);
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true, trashGroupId };
 }
 
@@ -343,6 +343,6 @@ export async function deleteNotebookPermanentlyInlineAction(id: string) {
     return { error: "زیر مجموعه حذف‌شده پیدا نشد." };
   }
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true };
 }

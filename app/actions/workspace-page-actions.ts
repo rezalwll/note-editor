@@ -104,7 +104,7 @@ export async function reorderPagesInlineAction(
     ),
   );
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath(`/notebooks/${parsedNotebookId.data}`);
   return { success: true };
 }
@@ -230,7 +230,7 @@ export async function movePagesToNotebookInlineAction(
   for (const pageId of parsedPageIds.data) {
     revalidatePath(`/pages/${pageId}`);
   }
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true, notebookId: result.notebookId };
 }
 
@@ -281,7 +281,7 @@ export async function createPageInlineAction(notebookId: string, title: string) 
   }
 
   revalidatePath(`/notebooks/${parsed.data.notebookId}`);
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { id: page.id };
 }
 
@@ -299,7 +299,7 @@ export async function archivePageAction(formData: FormData) {
   }
 
   revalidatePath(`/notebooks/${result.notebookId}`);
-  revalidatePath("/");
+  revalidatePath("/workspace");
   redirect(`/notebooks/${result.notebookId}`);
 }
 
@@ -318,7 +318,7 @@ export async function archivePageInlineAction(pageId: string) {
 
   revalidatePath(`/notebooks/${result.notebookId}`);
   revalidatePath(`/pages/${parsedPageId.data}`);
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return {
     success: true,
     notebookId: result.notebookId,
@@ -341,7 +341,7 @@ export async function restorePageInlineAction(pageId: string) {
 
   revalidatePath(`/notebooks/${result.notebookId}`);
   revalidatePath(`/pages/${parsedPageId.data}`);
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true, notebookId: result.notebookId };
 }
 
@@ -358,7 +358,7 @@ export async function deletePagePermanentlyInlineAction(pageId: string) {
     return { error: "صفحه حذف‌شده پیدا نشد." };
   }
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true };
 }
 
@@ -397,6 +397,6 @@ export async function updateTagsAction(formData: FormData) {
 export async function emptyTrashInlineAction() {
   const user = await requireUser();
   const deletedCount = await emptyTrash(user.id);
-  revalidatePath("/");
+  revalidatePath("/workspace");
   return { success: true, deletedCount };
 }
