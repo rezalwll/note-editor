@@ -83,9 +83,9 @@ const pendingSignupStore = prisma as typeof prisma & {
 };
 
 function getSafeRedirectTarget(value: string | undefined) {
-  if (!value) return "/";
+  if (!value) return "/workspace";
   if (!value.startsWith("/") || value.startsWith("//")) {
-    return "/";
+    return "/workspace";
   }
 
   return value;
@@ -421,7 +421,7 @@ export async function completeSignupVerificationAction(
     };
   }
 
-  redirect("/");
+  redirect("/workspace");
 }
 
 export async function resendSignupVerificationCodeAction(
@@ -548,7 +548,7 @@ export async function updateProfileAction(
     };
   }
 
-  revalidatePath("/");
+  revalidatePath("/workspace");
   revalidatePath("/settings");
   return { success: "پروفایل با موفقیت به‌روزرسانی شد." };
 }

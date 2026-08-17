@@ -12,7 +12,7 @@ const initialState: AuthActionState = {};
 export function LoginForm() {
   const searchParams = useSearchParams();
   const [state, formAction] = useActionState(loginAction, initialState);
-  const next = searchParams.get("next") ?? "/";
+  const next = searchParams.get("next") ?? "/workspace";
 
   return (
     <form action={formAction} className="space-y-5">

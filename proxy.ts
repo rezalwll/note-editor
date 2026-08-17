@@ -51,7 +51,8 @@ export async function proxy(request: NextRequest) {
   const isGuestOnlyRoute =
     pathname === "/login" ||
     pathname === "/signup";
-  const isPublicAuthRoute =
+  const isPublicRoute =
+    pathname === "/" ||
     isGuestOnlyRoute ||
     pathname === "/signup/verify" ||
     pathname === "/forgot-password" ||
@@ -61,13 +62,13 @@ export async function proxy(request: NextRequest) {
     return next();
   }
 
-  if (isPublicAuthRoute) {
+  if (isPublicRoute) {
     const session = await verifySession(
       request.cookies.get(getSessionCookieName())?.value,
     );
 
     if (isGuestOnlyRoute && session?.userId) {
-      return redirect(new URL("/", request.url));
+      return redirect(new URL("/workspace", request.url));
     }
 
     return next();

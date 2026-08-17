@@ -45,7 +45,7 @@ vi.mock("@/components/forms/logout-form", () => ({ LogoutForm: () => <div>Logout
 vi.mock("@/components/forms/workspace-portability-card", () => ({ WorkspacePortabilityCard: () => <div>Portability</div> }));
 vi.mock("@/lib/email-auth", () => ({ getSupportEmail: () => "help@notava.test" }));
 
-import DashboardPage from "@/app/(protected)/page";
+import DashboardPage from "@/app/(protected)/workspace/page";
 import NotebookPage, { generateMetadata as notebookMetadata } from "@/app/(protected)/notebooks/[id]/page";
 import PageView, { generateMetadata as pageMetadata } from "@/app/(protected)/pages/[id]/page";
 import SettingsPage from "@/app/(protected)/settings/page";

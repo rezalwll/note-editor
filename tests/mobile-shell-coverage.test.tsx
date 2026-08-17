@@ -471,7 +471,7 @@ describe("MobileShell notebook workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "انتقال زیر مجموعه به حذف‌شده‌ها" }));
 
     await waitFor(() => expect(mocks.archiveNotebook).toHaveBeenCalledWith("notebook-1"));
-    expect(mocks.push).toHaveBeenCalledWith("/");
+    expect(mocks.push).toHaveBeenCalledWith("/workspace");
     await runHistoryCallbacks();
     expect(mocks.assignNotebookGroup).toHaveBeenCalledWith(["notebook-1"], "group-1");
   });
@@ -506,7 +506,7 @@ describe("MobileShell notebook workflows", () => {
 
     await waitFor(() => expect(mocks.deleteNotebookPermanently).toHaveBeenCalledWith("deleted-notebook"));
     expect(mocks.clear).toHaveBeenCalled();
-    expect(mocks.push).toHaveBeenCalledWith("/");
+    expect(mocks.push).toHaveBeenCalledWith("/workspace");
   });
 
   it("does not offer operations for system notebooks and renders empty groups", () => {

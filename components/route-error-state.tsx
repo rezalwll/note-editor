@@ -52,7 +52,7 @@ export function RouteErrorState({ error, reset, scope }: RouteErrorStateProps) {
             تلاش دوباره
           </button>
           <Link
-            href="/"
+            href="/workspace"
             className="rounded-xl border border-[#d8ddff] bg-white px-5 py-2.5 text-sm font-medium text-[#3d4b73] transition hover:bg-[#f7fbff]"
           >
             صفحهٔ اصلی

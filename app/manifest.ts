@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "notava",
     description:
       "فضای خصوصی notava برای یادداشت‌ها، مجموعه‌ها، زیر مجموعه‌ها و صفحه‌ها، آماده برای استفاده آفلاین.",
-    start_url: "/",
+    start_url: "/workspace",
     display: "standalone",
     background_color: "#f7f7ff",
     theme_color: "#b5baff",
