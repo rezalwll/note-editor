@@ -369,10 +369,11 @@ export function NoteEditor({
       <div className="min-h-full w-full">
         <div
           ref={pageRef}
+          data-testid="note-editor-scroll-area"
           onPointerDown={handlePagePointerDown}
           onPointerUp={handlePagePointerUp}
           onPointerCancel={handlePagePointerCancel}
-          className="pt-0 flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 md:pt-4 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:pb-[28vh]"
+          className="editor-page-scrollbar flex min-h-full flex-col overflow-visible border-x-0 border-y bg-white pb-24 pt-0 md:h-[calc(100dvh-176px)] md:min-h-0 md:overflow-y-auto md:overscroll-contain md:rounded-[10px] md:border md:pb-0 md:pt-4"
           style={{
             borderColor: notebookTheme.editorBorder,
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${notebookTheme.editorGlow}`,

@@ -160,6 +160,22 @@ describe("NoteEditor freeform placement", () => {
     });
   }
 
+  it("scrolls overflowing editor content inside the white page", () => {
+    renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [],
+      }),
+    );
+
+    expect(screen.getByTestId("note-editor-scroll-area")).toHaveClass(
+      "editor-page-scrollbar",
+      "md:h-[calc(100dvh-176px)]",
+      "md:overflow-y-auto",
+      "md:overscroll-contain",
+    );
+  });
+
   it("measures automatic block width with the rendered text styles", async () => {
     const measurementContext = {
       font: "",
@@ -869,6 +885,37 @@ describe("NoteEditor freeform placement", () => {
       });
     },
   );
+
+  it("renumbers following items when Enter inserts into a numbered list", async () => {
+    const initialText = "۱- اول\n۲- دوم\n۳- سوم";
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "renumbered-list",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: initialText,
+          },
+        ],
+      }),
+    );
+    await waitForHydration();
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const firstLineEnd = initialText.indexOf("\n");
+
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(firstLineEnd, firstLineEnd);
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("۱- اول\n۲- \n۳- دوم\n۴- سوم");
+      expect(textarea.selectionStart).toBe("۱- اول\n۲- ".length);
+      expect(textarea.selectionEnd).toBe("۱- اول\n۲- ".length);
+    });
+  });
 
   it("copies the selected text from the editor context menu", async () => {
     const { container } = renderEditor(

@@ -541,7 +541,7 @@ export function useNoteEditorLayout({
     canvasRef,
     canvasWidth,
     desktopCanvasMinHeight: Math.max(
-      viewportHeight - 240,
+      viewportHeight - 280,
       lowestBlockBottom + 360,
     ),
     getCanvasRect,

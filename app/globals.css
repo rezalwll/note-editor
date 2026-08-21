@@ -129,6 +129,31 @@ label[for] {
   cursor: text;
 }
 
+.editor-page-scrollbar {
+  scrollbar-color: #9aa8b8 #f3f6f8;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.editor-page-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.editor-page-scrollbar::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #f3f6f8;
+}
+
+.editor-page-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid #f3f6f8;
+  border-radius: 999px;
+  background: #9aa8b8;
+}
+
+.editor-page-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #77889b;
+}
+
 .freeform-note::placeholder {
   color: #93a0bd;
 }

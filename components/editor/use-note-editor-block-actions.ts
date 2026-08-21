@@ -54,6 +54,32 @@ function incrementListNumber(value: string) {
   return toPersianDigits(nextAsciiValue);
 }
 
+function renumberNumberedListFrom(
+  text: string,
+  start: number,
+  indentation: string,
+  firstNumber: number,
+) {
+  const lines = text.slice(start).split("\n");
+  let expectedNumber = firstNumber;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(
+      /^([ \t]*)([0-9\u06F0-\u06F9\u0660-\u0669]+)(\s*-\s+)/,
+    );
+    if (!match || match[1] !== indentation) {
+      break;
+    }
+
+    lines[index] = `${match[1]}${toPersianDigits(String(expectedNumber))}${lines[
+      index
+    ].slice(match[1].length + match[2].length)}`;
+    expectedNumber += 1;
+  }
+
+  return text.slice(0, start) + lines.join("\n");
+}
+
 type LinePrefixChange = {
   start: number;
   removedLength: number;
@@ -467,7 +493,16 @@ export function useNoteEditorBlockActions({
         )}`
       : block.text.slice(0, selectionStart);
     const afterCursor = block.text.slice(selectionStart);
-    const nextText = `${beforeCursor}\n${prefix}${afterCursor}`;
+    const insertedLineStart = beforeCursor.length + 1;
+    const textWithInsertedItem = `${beforeCursor}\n${prefix}${afterCursor}`;
+    const nextText = numberedMatch
+      ? renumberNumberedListFrom(
+          textWithInsertedItem,
+          insertedLineStart,
+          numberedMatch[1],
+          Number.parseInt(toAsciiDigits(numberedMatch[2]), 10) + 1,
+        )
+      : textWithInsertedItem;
     const nextCursorPosition = selectionStart + 1 + prefix.length;
 
     selectionRestoreRef.current = {
