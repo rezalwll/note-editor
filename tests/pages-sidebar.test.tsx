@@ -305,6 +305,40 @@ describe("PagesSidebar", () => {
     expect(screen.getByLabelText("جابجایی صفحه")).toBeInTheDocument();
   });
 
+  it("keeps the pages container above the viewport bottom and scrolls its list", () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Notebook",
+            deletedAt: null,
+            pages: [
+              {
+                id: "page-1",
+                title: "Page one",
+                updatedAt: new Date(),
+                deletedAt: null,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("pages-sidebar-container")).toHaveClass(
+      "bottom-[10px]",
+      "flex",
+      "overflow-hidden",
+    );
+    expect(screen.getByTestId("pages-sidebar-list")).toHaveClass(
+      "min-h-0",
+      "flex-1",
+      "overflow-y-auto",
+      "overscroll-contain",
+    );
+  });
+
   it("virtualizes a sidebar containing five thousand pages", () => {
     const pages = Array.from({ length: 5_000 }, (_, index) => ({
       id: `page-${index + 1}`,

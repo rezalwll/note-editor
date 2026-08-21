@@ -68,8 +68,6 @@ type PagesSidebarProps = {
 
 export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   const sidebarTopOffset = "166px";
-  const sidebarHeight = "calc(100vh - 150px)";
-  const sidebarListHeight = "calc(100vh - 198px)";
   const pathname = usePathname();
   const router = useRouter();
   const { openMenu } = useContextMenu();
@@ -496,8 +494,9 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
     return (
       <aside className="hidden xl:block">
         <div
-          className="fixed right-0 w-[300px] border-l"
-          style={{ top: sidebarTopOffset, height: sidebarHeight }}
+          data-testid="pages-sidebar-container"
+          className="fixed bottom-[10px] right-0 w-[300px] border-l"
+          style={{ top: sidebarTopOffset }}
         />
       </aside>
     );
@@ -506,10 +505,10 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
   return (
     <aside className="hidden xl:block">
       <div
-        className="fixed right-0 w-[300px] border-l"
+        data-testid="pages-sidebar-container"
+        className="fixed bottom-[10px] right-0 flex w-[300px] min-h-0 flex-col overflow-hidden border-l"
         style={{
           top: sidebarTopOffset,
-          height: sidebarHeight,
           borderColor: activeTheme?.sidebarBorder,
           backgroundColor: activeTheme?.sidebarBg,
         }}
@@ -617,8 +616,8 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
         <div
           ref={pageListRef}
-          className="overflow-y-auto text-right"
-          style={{ height: sidebarListHeight }}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain text-right"
+          data-testid="pages-sidebar-list"
           data-virtualized={shouldVirtualizePages ? "true" : "false"}
           data-rendered-count={renderedPages.length}
           onScroll={(event) => {
