@@ -161,18 +161,20 @@ describe("NoteEditor freeform placement", () => {
   }
 
   it("scrolls overflowing editor content inside the white page", () => {
-    renderEditor(
+    const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
         blocks: [],
       }),
     );
 
+    expect(container.firstElementChild).toHaveClass("xl:pt-4");
     expect(screen.getByTestId("note-editor-scroll-area")).toHaveClass(
       "editor-page-scrollbar",
       "md:h-[calc(100dvh-176px)]",
       "md:overflow-y-auto",
       "md:overscroll-contain",
+      "xl:h-[calc(100dvh-166px)]",
     );
   });
 
