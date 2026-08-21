@@ -188,10 +188,12 @@ function ContextMenuOverlay({
     20 +
     (menu.title ? 36 : 0) +
     menu.items.reduce((total, item) => total + (isSeparator(item) ? 9 : 36), 0);
+  const maxVisibleMenuHeight = Math.min(window.innerHeight * 0.7, 420);
+  const visibleMenuHeight = Math.min(estimatedHeight, maxVisibleMenuHeight);
   const left = Math.max(12, Math.min(menu.x, window.innerWidth - maxWidth - 12));
   const top = Math.max(
     12,
-    Math.min(menu.y, window.innerHeight - estimatedHeight - 12),
+    Math.min(menu.y, window.innerHeight - visibleMenuHeight - 12),
   );
   const activeSubmenuItem = menu.items.find(
     (item): item is ContextMenuItem =>
@@ -207,6 +209,10 @@ function ContextMenuOverlay({
         0,
       )
     : 0;
+  const visibleSubmenuHeight = Math.min(
+    submenuHeight,
+    maxVisibleMenuHeight,
+  );
   const isNarrowViewport = window.innerWidth < 520;
   const submenuLeft = submenuAnchor
     ? isNarrowViewport
@@ -223,7 +229,7 @@ function ContextMenuOverlay({
         12,
         Math.min(
           isNarrowViewport ? top : submenuAnchor.top - 6,
-          window.innerHeight - submenuHeight - 12,
+          window.innerHeight - visibleSubmenuHeight - 12,
         ),
       )
     : top;

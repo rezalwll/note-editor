@@ -3,10 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ContextMenuProvider,
+  type ContextMenuItem,
   useContextMenu,
 } from "@/components/context-menu";
 
-function ContextMenuHarness({ onSelect }: { onSelect: () => void }) {
+function ContextMenuHarness({
+  onSelect,
+  submenu,
+}: {
+  onSelect: () => void;
+  submenu?: ContextMenuItem[];
+}) {
   const { openMenu } = useContextMenu();
 
   return (
@@ -20,7 +27,7 @@ function ContextMenuHarness({ onSelect }: { onSelect: () => void }) {
             {
               id: "color",
               label: "رنگ",
-              submenu: [
+              submenu: submenu ?? [
                 {
                   id: "mint",
                   label: "نعنایی",
@@ -55,6 +62,14 @@ describe("ContextMenu submenus", () => {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       }),
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1920,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 868,
     });
   });
 
@@ -101,6 +116,73 @@ describe("ContextMenu submenus", () => {
     expect(
       await screen.findByRole("menu", { name: "رنگ" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a long RTL submenu beside its trigger instead of pinning it to the viewport top", async () => {
+    const submenu = Array.from({ length: 22 }, (_, index) => ({
+      id: `target-${index}`,
+      label: `زیر مجموعه ${index}`,
+      onSelect: vi.fn(),
+    }));
+    render(
+      <ContextMenuProvider>
+        <ContextMenuHarness onSelect={vi.fn()} submenu={submenu} />
+      </ContextMenuProvider>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "باز کردن منو" }), {
+      clientX: 1638,
+      clientY: 650,
+    });
+    const colorItem = screen.getByRole("menuitem", { name: "رنگ" });
+    vi.spyOn(colorItem, "getBoundingClientRect").mockReturnValue({
+      bottom: 776,
+      height: 36,
+      left: 1638,
+      right: 1878,
+      top: 740,
+      width: 240,
+      x: 1638,
+      y: 740,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerEnter(colorItem);
+
+    expect(await screen.findByRole("menu", { name: "رنگ" })).toHaveStyle({
+      left: "1422px",
+      top: "436px",
+    });
+  });
+
+  it("opens a submenu on the available side when the preferred RTL side is clipped", async () => {
+    render(
+      <ContextMenuProvider>
+        <ContextMenuHarness onSelect={vi.fn()} />
+      </ContextMenuProvider>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "باز کردن منو" }), {
+      clientX: 100,
+      clientY: 180,
+    });
+    const colorItem = screen.getByRole("menuitem", { name: "رنگ" });
+    vi.spyOn(colorItem, "getBoundingClientRect").mockReturnValue({
+      bottom: 236,
+      height: 36,
+      left: 100,
+      right: 340,
+      top: 200,
+      width: 240,
+      x: 100,
+      y: 200,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerEnter(colorItem);
+
+    expect(await screen.findByRole("menu", { name: "رنگ" })).toHaveStyle({
+      left: "348px",
+      top: "194px",
+    });
   });
 
   it("ignores hydration scroll restoration briefly, then dismisses on scroll", () => {

@@ -227,6 +227,61 @@ test("moves a page to another notebook from its context menu", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("keeps a long move-page submenu attached to its parent item", async ({
+  page,
+  account,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 868 });
+  const source = await createE2EWorkspace(account.id, {
+    groupName: "Long move menu source",
+    notebookName: "Long move menu notebook",
+    pages: Array.from({ length: 9 }, (_, index) => ({
+      title: `Move menu page ${index + 1}`,
+    })),
+  });
+
+  for (let index = 0; index < 18; index += 1) {
+    await createE2EWorkspace(account.id, {
+      groupName: `Move target group ${index + 1}`,
+      notebookName: `Move target notebook ${index + 1}`,
+    });
+  }
+
+  await login(page, account);
+  const activePage = source.pages.at(-1)!;
+  await page.goto(`/pages/${activePage.id}`);
+
+  const pageRow = page.getByTestId(`page-item-${activePage.id}`);
+  await pageRow.scrollIntoViewIfNeeded();
+  await pageRow.click({ button: "right" });
+
+  const moveTrigger = page.locator(
+    '[data-context-menu-item-id="move-pages"]',
+  );
+  await expect(moveTrigger).toBeVisible();
+  await moveTrigger.click();
+
+  const submenu = page.getByRole("menu", { name: "انتقال صفحه به" });
+  await expect(submenu).toBeVisible();
+  const [triggerBox, submenuBox] = await Promise.all([
+    moveTrigger.boundingBox(),
+    submenu.boundingBox(),
+  ]);
+
+  expect(triggerBox).not.toBeNull();
+  expect(submenuBox).not.toBeNull();
+  expect(submenuBox!.y).toBeCloseTo(436, 0);
+  expect(submenuBox!.y).toBeLessThanOrEqual(triggerBox!.y);
+  expect(submenuBox!.y + submenuBox!.height).toBeGreaterThanOrEqual(
+    triggerBox!.y + triggerBox!.height,
+  );
+  expect(triggerBox!.x - (submenuBox!.x + submenuBox!.width)).toBeCloseTo(
+    8,
+    0,
+  );
+  expect(submenuBox!.y + submenuBox!.height).toBeLessThanOrEqual(856);
+});
+
 test("autosaves editor content and restores it after reload", async ({
   page,
   account,
