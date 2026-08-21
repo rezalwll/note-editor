@@ -74,7 +74,10 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
   return (
     <ContextMenuProvider>
       <WorkspaceHistoryProvider>
-       <div className="min-h-screen h-[100dvh] overflow-hidden bg-[#f6f6f6] text-[#2b2b2b] xl:h-auto xl:overflow-visible">
+       <div
+         data-testid="app-shell-root"
+         className="h-[100dvh] min-h-screen overflow-hidden bg-[#f6f6f6] text-[#2b2b2b] xl:flex xl:min-h-0 xl:flex-col"
+       >
         <MobileShell
           notebooks={shellNotebooks}
           groups={shellGroups}
@@ -82,7 +85,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
         />
         <GlobalSearchOverlay />
 
-        <div className="sticky top-0 z-40 hidden overflow-visible xl:block">
+        <div className="sticky top-0 z-40 hidden shrink-0 overflow-visible xl:block">
           <header className="border-b border-[#b5baff] bg-[linear-gradient(90deg,rgba(159,161,255,0.94)_0%,rgba(181,186,255,0.94)_32%,rgba(174,226,255,0.92)_68%,rgba(217,249,223,0.9)_100%)] backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
               <div className="flex items-center gap-3">

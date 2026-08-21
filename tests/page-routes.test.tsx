@@ -123,7 +123,14 @@ describe("protected page routes", () => {
     const props = { params: Promise.resolve({ id: "notebook-1" }) };
     expect(await notebookMetadata(props)).toEqual({ title: expect.stringContaining("Notebook") });
     render(await NotebookPage(props));
-    expect(screen.getByRole("heading")).toHaveTextContent("Notebook");
+    const heading = screen.getByRole("heading");
+    expect(heading).toHaveTextContent("Notebook");
+    const emptyNotebookSurface = heading.parentElement?.parentElement?.parentElement;
+    expect(emptyNotebookSurface).toHaveClass("xl:h-full", "xl:min-h-0");
+    expect(emptyNotebookSurface?.parentElement).toHaveClass("h-full");
+    expect(emptyNotebookSurface?.parentElement?.parentElement).toHaveClass(
+      "xl:pt-[6px]",
+    );
   });
 
   it("renders an editable page and generates its metadata", async () => {

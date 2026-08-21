@@ -326,10 +326,17 @@ describe("PagesSidebar", () => {
       />,
     );
 
-    expect(screen.getByTestId("pages-sidebar-container")).toHaveClass(
-      "bottom-[10px]",
+    const container = screen.getByTestId("pages-sidebar-container");
+
+    expect(container).toHaveClass(
+      "h-full",
       "flex",
       "overflow-hidden",
+    );
+    expect(container.parentElement).toHaveClass(
+      "pt-[6px]",
+      "pb-[10px]",
+      "xl:col-start-1",
     );
     expect(screen.getByTestId("pages-sidebar-list")).toHaveClass(
       "min-h-0",

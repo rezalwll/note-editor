@@ -78,6 +78,66 @@ test("creates a group, notebook and page through the workspace UI", async ({
   await expect(page.getByTestId("page-title-input")).toHaveValue(pageTitle);
 });
 
+test("keeps the desktop editor inside the viewport with isolated scrolling", async ({
+  page,
+  account,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 868 });
+  const workspace = await createE2EWorkspace(account.id, {
+    groupName: "Desktop layout group",
+    notebookName: "Desktop layout notebook",
+    pages: [{ title: "Desktop layout page" }],
+  });
+
+  await login(page, account);
+  await page.goto(`/pages/${workspace.pages[0].id}`);
+  await expect(page.getByTestId("note-editor-scroll-area")).toBeVisible();
+  await expect(page.getByTestId("pages-sidebar-container")).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const editor = document.querySelector<HTMLElement>(
+      '[data-testid="note-editor-scroll-area"]',
+    );
+    const sidebar = document.querySelector<HTMLElement>(
+      '[data-testid="pages-sidebar-container"]',
+    );
+    const main = document.querySelector("main");
+
+    if (!editor || !sidebar || !main) {
+      throw new Error("Desktop workspace geometry is unavailable.");
+    }
+
+    const editorRect = editor.getBoundingClientRect();
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const mainRect = main.getBoundingClientRect();
+
+    return {
+      documentClientHeight: document.documentElement.clientHeight,
+      documentScrollHeight: document.documentElement.scrollHeight,
+      windowScrollY: window.scrollY,
+      viewportHeight: window.innerHeight,
+      mainTop: mainRect.top,
+      editorTop: editorRect.top,
+      editorBottom: editorRect.bottom,
+      sidebarTop: sidebarRect.top,
+      sidebarBottom: sidebarRect.bottom,
+    };
+  });
+
+  expect(geometry.documentScrollHeight).toBe(geometry.documentClientHeight);
+  expect(geometry.windowScrollY).toBe(0);
+  expect(Math.abs(geometry.editorTop - geometry.sidebarTop)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.editorTop - geometry.mainTop - 6)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.editorBottom - geometry.viewportHeight)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.sidebarBottom - geometry.viewportHeight + 10)).toBeLessThanOrEqual(1);
+
+  await page.mouse.move(900, 600);
+  await page.mouse.wheel(0, 800);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(0);
+});
+
 test("moves a notebook between groups and keeps navigation stable", async ({
   page,
   account,

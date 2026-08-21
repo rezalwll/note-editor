@@ -50,7 +50,7 @@ export default async function PageView({ params }: PageViewProps) {
 
   return (
     <div className="h-full bg-white">
-      <div className="mx-auto max-w-[1400px]">
+      <div className="mx-auto h-full max-w-[1400px]">
         <NoteEditor
           userId={user.id}
           notebookId={page.notebook.id}

@@ -168,13 +168,16 @@ describe("NoteEditor freeform placement", () => {
       }),
     );
 
-    expect(container.firstElementChild).toHaveClass("xl:pt-4");
+    expect(container.firstElementChild).toHaveClass(
+      "min-h-0",
+      "xl:pt-[6px]",
+    );
     expect(screen.getByTestId("note-editor-scroll-area")).toHaveClass(
       "editor-page-scrollbar",
       "md:h-[calc(100dvh-176px)]",
       "md:overflow-y-auto",
       "md:overscroll-contain",
-      "xl:h-[calc(100dvh-166px)]",
+      "xl:h-full",
     );
   });
 

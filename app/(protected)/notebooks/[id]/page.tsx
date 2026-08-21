@@ -53,10 +53,10 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
   const theme = getNotebookTheme(notebook.id, notebook.themeKey);
 
   return (
-    <div className="h-full bg-white">
-      <div className="mx-auto max-w-[1400px]">
+    <div className="h-full min-h-0 bg-white xl:pt-[6px]">
+      <div className="mx-auto h-full max-w-[1400px]">
         <div
-          className="min-h-full border-x-0 border-y bg-white px-6 pb-24 pt-8 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:px-12 md:pt-10"
+          className="min-h-full border-x-0 border-y bg-white px-6 pb-24 pt-8 md:min-h-[calc(100vh-136px)] md:rounded-[10px] md:border md:px-12 md:pt-10 xl:h-full xl:min-h-0"
           style={{
             borderColor: theme.editorBorder,
             boxShadow: `0 1px 0 rgba(0,0,0,0.04), 0 14px 36px ${theme.editorGlow}`,

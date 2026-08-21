@@ -67,7 +67,6 @@ type PagesSidebarProps = {
 };
 
 export function PagesSidebar({ notebooks }: PagesSidebarProps) {
-  const sidebarTopOffset = "166px";
   const pathname = usePathname();
   const router = useRouter();
   const { openMenu } = useContextMenu();
@@ -492,23 +491,21 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
 
   if (!activeNotebook) {
     return (
-      <aside className="hidden xl:block">
+      <aside className="hidden h-full min-h-0 pb-[10px] pt-[6px] xl:col-start-1 xl:row-start-1 xl:block">
         <div
           data-testid="pages-sidebar-container"
-          className="fixed bottom-[10px] right-0 w-[300px] border-l"
-          style={{ top: sidebarTopOffset }}
+          className="h-full w-[300px] border-l"
         />
       </aside>
     );
   }
 
   return (
-    <aside className="hidden xl:block">
+    <aside className="hidden h-full min-h-0 pb-[10px] pt-[6px] xl:col-start-1 xl:row-start-1 xl:block">
       <div
         data-testid="pages-sidebar-container"
-        className="fixed bottom-[10px] right-0 flex w-[300px] min-h-0 flex-col overflow-hidden border-l"
+        className="flex h-full w-[300px] min-h-0 flex-col overflow-hidden border-l"
         style={{
-          top: sidebarTopOffset,
           borderColor: activeTheme?.sidebarBorder,
           backgroundColor: activeTheme?.sidebarBg,
         }}

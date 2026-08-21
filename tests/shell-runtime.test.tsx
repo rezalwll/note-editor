@@ -84,6 +84,13 @@ describe("application shell and runtimes", () => {
     });
 
     render(await AppShell({ currentUser: user, children: <div>Workspace</div> }));
+    expect(screen.getByTestId("app-shell-root")).toHaveClass(
+      "h-[100dvh]",
+      "overflow-hidden",
+      "xl:flex",
+      "xl:min-h-0",
+      "xl:flex-col",
+    );
     expect(screen.getByText("Mobile shell")).toBeInTheDocument();
     expect(screen.getByText("Section tabs")).toBeInTheDocument();
     expect(screen.getByText("Workspace")).toBeInTheDocument();
