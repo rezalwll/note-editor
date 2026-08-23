@@ -51,14 +51,15 @@ test("exports and imports a real workspace archive", async ({
   );
 
   await page.goto(`/pages/${target.id}`);
-  await page.getByTestId("page-title-input").fill("عنوان تغییرکرده بعد از خروجی");
-  await page.getByTestId("note-canvas").click({ position: { x: 12, y: 12 } });
+  const titleInput = page.getByTestId("page-title-input");
+  await titleInput.fill("عنوان تغییرکرده بعد از خروجی");
+  await titleInput.press("Tab");
+  await waitForSyncState(page, "synced");
   await expect
     .poll(async () =>
       (await findPage(target.id))?.title,
     )
     .toBe("عنوان تغییرکرده بعد از خروجی");
-  await waitForSyncState(page, "synced");
 
   await page.goto("/settings");
   await page.getByTestId("workspace-import-file").setInputFiles(archivePath);
