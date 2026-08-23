@@ -77,43 +77,62 @@ describe("protected page routes", () => {
     mocks.groupFindMany.mockResolvedValue([{ id: "group-1", name: "Group" }]);
     mocks.notebookFindMany.mockResolvedValue([]);
     render(await DashboardPage());
-    expect(screen.getByRole("heading")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "سلام، Owner" })).toBeInTheDocument();
+    expect(screen.getByText("اولین صفحه‌ات را بساز")).toBeInTheDocument();
   });
 
-  it("redirects the dashboard to the user's last valid page", async () => {
-    mocks.cookieGet.mockReturnValue({ value: "page-last" });
-    mocks.pageFindFirst.mockResolvedValue({ id: "page-last" });
-
-    await DashboardPage();
-
-    expect(mocks.cookieGet).toHaveBeenCalledWith("notava_last_page_user-1");
-    expect(mocks.pageFindFirst).toHaveBeenCalledWith({
-      where: {
-        id: "page-last",
-        userId: "user-1",
-        archived: false,
-        deletedAt: null,
-        notebook: {
-          is: { archived: false, deletedAt: null },
-        },
-      },
-      select: { id: true },
-    });
-    expect(mocks.redirect).toHaveBeenCalledWith("/pages/page-last");
-    expect(mocks.notebookFindMany).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the first available page when the remembered page is stale", async () => {
-    mocks.cookieGet.mockReturnValue({ value: "page-deleted" });
-    mocks.pageFindFirst.mockResolvedValue(null);
-    mocks.groupFindMany.mockResolvedValue([]);
+  it("renders the most recently edited page as continue writing", async () => {
+    mocks.groupFindMany.mockResolvedValue([{ id: "group-1", name: "کار", systemKey: null }]);
     mocks.notebookFindMany.mockResolvedValue([
-      { id: "notebook-1", pages: [{ id: "page-first" }] },
+      {
+        id: "notebook-1",
+        name: "پروژه",
+        groupId: "group-1",
+        group: { id: "group-1", name: "کار" },
+        systemKey: null,
+        deletedAt: null,
+        pages: [
+          {
+            id: "page-recent",
+            title: "ایده تازه",
+            updatedAt: new Date("2026-08-23T10:00:00.000Z"),
+            deletedAt: null,
+          },
+        ],
+      },
     ]);
 
-    await DashboardPage();
+    render(await DashboardPage());
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/pages/page-first");
+    expect(screen.getAllByRole("link", { name: /ایده تازه/ })[0]).toHaveAttribute(
+      "href",
+      "/pages/page-recent",
+    );
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("summarizes collection note counts on the dashboard", async () => {
+    mocks.groupFindMany.mockResolvedValue([
+      { id: "group-1", name: "کار", systemKey: null },
+    ]);
+    mocks.notebookFindMany.mockResolvedValue([
+      {
+        id: "notebook-1",
+        name: "پروژه",
+        groupId: "group-1",
+        group: { id: "group-1", name: "کار" },
+        systemKey: null,
+        deletedAt: null,
+        pages: [
+          { id: "page-1", title: "یک", updatedAt: new Date(), deletedAt: null },
+          { id: "page-2", title: "دو", updatedAt: new Date(), deletedAt: null },
+        ],
+      },
+    ]);
+
+    render(await DashboardPage());
+
+    expect(screen.getByText("۲ یادداشت")).toBeInTheDocument();
   });
 
   it("renders a notebook without pages and generates its metadata", async () => {

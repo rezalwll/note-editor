@@ -53,6 +53,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [pagesOpen, setPagesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
@@ -152,10 +153,14 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
 
     const updatePanelPosition = () => {
       const rect = profileTriggerRef.current!.getBoundingClientRect();
-      const panelWidth = 176;
+      const panelWidth = 224;
+      const panelHeight = 286;
 
       setProfilePanelPosition({
-        top: rect.bottom + 10,
+        top:
+          rect.top > window.innerHeight / 2
+            ? Math.max(12, rect.top - panelHeight - 10)
+            : rect.bottom + 10,
         left: Math.min(
           Math.max(12, rect.right - panelWidth),
           window.innerWidth - panelWidth - 12,
@@ -189,6 +194,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     setSectionsOpen(false);
     setPagesOpen(false);
     setProfileOpen(false);
+    setCreateMenuOpen(false);
     setActionSheet(null);
   }
 
@@ -409,6 +415,35 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
     });
   }
 
+  function startCreatePage() {
+    if (!activeNotebook || activeNotebook.deletedAt) {
+      return;
+    }
+
+    setCreateMenuOpen(false);
+    setDraftTitle("");
+    setIsCreating(true);
+    setPagesOpen(true);
+  }
+
+  function startCreateNotebook() {
+    if (!activeGroup || activeGroup.systemKey) {
+      return;
+    }
+
+    setCreateMenuOpen(false);
+    setSectionsOpen(true);
+    beginCreateNotebook(activeGroup.id);
+  }
+
+  function startCreateGroup() {
+    setCreateMenuOpen(false);
+    setEditingGroupId(null);
+    setDraftGroupName("");
+    setIsCreatingGroup(true);
+    setSectionsOpen(true);
+  }
+
   function deleteGroup(group: MobileGroupSection) {
     const groupId = group.id;
     closeActionSheet();
@@ -547,6 +582,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       closeActionSheet={closeActionSheet}
       closeAll={closeAll}
       currentUser={currentUser}
+      createMenuOpen={createMenuOpen}
       deleteGroup={deleteGroup}
       deleteNotebook={deleteNotebook}
       deletePagePermanently={deletePagePermanently}
@@ -577,6 +613,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       sectionsOpen={sectionsOpen}
       selectNotebook={selectNotebook}
       setActionSheet={setActionSheet}
+      setCreateMenuOpen={setCreateMenuOpen}
       setDraftGroupName={setDraftGroupName}
       setDraftNotebookName={setDraftNotebookName}
       setDraftTitle={setDraftTitle}
@@ -593,6 +630,9 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       submitCreateNotebook={submitCreateNotebook}
       submitRenameGroup={submitRenameGroup}
       submitRenameNotebook={submitRenameNotebook}
+      startCreateGroup={startCreateGroup}
+      startCreateNotebook={startCreateNotebook}
+      startCreatePage={startCreatePage}
       toggleGroupSelection={toggleGroupSelection}
     />
   );

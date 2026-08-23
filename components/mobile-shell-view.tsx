@@ -5,6 +5,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import { MobileShellNavigation } from "@/components/mobile-shell-navigation";
 import {
   MobileActionSheet,
+  MobileCreateMenu,
   MobileProfileMenu,
 } from "@/components/mobile-shell-overlays";
 import { MobilePagesPanel } from "@/components/mobile-shell-pages-panel";
@@ -37,6 +38,7 @@ type MobileShellViewProps = {
   cancelCreateNotebook: () => void;
   closeActionSheet: () => void;
   closeAll: () => void;
+  createMenuOpen: boolean;
   currentUser: MobileCurrentUser;
   creatingNotebookGroupId: string | null;
   deleteGroup: (group: MobileGroupSection) => void;
@@ -68,6 +70,7 @@ type MobileShellViewProps = {
   sectionsOpen: boolean;
   selectNotebook: (notebook: MobileNotebook) => void;
   setActionSheet: Dispatch<SetStateAction<ActionSheetState>>;
+  setCreateMenuOpen: Dispatch<SetStateAction<boolean>>;
   setDraftGroupName: Dispatch<SetStateAction<string>>;
   setDraftNotebookName: Dispatch<SetStateAction<string>>;
   setDraftTitle: Dispatch<SetStateAction<string>>;
@@ -84,6 +87,9 @@ type MobileShellViewProps = {
   submitCreateNotebook: () => void;
   submitRenameGroup: () => void;
   submitRenameNotebook: () => void;
+  startCreateGroup: () => void;
+  startCreateNotebook: () => void;
+  startCreatePage: () => void;
   toggleGroupSelection: (groupId: string) => void;
 };
 
@@ -104,6 +110,7 @@ export function MobileShellView({
   cancelCreateNotebook,
   closeActionSheet,
   closeAll,
+  createMenuOpen,
   currentUser,
   creatingNotebookGroupId,
   deleteGroup,
@@ -135,6 +142,7 @@ export function MobileShellView({
   sectionsOpen,
   selectNotebook,
   setActionSheet,
+  setCreateMenuOpen,
   setDraftGroupName,
   setDraftNotebookName,
   setDraftTitle,
@@ -151,13 +159,21 @@ export function MobileShellView({
   submitCreateNotebook,
   submitRenameGroup,
   submitRenameNotebook,
+  startCreateGroup,
+  startCreateNotebook,
+  startCreatePage,
   toggleGroupSelection,
 }: MobileShellViewProps) {
   return (
     <div className="xl:hidden">
       <MobileShellNavigation
+        activeGroup={activeGroup}
+        activeNotebook={activeNotebook}
+        createMenuOpen={createMenuOpen}
         currentUser={currentUser}
+        pathname={pathname}
         profileTriggerRef={profileTriggerRef}
+        setCreateMenuOpen={setCreateMenuOpen}
         setPagesOpen={setPagesOpen}
         setProfileOpen={setProfileOpen}
         setSectionsOpen={setSectionsOpen}
@@ -230,6 +246,19 @@ export function MobileShellView({
           deleteNotebook={deleteNotebook}
           deletePagePermanently={deletePagePermanently}
           restorePage={restorePage}
+        />
+      ) : null}
+
+      {createMenuOpen ? (
+        <MobileCreateMenu
+          canCreateNotebook={Boolean(
+            activeGroup && !activeGroup.systemKey,
+          )}
+          canCreatePage={Boolean(activeNotebook && !activeNotebook.deletedAt)}
+          close={() => setCreateMenuOpen(false)}
+          createGroup={startCreateGroup}
+          createNotebook={startCreateNotebook}
+          createPage={startCreatePage}
         />
       ) : null}
 

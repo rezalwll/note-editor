@@ -226,7 +226,7 @@ describe("MobileShell panels and installation", () => {
 
   it("toggles every panel, positions profile and dismisses it inside/outside correctly", async () => {
     renderShell();
-    expect(screen.getByTestId("mobile-sync")).toBeInTheDocument();
+    expect(screen.queryByTestId("mobile-sync")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "باز کردن پروفایل" }));
     expect(screen.getByText("@owner")).toBeInTheDocument();
@@ -245,6 +245,7 @@ describe("MobileShell panels and installation", () => {
     expect(screen.queryByText("@owner")).not.toBeInTheDocument();
 
     openSections();
+    expect(screen.queryByTestId("mobile-sync")).not.toBeInTheDocument();
     expect(screen.getByText("گروه اول")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "باز کردن مجموعه‌ها" }));
     expect(screen.queryByText("گروه اول")).not.toBeInTheDocument();
@@ -252,6 +253,27 @@ describe("MobileShell panels and installation", () => {
     expect(screen.getByText("صفحه اول")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "صفحه‌ها" }));
     expect(screen.queryByText("صفحه اول")).not.toBeInTheDocument();
+  });
+
+  it("positions the profile panel above a trigger in the lower half of the screen", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 320,
+      y: 700,
+      width: 40,
+      height: 40,
+      top: 700,
+      right: 360,
+      bottom: 740,
+      left: 320,
+      toJSON: () => ({}),
+    });
+
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "باز کردن پروفایل" }));
+
+    expect(screen.getByText("@owner").closest("div.fixed")).toHaveStyle({
+      top: "404px",
+    });
   });
 
   it("captures and runs the PWA install prompt", async () => {
@@ -276,6 +298,26 @@ describe("MobileShell panels and installation", () => {
     expect(screen.getByRole("button", { name: "دفتر اول" })).toBeInTheDocument();
     expandGroup("گروه اول");
     expect(screen.queryByRole("button", { name: "دفتر اول" })).not.toBeInTheDocument();
+  });
+
+  it("routes the primary create action to page, notebook and group workflows", () => {
+    const pageView = renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "ساخت مورد جدید" }));
+    expect(screen.getByText("چه چیزی می‌سازی؟")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^صفحه جدید/ }));
+    expect(screen.getByPlaceholderText("صفحه بدون عنوان")).toBeInTheDocument();
+    pageView.unmount();
+
+    const notebookView = renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "ساخت مورد جدید" }));
+    fireEvent.click(screen.getByRole("button", { name: /^زیرمجموعه جدید/ }));
+    expect(screen.getByPlaceholderText("نام زیر مجموعه جدید")).toBeInTheDocument();
+    notebookView.unmount();
+
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "ساخت مورد جدید" }));
+    fireEvent.click(screen.getByRole("button", { name: /^مجموعه جدید/ }));
+    expect(screen.getByPlaceholderText("نام مجموعه جدید")).toBeInTheDocument();
   });
 });
 
@@ -522,6 +564,7 @@ describe("MobileShell page workflows", () => {
   it("creates a named page and records undo/redo", async () => {
     mocks.pathname = "/pages/page-1";
     renderShell();
+    expect(screen.getByTestId("mobile-sync")).toBeInTheDocument();
     openPages();
     fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
     const input = screen.getByPlaceholderText("صفحه بدون عنوان");

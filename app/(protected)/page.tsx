@@ -1,91 +1,77 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-
+import { MobileHomeDashboard } from "@/components/mobile-home-dashboard";
 import { requireUser } from "@/lib/auth";
-import { getLastVisitedPageCookieName } from "@/lib/last-visited-page";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const cookieStore = await cookies();
-  const lastVisitedPageId = cookieStore.get(
-    getLastVisitedPageCookieName(user.id),
-  )?.value;
-
-  if (lastVisitedPageId) {
-    const lastVisitedPage = await prisma.page.findFirst({
-      where: {
-        id: lastVisitedPageId,
-        userId: user.id,
-        archived: false,
-        deletedAt: null,
-        notebook: {
-          is: {
-            archived: false,
-            deletedAt: null,
+  const [groups, notebooks] = await Promise.all([
+    prisma.notebookGroup.findMany({
+      where: { userId: user.id, systemKey: null },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.notebook.findMany({
+      where: { archived: false, deletedAt: null, userId: user.id },
+      include: {
+        group: { select: { id: true, name: true } },
+        pages: {
+          where: { archived: false, deletedAt: null, userId: user.id },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            title: true,
+            updatedAt: true,
+            deletedAt: true,
           },
         },
       },
-      select: { id: true },
+      orderBy: [
+        { group: { sortOrder: "asc" } },
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+      ],
+    }),
+  ]);
+  const recentPages = notebooks
+    .filter((notebook) => !notebook.deletedAt && !notebook.systemKey)
+    .flatMap((notebook) =>
+      notebook.pages.map((page) => ({
+        id: page.id,
+        title: page.title,
+        updatedAt: page.updatedAt,
+        notebookName: notebook.name,
+        groupName: notebook.group?.name ?? null,
+      })),
+    )
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  const collections = groups
+    .filter((group) => group.systemKey === null)
+    .map((group) => {
+      const groupNotebooks = notebooks.filter(
+        (notebook) => notebook.groupId === group.id && !notebook.deletedAt,
+      );
+      const firstNotebook = groupNotebooks[0];
+      const firstPage = firstNotebook?.pages[0];
+      return {
+        id: group.id,
+        name: group.name,
+        pageCount: groupNotebooks.reduce(
+          (count, notebook) => count + notebook.pages.length,
+          0,
+        ),
+        href: firstPage
+          ? `/pages/${firstPage.id}`
+          : firstNotebook
+            ? `/notebooks/${firstNotebook.id}`
+            : "/",
+      };
     });
 
-    if (lastVisitedPage) {
-      return redirect(`/pages/${lastVisitedPage.id}`);
-    }
-  }
-
-  const groups = await prisma.notebookGroup.findMany({
-    where: { userId: user.id, systemKey: null },
-    select: { id: true, name: true },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    take: 1,
-  });
-  const notebooks = await prisma.notebook.findMany({
-    where: { archived: false, deletedAt: null, userId: user.id },
-    include: {
-      pages: {
-        where: { archived: false, deletedAt: null, userId: user.id },
-        orderBy: [{ sortOrder: "asc" }, { updatedAt: "asc" }],
-        take: 1,
-      },
-    },
-    orderBy: [
-      { group: { sortOrder: "asc" } },
-      { sortOrder: "asc" },
-      { createdAt: "asc" },
-    ],
-    take: 1,
-  });
-
-  const activeNotebook = notebooks[0];
-
-  if (activeNotebook?.pages[0]) {
-    redirect(`/pages/${activeNotebook.pages[0].id}`);
-  }
-
-  if (activeNotebook) {
-    redirect(`/notebooks/${activeNotebook.id}`);
-  }
-
-  const hasGroup = groups.length > 0;
-
   return (
-    <div className="flex h-full bg-white">
-      <div className="mx-auto flex w-full max-w-[1100px] items-center justify-center px-6 py-12">
-        <div
-          className="w-full max-w-2xl rounded-[18px] border border-[#d9e2f1] bg-white px-8 py-16 text-center shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
-          dir="rtl"
-        >
-          <h1 className="text-2xl font-medium text-[#1f2937]">
-            {hasGroup ? "هنوز زیرمجموعه‌ای ندارید" : "هنوز هیچ مجموعه‌ای ندارید"}
-          </h1>
-          <p className="mt-3 text-sm leading-7 text-[#6b7280]">
-            {hasGroup
-              ? "از دکمه «زیر مجموعه جدید» در نوار بالا استفاده کنید تا اولین زیرمجموعه را بسازید."
-              : "برای شروع، از دکمه «مجموعه جدید» در نوار بالا یک مجموعه بسازید."}
-          </p>
-        </div>
-      </div>
-    </div>
+    <MobileHomeDashboard
+      displayName={user.displayName}
+      continuePage={recentPages[0] ?? null}
+      recentPages={recentPages.slice(0, 3)}
+      collections={collections}
+    />
   );
 }

@@ -157,3 +157,11 @@ label[for] {
 .freeform-note::placeholder {
   color: #93a0bd;
 }
+
+.notava-scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.notava-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

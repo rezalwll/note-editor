@@ -1,6 +1,14 @@
 "use client";
 
-import { ChevronDown, EllipsisVertical, FolderPlus, Trash2, X } from "lucide-react";
+import {
+  ChevronDown,
+  EllipsisVertical,
+  Folder,
+  FolderPlus,
+  NotebookPen,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import {
@@ -87,22 +95,25 @@ export function MobileSectionsPanel({
     null;
 
   return (
-        <div className="fixed inset-0 z-50 cursor-pointer bg-black/20" onClick={closeAll}>
+        <div className="fixed inset-0 z-50 cursor-pointer bg-[#1f2940]/20" onClick={closeAll}>
           <div
-            className="absolute inset-x-0 top-0 max-h-[72vh] overflow-hidden rounded-b-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+            className="absolute inset-0 overflow-hidden bg-[#f7f8fc]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="sticky top-0 z-10 border-b border-[var(--border-soft)] bg-white px-4 py-3">
-              <div className="flex items-center justify-between">
+            <div className="sticky top-0 z-10 border-b border-[#e9eaf1] bg-white/96 px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))] backdrop-blur-xl">
+              <div className="relative flex min-h-10 items-center justify-center">
                 <button
                   type="button"
                   onClick={closeAll}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--bg-softer)]"
+                  className="absolute left-0 inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--bg-softer)]"
                   aria-label="بستن فهرست مجموعه‌ها"
                 >
                   <X className="h-5 w-5" />
                 </button>
-                <div className="text-sm font-semibold text-[var(--text-strong)]">مجموعه‌ها</div>
+                <div className="text-center">
+                  <div className="text-base font-bold text-[#23324d]">مجموعه‌ها</div>
+                  <div className="mt-0.5 text-[11px] text-[#8a92a4]">خانه / مجموعه‌ها</div>
+                </div>
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2" dir="rtl">
@@ -115,7 +126,7 @@ export function MobileSectionsPanel({
                     }
                   }}
                   disabled={!createNotebookGroup || isPending}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#6977e8] px-3 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(105,119,232,0.24)] transition hover:bg-[#5c69d6] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-[#6756d8] px-3 text-xs font-medium text-white transition hover:bg-[#5b49cc] disabled:cursor-not-allowed disabled:opacity-45"
                   title={
                     createNotebookGroup
                       ? `افزودن به ${createNotebookGroup.name}`
@@ -133,7 +144,7 @@ export function MobileSectionsPanel({
                     setDraftGroupName("");
                     setIsCreatingGroup((current) => !current);
                   }}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border-soft)] bg-white px-3 text-xs font-semibold text-[#33406d] transition hover:bg-[var(--bg-softer)]"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] border border-[#dedfea] bg-white px-3 text-xs font-medium text-[#33406d] transition hover:bg-[#f7f7fb]"
                 >
                   <FolderPlus className="h-4 w-4" />
                   مجموعه جدید
@@ -141,8 +152,8 @@ export function MobileSectionsPanel({
               </div>
             </div>
 
-            <div className="max-h-[calc(72vh-116px)] overflow-y-auto p-4">
-              <div className="grid gap-4">
+            <div className="h-[calc(100dvh-122px-env(safe-area-inset-top))] overflow-y-auto px-3 py-4 pb-28">
+              <div className="grid gap-3">
                 {isCreatingGroup ? (
                   <div className="rounded-2xl border border-dashed border-[#b5baff] bg-[#f8f8ff] px-4 py-3">
                     <input
@@ -179,60 +190,33 @@ export function MobileSectionsPanel({
                   const isActiveGroup = activeGroupId === group.id;
 
                   return (
-                    <div key={group.id}>
-                      <div className="flex items-center gap-2">
-                        {canManageGroup ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                beginCreateNotebook(group.id);
-                              }}
-                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
-                              aria-label={`افزودن زیر مجموعه به ${group.name}`}
-                            >
-                              <FolderPlus className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setActionSheet({ type: "group", id: group.id });
-                              }}
-                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-white text-[#50607a]"
-                              aria-label={`عملیات ${group.name}`}
-                            >
-                              <EllipsisVertical className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : null}
-
+                    <div
+                      key={group.id}
+                      className={`rounded-[22px] border bg-white p-2 transition ${
+                        isActiveGroup
+                          ? "border-[#c9c2fb] ring-2 ring-[#ebe8ff]"
+                          : "border-[#e7e8f0]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5" dir="rtl">
                         <button
                           type="button"
                           onClick={() => toggleGroupSelection(group.id)}
-                          className="flex w-full items-center justify-between rounded-2xl border border-[var(--border-soft)] bg-[#fbfbff] px-4 py-3 text-right shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                          style={{
-                            boxShadow: isActiveGroup
-                              ? "0 0 0 1px rgba(255,255,255,0.96), 0 0 0 3px rgba(34,197,94,0.5), 0 8px 18px rgba(34,197,94,0.2)"
-                              : undefined,
-                          }}
+                          className="flex min-h-12 min-w-0 flex-1 items-center justify-between rounded-[16px] px-2.5 text-right transition hover:bg-[#f8f8fc]"
+                          aria-label={`${group.notebookCount} ${group.name}`}
                         >
-                          <div className="flex items-center gap-3">
-                            <ChevronDown
-                              className={[
-                                "h-4 w-4 text-[#708090] transition",
-                                expandedGroupIds.includes(group.id) ? "rotate-180" : "",
-                              ].join(" ")}
-                            />
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#50607a]">
-                              {group.notebookCount}
+                          <span className="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[#23324d]">
+                            <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                              group.systemKey === TRASH_GROUP_KEY
+                                ? "bg-[#fff1f0] text-[#c43f38]"
+                                : "bg-[#f0eeff] text-[#6a58d7]"
+                            }`}>
+                              {group.systemKey === TRASH_GROUP_KEY ? (
+                                <Trash2 className="h-4 w-4" />
+                              ) : (
+                                <Folder className="h-4 w-4" />
+                              )}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-[#23324d]">
-                            {group.systemKey === TRASH_GROUP_KEY ? (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            ) : null}
                             {isEditing ? (
                               <input
                                 ref={groupInputRef}
@@ -255,22 +239,57 @@ export function MobileSectionsPanel({
                                 onClick={(event) => event.stopPropagation()}
                               />
                             ) : (
-                              <span>{group.name}</span>
+                              <span className="truncate">{group.name}</span>
                             )}
-                          </div>
+                          </span>
+                          <span className="mr-2 flex shrink-0 items-center gap-2 text-[#7b8497]">
+                            <span className="min-w-5 rounded-full bg-[#f2f3f7] px-1.5 py-0.5 text-center text-[10px] font-medium">
+                              {group.notebookCount}
+                            </span>
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition ${
+                                expandedGroupIds.includes(group.id) ? "rotate-180" : ""
+                              }`}
+                            />
+                          </span>
                         </button>
+
+                        {canManageGroup ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                beginCreateNotebook(group.id);
+                              }}
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#667085] transition hover:bg-[#f2f2f8]"
+                              aria-label={`افزودن زیر مجموعه به ${group.name}`}
+                            >
+                              <FolderPlus className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setActionSheet({ type: "group", id: group.id });
+                              }}
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#667085] transition hover:bg-[#f2f2f8]"
+                              aria-label={`عملیات ${group.name}`}
+                            >
+                              <EllipsisVertical className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : null}
                       </div>
 
                       {expandedGroupIds.includes(group.id) ? (
-                        <div className="mt-2 grid gap-2 pr-3">
+                        <div className="mt-2 grid gap-1.5 border-t border-[#eff0f5] px-1 pt-2">
                           {creatingNotebookGroupId === group.id ? (
-                            <div className="rounded-2xl border border-dashed border-[#b5baff] bg-[#f8f8ff] px-4 py-3">
+                            <div className="rounded-[14px] border border-dashed border-[#b9b1f6] bg-[#faf9ff] px-3 py-2.5">
                               <input
                                 ref={notebookInputRef}
                                 value={draftNotebookName}
-                                onChange={(event) =>
-                                  setDraftNotebookName(event.target.value)
-                                }
+                                onChange={(event) => setDraftNotebookName(event.target.value)}
                                 onBlur={submitCreateNotebook}
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter") {
@@ -284,7 +303,7 @@ export function MobileSectionsPanel({
                                 }}
                                 disabled={isPending}
                                 placeholder="نام زیر مجموعه جدید"
-                                className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#708090]"
+                                className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#8b92a3]"
                                 dir="rtl"
                               />
                             </div>
@@ -297,36 +316,26 @@ export function MobileSectionsPanel({
                               const isEditingNotebook = editingNotebookId === notebook.id;
 
                               return (
-                                <div key={notebook.id} className="flex items-center gap-2">
-                                  {canManageNotebook ? (
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setActionSheet({ type: "notebook", id: notebook.id });
-                                      }}
-                                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border bg-white text-[#50607a] shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                                      style={{ borderColor: theme.editorBorder }}
-                                      aria-label={`عملیات ${notebook.name}`}
-                                    >
-                                      <EllipsisVertical className="h-4 w-4" />
-                                    </button>
-                                  ) : null}
-
+                                <div key={notebook.id} className="flex items-center gap-1" dir="rtl">
                                   <button
                                     type="button"
                                     onClick={() => selectNotebook(notebook)}
-                                    className="w-full rounded-2xl border px-4 py-3 text-right text-sm shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition"
+                                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[14px] border px-3 text-right text-sm transition"
                                     style={{
-                                      backgroundColor: isActiveNotebook
-                                        ? theme.sidebarActive
-                                        : theme.accentSoft,
-                                      borderColor: isActiveNotebook
-                                        ? theme.accent
-                                        : theme.editorBorder,
-                                      color: theme.sidebarText,
+                                      backgroundColor: isActiveNotebook ? theme.accentSoft : "#fbfbfd",
+                                      borderColor: isActiveNotebook ? theme.accent : "#ececf3",
+                                      color: isActiveNotebook ? theme.sidebarText : "#3c485f",
+                                      boxShadow: isActiveNotebook
+                                        ? `inset -3px 0 0 ${theme.accent}`
+                                        : undefined,
                                     }}
                                   >
+                                    <span
+                                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                                      style={{ backgroundColor: theme.accentSoft, color: theme.accent }}
+                                    >
+                                      <NotebookPen className="h-3.5 w-3.5" />
+                                    </span>
                                     {isEditingNotebook ? (
                                       <input
                                         ref={notebookInputRef}
@@ -344,19 +353,33 @@ export function MobileSectionsPanel({
                                             setDraftNotebookName("");
                                           }
                                         }}
-                                        className="w-full border-none bg-transparent text-right text-sm outline-none"
+                                        className="min-w-0 flex-1 border-none bg-transparent text-right text-sm outline-none"
                                         dir="rtl"
                                         onClick={(event) => event.stopPropagation()}
                                       />
                                     ) : (
-                                      notebook.name
+                                      <span className="truncate">{notebook.name}</span>
                                     )}
                                   </button>
+
+                                  {canManageNotebook ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setActionSheet({ type: "notebook", id: notebook.id });
+                                      }}
+                                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#778094] transition hover:bg-[#f2f2f8]"
+                                      aria-label={`عملیات ${notebook.name}`}
+                                    >
+                                      <EllipsisVertical className="h-4 w-4" />
+                                    </button>
+                                  ) : null}
                                 </div>
                               );
                             })
                           ) : (
-                            <div className="rounded-2xl border border-dashed border-[var(--border-soft)] bg-white px-4 py-3 text-right text-xs text-[#708090]">
+                            <div className="rounded-[14px] border border-dashed border-[#dedfe8] bg-[#fbfbfd] px-3 py-3 text-right text-xs text-[#858da0]">
                               هنوز زیر مجموعه‌ای در این مجموعه نیست
                             </div>
                           )}

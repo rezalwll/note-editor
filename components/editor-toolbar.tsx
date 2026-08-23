@@ -11,6 +11,7 @@ import {
   ImagePlus,
   List,
   ListTodo,
+  MoreHorizontal,
   PilcrowLeft,
   PilcrowRight,
   Redo2,
@@ -192,7 +193,11 @@ function ToolbarButton({
   );
 }
 
-export function EditorToolbar() {
+export function EditorToolbar({
+  variant = "default",
+}: {
+  variant?: "default" | "mobile";
+}) {
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultState);
   const [workspaceHistory, setWorkspaceHistory] = useState({
     canUndo: false,
@@ -201,6 +206,7 @@ export function EditorToolbar() {
   });
   const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
   const [colorMenuKind, setColorMenuKind] = useState<ColorMenuKind | null>(null);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [colorMenuPosition, setColorMenuPosition] = useState<{
     top: number;
     left: number;
@@ -377,6 +383,119 @@ export function EditorToolbar() {
     setColorMenuKind(null);
     setColorMenuPosition(null);
   };
+
+  if (variant === "mobile") {
+    return (
+      <div className="flex min-w-max items-center justify-center gap-1.5 rounded-[22px] border border-white/80 bg-white/92 px-2.5 py-2.5 shadow-[0_16px_40px_rgba(35,50,77,0.12)] backdrop-blur-xl">
+        <ToolbarButton
+          label="واگرد"
+          disabled={
+            workspaceHistory.isApplying ||
+            (!toolbarState.canUndo && !workspaceHistory.canUndo)
+          }
+          onClick={() => runHistoryCommand("undo")}
+        >
+          <Undo2 className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="انجام دوباره"
+          disabled={
+            workspaceHistory.isApplying ||
+            (!toolbarState.canRedo && !workspaceHistory.canRedo)
+          }
+          onClick={() => runHistoryCommand("redo")}
+        >
+          <Redo2 className="h-4 w-4" />
+        </ToolbarButton>
+
+        <div className="mx-0.5 h-7 w-px bg-[#e4e5ef]" />
+
+        <ToolbarButton
+          label="پررنگ"
+          active={toolbarState.bold}
+          disabled={!toolbarState.hasActiveBlock}
+          onClick={() => dispatchEditorCommand("toggle-bold")}
+        >
+          <Bold className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="هایلایت"
+          active={toolbarState.highlightColor !== "transparent"}
+          disabled={!toolbarState.hasActiveBlock}
+          onClick={() =>
+            dispatchEditorCommand("set-highlight-color", {
+              highlightColor:
+                toolbarState.highlightColor === "transparent"
+                  ? "#fff2a8"
+                  : "transparent",
+            })
+          }
+        >
+          <Highlighter className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="فهرست کارها"
+          disabled={!toolbarState.hasActiveBlock}
+          onClick={() => dispatchEditorCommand("toggle-todo-list")}
+        >
+          <ListTodo className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="افزودن تصویر"
+          disabled={!toolbarState.canInsertImage}
+          onClick={() => dispatchEditorCommand("insert-image")}
+        >
+          <ImagePlus className="h-4 w-4" />
+        </ToolbarButton>
+        <button
+          type="button"
+          aria-label="ابزارهای بیشتر"
+          aria-expanded={isMobileExpanded}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setIsMobileExpanded((current) => !current)}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#ececf3] bg-white text-[#3f4b7b]"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+
+        {isMobileExpanded ? (
+          <div className="flex items-center gap-1.5 border-r border-[#e4e5ef] pr-2">
+            <ToolbarButton
+              label="مورب"
+              active={toolbarState.italic}
+              disabled={!toolbarState.hasActiveBlock}
+              onClick={() => dispatchEditorCommand("toggle-italic")}
+            >
+              <Italic className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              label="فهرست نشانه‌دار"
+              disabled={!toolbarState.hasActiveBlock}
+              onClick={() => dispatchEditorCommand("toggle-bullet-list")}
+            >
+              <List className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              label="تراز راست"
+              active={toolbarState.align === "right"}
+              disabled={!toolbarState.hasActiveBlock}
+              onClick={() => dispatchEditorCommand("align-right")}
+            >
+              <AlignRight className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              label="تراز وسط"
+              active={toolbarState.align === "center"}
+              disabled={!toolbarState.hasActiveBlock}
+              onClick={() => dispatchEditorCommand("align-center")}
+            >
+              <AlignCenter className="h-4 w-4" />
+            </ToolbarButton>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-white/55 bg-[linear-gradient(135deg,rgba(159,161,255,0.36)_0%,rgba(181,186,255,0.32)_36%,rgba(174,226,255,0.34)_72%,rgba(217,249,223,0.34)_100%)] px-2.5 py-2 shadow-[0_14px_34px_rgba(116,125,255,0.14)] backdrop-blur">

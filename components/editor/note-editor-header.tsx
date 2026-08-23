@@ -30,7 +30,7 @@ export function NoteEditorHeader({
   const { openMenu } = useContextMenu();
 
   return (
-    <div className="px-4 pt-5 text-right md:px-[48px] md:pt-6" dir="rtl">
+    <div className="px-5 pt-7 text-right md:px-[48px] md:pt-6" dir="rtl">
       <div
         className="w-full border-b align-top"
         style={{ borderColor: accentColor }}
@@ -70,11 +70,11 @@ export function NoteEditorHeader({
             });
           }}
           placeholder="صفحه بدون عنوان"
-          className="mb-2 w-full border-none bg-transparent text-[22px] font-normal text-[#111] outline-none placeholder:text-[#7d7d7d]"
+          className="mb-3 w-full border-none bg-transparent text-[30px] font-bold tracking-[-0.02em] text-[#23324d] outline-none placeholder:text-[#9b9faf] md:text-[22px] md:font-normal"
           dir="rtl"
           aria-label="عنوان صفحه"
         />
-        <div className="flex flex-row-reverse gap-8 text-[12px] text-[#6f6f6f]">
+        <div className="flex flex-row-reverse gap-5 pb-2 text-[12px] text-[#8b92a3]">
           <span>{timeLabel}</span>
           <span>{dateLabel}</span>
         </div>

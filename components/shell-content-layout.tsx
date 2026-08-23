@@ -18,14 +18,20 @@ export function ShellContentLayout({
 
   return (
     <div
-      className={`relative h-[calc(100dvh-9rem)] overflow-hidden bg-white xl:h-auto xl:min-h-0 xl:flex-1 ${
+      className={`relative overflow-hidden bg-white xl:h-auto xl:min-h-0 xl:flex-1 ${
+        showsEditor
+          ? "h-[calc(100dvh-3.5rem)]"
+          : "h-[calc(100dvh-4rem)]"
+      } ${
         showsPagesSidebar
           ? "xl:grid xl:grid-cols-[300px_minmax(0,1fr)]"
           : ""
       }`}
     >
       <main
-        className={`h-full min-w-0 overflow-y-auto overscroll-contain bg-white pb-20 xl:h-full xl:pb-0 ${
+        className={`h-full min-w-0 overflow-y-auto overscroll-contain bg-white xl:h-full xl:pb-0 ${
+          showsEditor ? "pb-28" : "pb-20"
+        } ${
           showsEditor ? "xl:overflow-hidden" : "xl:overflow-y-auto"
         } ${
           showsPagesSidebar ? "xl:col-start-2 xl:row-start-1" : ""

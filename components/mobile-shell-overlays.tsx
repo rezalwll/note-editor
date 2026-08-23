@@ -1,5 +1,6 @@
 "use client";
 
+import { FilePlus2, FolderPlus, LibraryBig, X } from "lucide-react";
 import Link from "next/link";
 import type { RefObject } from "react";
 
@@ -11,6 +12,99 @@ import type {
   MobileGroupSection,
   MobileNotebook,
 } from "@/components/use-mobile-shell-model";
+
+type MobileCreateMenuProps = {
+  canCreateNotebook: boolean;
+  canCreatePage: boolean;
+  close: () => void;
+  createGroup: () => void;
+  createNotebook: () => void;
+  createPage: () => void;
+};
+
+/** Context-aware create sheet opened by the primary mobile plus action. */
+export function MobileCreateMenu({
+  canCreateNotebook,
+  canCreatePage,
+  close,
+  createGroup,
+  createNotebook,
+  createPage,
+}: MobileCreateMenuProps) {
+  const actions = [
+    {
+      label: "صفحه جدید",
+      description: "در زیرمجموعه فعال",
+      icon: FilePlus2,
+      onClick: createPage,
+      disabled: !canCreatePage,
+      colors: "bg-[#eeeaff] text-[#6f58e8]",
+    },
+    {
+      label: "زیرمجموعه جدید",
+      description: "در مجموعه فعال",
+      icon: FolderPlus,
+      onClick: createNotebook,
+      disabled: !canCreateNotebook,
+      colors: "bg-[#eaf9ef] text-[#16a765]",
+    },
+    {
+      label: "مجموعه جدید",
+      description: "یک فضای تازه بساز",
+      icon: LibraryBig,
+      onClick: createGroup,
+      disabled: false,
+      colors: "bg-[#eaf6ff] text-[#168ad0]",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-[#1f2940]/25 backdrop-blur-[2px]" onClick={close}>
+      <section
+        className="absolute inset-x-3 bottom-[calc(88px+env(safe-area-inset-bottom))] rounded-[28px] border border-white/80 bg-white/96 p-4 shadow-[0_24px_70px_rgba(35,50,77,0.22)]"
+        onClick={(event) => event.stopPropagation()}
+        aria-label="ساخت مورد جدید"
+      >
+        <div className="mb-3 flex items-center justify-between" dir="rtl">
+          <div>
+            <h2 className="text-base font-bold text-[#23324d]">چه چیزی می‌سازی؟</h2>
+            <p className="mt-0.5 text-xs text-[#8a92a4]">مقصد بر اساس فضای فعلی انتخاب می‌شود.</p>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#f3f3f8] text-[#6d7587]"
+            aria-label="بستن منوی ساخت"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid gap-2" dir="rtl">
+          {actions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className="flex min-h-[68px] items-center gap-3 rounded-[20px] border border-[#ededf4] bg-white px-3 text-right transition hover:bg-[#fafaff] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <span className={`inline-flex h-11 w-11 items-center justify-center rounded-[14px] ${action.colors}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold text-[#23324d]">{action.label}</span>
+                  <span className="mt-0.5 block text-xs text-[#8a92a4]">{action.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
 
 type MobileActionSheetProps = {
   actionGroup: MobileGroupSection | null;
@@ -157,14 +251,14 @@ export function MobileProfileMenu({
       <div className="fixed inset-0 z-[120] bg-black/10" />
       <div
         ref={profileMenuRef}
-        className="fixed z-[130] flex w-[176px] flex-col rounded-[18px] border border-[var(--border-soft)] bg-white p-1.5 shadow-[0_22px_54px_rgba(15,23,42,0.16)]"
+        className="fixed z-[130] flex w-[224px] flex-col rounded-[24px] border border-[#e8e8f1] bg-white/96 p-2 shadow-[0_24px_64px_rgba(35,50,77,0.20)] backdrop-blur-xl"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
-        <div className="border-b border-[var(--border-soft)] px-2.5 py-2 text-center">
-          <div className="truncate text-sm font-semibold text-[#1f2a37]">
+        <div className="rounded-[18px] bg-[linear-gradient(135deg,#f3f0ff,#eef8ff)] px-3 py-3 text-right" dir="rtl">
+          <div className="truncate text-sm font-bold text-[#23324d]">
             {currentUser.displayName}
           </div>
-          <div className="truncate text-[11px] text-[#708090]" dir="ltr">
+          <div className="mt-0.5 truncate text-[11px] text-[#7f8799]" dir="ltr">
             @{currentUser.username}
           </div>
         </div>
@@ -173,7 +267,7 @@ export function MobileProfileMenu({
           <button
             type="button"
             onClick={() => handleInstall(installEvent)}
-            className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+            className="mt-1 rounded-xl px-3 py-2.5 text-right text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
           >
             نصب برنامه
           </button>
@@ -182,7 +276,7 @@ export function MobileProfileMenu({
         <Link
           href="/settings"
           onClick={closeAll}
-          className="mt-1 rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+          className="mt-1 rounded-xl px-3 py-2.5 text-right text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
         >
           تنظیمات
         </Link>
@@ -190,7 +284,7 @@ export function MobileProfileMenu({
         <Link
           href="/support"
           onClick={closeAll}
-          className="rounded-xl px-2.5 py-2 text-center text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
+          className="rounded-xl px-3 py-2.5 text-right text-sm text-[var(--text-main)] transition hover:bg-[var(--bg-softer)]"
         >
           پشتیبانی
         </Link>
@@ -208,7 +302,7 @@ export function MobileProfileMenu({
         <form action={logoutAndClearClientData}>
           <button
             type="submit"
-            className="w-full rounded-xl px-2.5 py-2 text-center text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
+            className="w-full rounded-xl px-3 py-2.5 text-right text-sm text-[#b42318] transition hover:bg-[#fff3f2]"
           >
             خروج از حساب
           </button>

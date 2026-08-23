@@ -45,7 +45,13 @@ function getStateFromSyncDetail(detail: SyncEventDetail): SyncIndicatorState | n
   return null;
 }
 
-export function SyncStatusIndicator({ userId }: { userId: string }) {
+export function SyncStatusIndicator({
+  userId,
+  variant = "default",
+}: {
+  userId: string;
+  variant?: "default" | "plain";
+}) {
   const [state, setState] = useState<SyncIndicatorState>("synced");
   const [conflictCount, setConflictCount] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -115,12 +121,20 @@ export function SyncStatusIndicator({ userId }: { userId: string }) {
         aria-label={label}
         title={label}
         onClick={() => setDialogOpen(true)}
-        className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/82 text-[#33406d] shadow-[0_8px_22px_rgba(15,23,42,0.1)] transition hover:bg-white"
+        className={
+          variant === "plain"
+            ? "relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#526176] transition hover:bg-[#f3f3f8]"
+            : "relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/82 text-[#33406d] shadow-[0_8px_22px_rgba(15,23,42,0.1)] transition hover:bg-white"
+        }
         data-testid="sync-status-indicator"
         data-sync-state={state}
       >
         {state === "synced" ? (
-          <Check aria-hidden="true" className="h-[18px] w-[18px] text-[#198754]" />
+          <Check
+            aria-hidden="true"
+            className={variant === "plain" ? "h-4 w-4 text-[#278a63]" : "h-[18px] w-[18px] text-[#198754]"}
+            strokeWidth={variant === "plain" ? 1.75 : 2}
+          />
         ) : null}
         {state === "syncing" ? (
           <LoaderCircle aria-hidden="true" className="h-[18px] w-[18px] animate-spin text-[#4361ee]" />

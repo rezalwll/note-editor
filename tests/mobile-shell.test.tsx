@@ -119,7 +119,8 @@ describe("MobileShell", () => {
       expect(screen.getByRole("button", { name: "زیر مجموعه تغییر کرده" })).toBeInTheDocument();
     });
   });
-  it("renders the sync status indicator in the mobile header", () => {
+  it("renders the sync status indicator in the note header", () => {
+    mocks.pathname = "/pages/page-1";
     render(
       <MobileShell
         groups={[]}
@@ -133,6 +134,6 @@ describe("MobileShell", () => {
     );
 
     expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "باز کردن جست‌وجو" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "بازگشت" })).toBeInTheDocument();
   });
 });
