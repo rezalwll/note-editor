@@ -8,10 +8,12 @@ import {
   IMAGE_DEFAULT_ASPECT_RATIO,
   IMAGE_DEFAULT_WIDTH,
   createBlockId,
+  getBlockHorizontalAnchor,
   getBlockMaxWidth,
   getBlockRightGutter,
   getImageBlockHeight,
   getRenderedBlockWidth,
+  getResponsiveBlockX,
   isImageBlock,
 } from "@/lib/editor-document";
 import { looksLikeMarkdown, markdownToHtml } from "@/lib/markdown";
@@ -133,7 +135,11 @@ export function useNoteEditorClipboard({
           );
 
       return {
-        x: getCanvasBoundedX(targetCanvasWidth, selectedBlock.x, width),
+        x: getCanvasBoundedX(
+          targetCanvasWidth,
+          getResponsiveBlockX(selectedBlock, targetCanvasWidth),
+          width,
+        ),
         y: selectedBlock.y + selectedHeight + 24,
         width,
       };
@@ -209,6 +215,11 @@ export function useNoteEditorClipboard({
           x: placement.x,
           y: nextY,
           width: placement.width,
+          horizontalAnchor: getBlockHorizontalAnchor(
+            getCanvasRect()?.width ?? canvasWidth,
+            placement.x,
+            placement.width,
+          ),
           text: "",
           aspectRatio: IMAGE_DEFAULT_ASPECT_RATIO,
         };

@@ -123,6 +123,26 @@ describe("note content", () => {
     });
   });
 
+  it("round-trips a viewport-independent horizontal block anchor", () => {
+    const document = {
+      type: "freeform-v1" as const,
+      blocks: [
+        {
+          id: "mobile-positioned",
+          x: 92,
+          y: 120,
+          width: 240,
+          horizontalAnchor: 0.65,
+          text: "متن موبایل",
+        },
+      ],
+    };
+
+    expect(parseFreeformDocument(serializeFreeformDocument(document))).toEqual(
+      document,
+    );
+  });
+
   it("sanitizes executable markup while preserving note text", () => {
     const html = sanitizeNoteHtml(
       '<p>متن امن</p><script>alert(1)</script><img src="x" onerror="alert(2)">',

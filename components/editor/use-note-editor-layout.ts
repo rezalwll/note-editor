@@ -191,6 +191,14 @@ export function useNoteEditorLayout({
   );
   const scheduleBlockDisplacement = useCallback(
     (positions: ReadonlyMap<string, number>) => {
+      const measuredCanvasWidth =
+        canvasRef.current?.getBoundingClientRect().width ?? 0;
+      const activeCanvasWidth = measuredCanvasWidth || canvasWidth;
+      if (activeCanvasWidth < 768) {
+        pendingDisplacementsRef.current.clear();
+        return;
+      }
+
       for (const [blockId, nextY] of positions) {
         const pendingY = pendingDisplacementsRef.current.get(blockId);
         pendingDisplacementsRef.current.set(
@@ -207,7 +215,10 @@ export function useNoteEditorLayout({
         displacementFrameIdRef.current = null;
         const pendingPositions = pendingDisplacementsRef.current;
         pendingDisplacementsRef.current = new Map();
-        if (pendingPositions.size === 0) {
+        const latestMeasuredCanvasWidth =
+          canvasRef.current?.getBoundingClientRect().width ?? 0;
+        const latestCanvasWidth = latestMeasuredCanvasWidth || canvasWidth;
+        if (pendingPositions.size === 0 || latestCanvasWidth < 768) {
           return;
         }
 
@@ -215,7 +226,7 @@ export function useNoteEditorLayout({
         onBlocksDisplaced(pendingPositions);
       });
     },
-    [onBlocksDisplaced],
+    [canvasWidth, onBlocksDisplaced],
   );
   const queueSelectionRestore = useCallback(
     (blockId: string, start: number, end: number) => {
@@ -358,7 +369,16 @@ export function useNoteEditorLayout({
     let shouldRecalculateMaximum =
       widthChanged || positionChangedBlocks.length > 0;
     let nextLowestBlockBottom = lowestBlockBottomRef.current;
-    const pendingPositionUpdates = new Map(pendingDisplacementsRef.current);
+    const measuredCanvasWidth =
+      canvasRef.current?.getBoundingClientRect().width ?? 0;
+    const activeCanvasWidth = measuredCanvasWidth || canvasWidth;
+    const canPersistAutomaticDisplacement = activeCanvasWidth >= 768;
+    if (!canPersistAutomaticDisplacement) {
+      pendingDisplacementsRef.current.clear();
+    }
+    const pendingPositionUpdates = canPersistAutomaticDisplacement
+      ? new Map(pendingDisplacementsRef.current)
+      : new Map<string, number>();
     const measuredHeights = new Map(
       [...measuredBoundsRef.current].map(([blockId, bounds]) => [
         blockId,
@@ -399,6 +419,7 @@ export function useNoteEditorLayout({
       measuredHeights.set(block.id, blockHeight);
 
       if (
+        canPersistAutomaticDisplacement &&
         !hasResponsivePositions &&
         !widthChanged &&
         !isImageBlock(block) &&

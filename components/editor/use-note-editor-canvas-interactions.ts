@@ -14,34 +14,25 @@ import {
   BLOCK_DEFAULT_WIDTH,
   BLOCK_RTL_CLICK_ANCHOR,
   IMAGE_MIN_WIDTH,
+  getBlockHorizontalAnchor,
   getBlockMaxWidth,
   getBlockRightGutter,
+  getCanvasBoundedX,
   getCanvasInset,
   getRenderedBlockWidth,
+  getResponsiveBlockX,
   getTextBlockMinWidth,
   isImageBlock,
 } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
+
+const POINTER_GEOMETRY_INTENT_THRESHOLD = 2;
 
 export type CanvasCoordinates = {
   x: number;
   y: number;
   width: number;
 };
-
-export function getCanvasBoundedX(
-  targetCanvasWidth: number,
-  desiredX: number,
-  blockWidth: number,
-) {
-  const inset = getCanvasInset(targetCanvasWidth);
-  const rightGutter = getBlockRightGutter(targetCanvasWidth);
-
-  return Math.min(
-    Math.max(inset, desiredX),
-    Math.max(inset, targetCanvasWidth - blockWidth - rightGutter),
-  );
-}
 
 export function isEditorControlTarget(target: HTMLElement) {
   return Boolean(
@@ -85,8 +76,11 @@ export function useNoteEditorCanvasInteractions({
 }: UseNoteEditorCanvasInteractionsOptions) {
   const dragStateRef = useRef<{
     id: string;
-    pointerOffsetX: number;
-    pointerOffsetY: number;
+    startClientX: number;
+    startClientY: number;
+    startRenderedX: number;
+    startRenderedY: number;
+    startPersistedY: number;
   } | null>(null);
   const resizeStateRef = useRef<{
     id: string;
@@ -180,15 +174,25 @@ export function useNoteEditorCanvasInteractions({
     const blockWidth = currentBlock
       ? getRenderedBlockWidth(currentBlock, rect.width)
       : BLOCK_DEFAULT_WIDTH;
-    const nextX = getCanvasBoundedX(
+    const dragState = dragStateRef.current;
+    const horizontalDelta = event.clientX - dragState.startClientX;
+    const verticalDelta = event.clientY - dragState.startClientY;
+    const nextRenderedX = getCanvasBoundedX(
       rect.width,
-      event.clientX - rect.left - dragStateRef.current.pointerOffsetX,
+      dragState.startRenderedX + horizontalDelta,
       blockWidth,
+    );
+    const nextRenderedY = Math.max(
+      24,
+      dragState.startRenderedY + verticalDelta,
     );
     const nextY = Math.max(
       24,
-      event.clientY - rect.top - dragStateRef.current.pointerOffsetY,
+      dragState.startPersistedY + nextRenderedY - dragState.startRenderedY,
     );
+    const movedHorizontally =
+      Math.abs(nextRenderedX - dragState.startRenderedX) >=
+      POINTER_GEOMETRY_INTENT_THRESHOLD;
 
     markEditorInteraction();
     setEditedBlocks((current) =>
@@ -196,7 +200,20 @@ export function useNoteEditorCanvasInteractions({
         if (block.id !== dragStateRef.current?.id) {
           return block;
         }
-        const nextBlock = { ...block, x: nextX, y: nextY, width: blockWidth };
+        const nextBlock = {
+          ...block,
+          ...(movedHorizontally
+            ? {
+                x: nextRenderedX,
+                horizontalAnchor: getBlockHorizontalAnchor(
+                  rect.width,
+                  nextRenderedX,
+                  blockWidth,
+                ),
+              }
+            : {}),
+          y: nextY,
+        };
         upsertLayoutBlock(nextBlock);
         return nextBlock;
       }),
@@ -236,6 +253,14 @@ export function useNoteEditorCanvasInteractions({
     const nextWidth = Math.min(maxWidth, Math.max(minWidth, desiredWidth));
     const nextX =
       resizeState.edge === "left" ? rightEdge - nextWidth : resizeState.startX;
+    const geometryChanged =
+      Math.abs(nextWidth - resizeState.startWidth) >=
+        POINTER_GEOMETRY_INTENT_THRESHOLD ||
+      Math.abs(nextX - resizeState.startX) >=
+        POINTER_GEOMETRY_INTENT_THRESHOLD;
+    if (!geometryChanged) {
+      return;
+    }
 
     markEditorInteraction();
     setEditedBlocks((current) =>
@@ -243,7 +268,16 @@ export function useNoteEditorCanvasInteractions({
         if (block.id !== resizeStateRef.current?.id) {
           return block;
         }
-        const nextBlock = { ...block, x: nextX, width: nextWidth };
+        const nextBlock = {
+          ...block,
+          x: nextX,
+          width: nextWidth,
+          horizontalAnchor: getBlockHorizontalAnchor(
+            rect.width,
+            nextX,
+            nextWidth,
+          ),
+        };
         upsertLayoutBlock(nextBlock);
         return nextBlock;
       }),
@@ -284,11 +318,15 @@ export function useNoteEditorCanvasInteractions({
 
     const rect = canvasRef.current.getBoundingClientRect();
     const blockWidth = getRenderedBlockWidth(block, rect.width);
-    const renderedX = getCanvasBoundedX(rect.width, block.x, blockWidth);
+    const persistedBlock = blocks.find((candidate) => candidate.id === block.id);
+    const renderedX = getResponsiveBlockX(block, rect.width);
     dragStateRef.current = {
       id: block.id,
-      pointerOffsetX: event.clientX - rect.left - renderedX,
-      pointerOffsetY: event.clientY - rect.top - block.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startRenderedX: renderedX,
+      startRenderedY: block.y,
+      startPersistedY: persistedBlock?.y ?? block.y,
     };
   }
 

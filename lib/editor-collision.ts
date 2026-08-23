@@ -1,8 +1,7 @@
 import {
   estimateBlockHeight,
-  getBlockRightGutter,
-  getCanvasInset,
   getRenderedBlockWidth,
+  getResponsiveBlockX,
 } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
 
@@ -20,20 +19,6 @@ function overlapsHorizontally(
   second: Pick<BlockBounds, "left" | "right">,
 ) {
   return first.left < second.right && first.right > second.left;
-}
-
-function getBoundedBlockX(
-  canvasWidth: number,
-  desiredX: number,
-  blockWidth: number,
-) {
-  const inset = getCanvasInset(canvasWidth);
-  const rightGutter = getBlockRightGutter(canvasWidth);
-
-  return Math.min(
-    Math.max(inset, desiredX),
-    Math.max(inset, canvasWidth - blockWidth - rightGutter),
-  );
 }
 
 function overlapsVertically(first: BlockBounds, second: BlockBounds) {
@@ -59,7 +44,7 @@ export function getResponsiveBlockLayout({
   if (blocks.length < 2) {
     return blocks.map((block) => {
       const width = getRenderedBlockWidth(block, canvasWidth);
-      const x = getBoundedBlockX(canvasWidth, block.x, width);
+      const x = getResponsiveBlockX(block, canvasWidth);
       return x === block.x ? block : { ...block, x };
     });
   }
@@ -71,13 +56,14 @@ export function getResponsiveBlockLayout({
   const orderedBlocks = [...blocks].sort(
     (first, second) =>
       first.y - second.y ||
-      second.x - first.x ||
+      getResponsiveBlockX(second, canvasWidth) -
+        getResponsiveBlockX(first, canvasWidth) ||
       first.id.localeCompare(second.id),
   );
 
   for (const block of orderedBlocks) {
     const width = getRenderedBlockWidth(block, canvasWidth);
-    const x = getBoundedBlockX(canvasWidth, block.x, width);
+    const x = getResponsiveBlockX(block, canvasWidth);
     const height =
       measuredHeights?.get(block.id) ?? estimateBlockHeight(block, canvasWidth);
     const constrained =
@@ -97,7 +83,11 @@ export function getResponsiveBlockLayout({
         (obstacle) =>
           overlapsHorizontally(bounds, obstacle) &&
           overlapsVertically(bounds, obstacle) &&
-          (constrained || displaced || obstacle.constrained || obstacle.displaced),
+          (canvasWidth < 768 ||
+            constrained ||
+            displaced ||
+            obstacle.constrained ||
+            obstacle.displaced),
       );
       if (!collision) {
         break;

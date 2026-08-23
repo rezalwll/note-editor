@@ -419,6 +419,275 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("preserves canonical x during a vertical mobile drag", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "vertical-mobile", x: 600, y: 320, width: 240, text: "move" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const block = container.querySelector(
+      '[data-testid="note-block-vertical-mobile"]',
+    ) as HTMLDivElement;
+    await waitFor(() => {
+      expect(block).toHaveStyle({ left: "134px", top: "320px" });
+    });
+
+    fireEvent.pointerDown(block.querySelector("button") as HTMLButtonElement, {
+      button: 0,
+      clientX: 150,
+      clientY: 330,
+      pointerId: 30,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 149,
+      clientY: 600,
+      pointerId: 30,
+    });
+    fireEvent.pointerUp(window, { pointerId: 30 });
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("vertical-mobile"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks[0]).toMatchObject({
+        id: "vertical-mobile",
+        x: 600,
+        y: 590,
+        width: 240,
+      });
+      expect(savedDocument?.blocks[0].horizontalAnchor).toBeUndefined();
+    });
+  });
+
+  it("does not persist a mobile clamp when editing a desktop-positioned block", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "desktop-positioned",
+            x: 600,
+            y: 72,
+            width: 300,
+            text: "original",
+          },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(textarea.parentElement).toHaveStyle({ left: "74px" });
+    });
+
+    fireEvent.change(textarea, { target: { value: "edited on mobile" } });
+    const resizeEdge = container.querySelector(
+      '[data-testid="resize-edge-block-desktop-positioned"]',
+    ) as HTMLDivElement;
+    fireEvent.pointerDown(resizeEdge, {
+      button: 0,
+      clientX: 74,
+      pointerId: 32,
+    });
+    fireEvent.pointerMove(window, { clientX: 75, pointerId: 32 });
+    fireEvent.pointerUp(window, { pointerId: 32 });
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("edited on mobile"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks[0]).toMatchObject({
+        id: "desktop-positioned",
+        x: 600,
+        y: 72,
+        width: 300,
+        text: "edited on mobile",
+      });
+    });
+  });
+
+  it("keeps a mobile-created block at the same logical position on desktop", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({ type: "freeform-v1", blocks: [] }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    const { canvasRectSpy, pageRectSpy } = mockEditorRects(canvas, page, 390);
+    syncLayout();
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 320,
+      clientY: 620,
+      pointerId: 31,
+    });
+    fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 320,
+      clientY: 620,
+      pointerId: 31,
+    });
+
+    const textarea = await waitFor(() => {
+      const element = container.querySelector("textarea") as HTMLTextAreaElement;
+      expect(element).not.toBeNull();
+      return element;
+    });
+    const block = textarea.parentElement as HTMLDivElement;
+    await waitFor(() => {
+      expect(Number.parseFloat(block.style.left)).toBeCloseTo(92, 5);
+      expect(Number.parseFloat(block.style.width)).toBe(240);
+    });
+    const initialMobileLeft = Number.parseFloat(block.style.left);
+    const initialMobileWidth = Number.parseFloat(block.style.width);
+    const initialMobileAnchor =
+      (initialMobileLeft - 16) / (390 - initialMobileWidth - 32);
+
+    fireEvent.change(textarea, { target: { value: "mobile-created block" } });
+    await waitFor(() => {
+      expect(textarea).toHaveValue("mobile-created block");
+      expect(Number.parseFloat(block.style.width)).toBeGreaterThan(0);
+    });
+    const mobileLeft = Number.parseFloat(block.style.left);
+    const mobileWidth = Number.parseFloat(block.style.width);
+    const mobileAnchor =
+      (mobileLeft - 16) / (390 - mobileWidth - 32);
+    expect(mobileAnchor).toBeCloseTo(initialMobileAnchor, 5);
+
+    fireEvent(window, new Event("pagehide"));
+    await waitFor(() => {
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("mobile-created block"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks[0].horizontalAnchor).toBeCloseTo(
+        initialMobileAnchor,
+        5,
+      );
+    });
+
+    canvasRectSpy.mockReturnValue({
+      x: 0,
+      y: 120,
+      top: 120,
+      left: 0,
+      bottom: 920,
+      right: 1200,
+      width: 1200,
+      height: 800,
+      toJSON: () => ({}),
+    });
+    pageRectSpy.mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 1000,
+      right: 1200,
+      width: 1200,
+      height: 1000,
+      toJSON: () => ({}),
+    });
+    setViewport(1200);
+    syncLayout();
+
+    await waitFor(() => {
+      const desktopLeft = Number.parseFloat(block.style.left);
+      const desktopWidth = Number.parseFloat(block.style.width);
+      const desktopAnchor =
+        (desktopLeft - 48) / (1200 - desktopWidth - 96);
+
+      expect(desktopLeft).toBeGreaterThan(48);
+      expect(desktopAnchor).toBeCloseTo(initialMobileAnchor, 5);
+    });
+  });
+
+  it("keeps mobile collision displacement out of the persisted document", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "growing-mobile", x: 48, y: 72, width: 300, text: "short" },
+          { id: "below-mobile", x: 48, y: 112, width: 300, text: "below" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const textarea = container.querySelector(
+      '[data-testid="note-block-growing-mobile"] textarea',
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: {
+        value: Array.from({ length: 20 }, () => "متن طولانی برای چند خط").join(" "),
+      },
+    });
+
+    await waitFor(() => {
+      const belowBlock = container.querySelector(
+        '[data-testid="note-block-below-mobile"]',
+      ) as HTMLDivElement;
+      expect(Number.parseFloat(belowBlock.style.top)).toBeGreaterThan(112);
+    });
+
+    fireEvent(window, new Event("pagehide"));
+    await waitFor(() => {
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("متن طولانی"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+      const belowBlock = savedDocument?.blocks.find(
+        (blockValue) => blockValue.id === "below-mobile",
+      );
+      const growingBlock = savedDocument?.blocks.find(
+        (blockValue) => blockValue.id === "growing-mobile",
+      );
+
+      expect(growingBlock).toMatchObject({ x: 48, y: 72, width: 300 });
+      expect(belowBlock).toMatchObject({ x: 48, y: 112, width: 300 });
+    });
+  });
+
   it("stacks side-by-side desktop blocks when the mobile canvas makes them collide", async () => {
     setViewport(390);
     const { container } = renderEditor(

@@ -9,12 +9,15 @@ import {
 import { flushSync } from "react-dom";
 
 import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
-import { getCanvasBoundedX } from "@/components/editor/use-note-editor-canvas-interactions";
 import {
   BLOCK_DEFAULT_WIDTH,
   createBlockId,
+  getBlockHorizontalAnchor,
+  getAnchoredBlockX,
+  getCanvasBoundedX,
   getCurrentLineRange,
   getRenderedBlockWidth,
+  getResponsiveBlockX,
   measureBlockWidth,
   toggleTodoMarkerAtPosition,
 } from "@/lib/editor-document";
@@ -257,11 +260,18 @@ export function useNoteEditorBlockActions({
     initialText = "",
     initialRichText?: string,
   ) {
+    const activeCanvasWidth =
+      canvasRef.current?.getBoundingClientRect().width ?? canvasWidth;
     const block: FreeformBlock = {
       id: createBlockId(),
       x,
       y,
       width,
+      horizontalAnchor: getBlockHorizontalAnchor(
+        activeCanvasWidth,
+        x,
+        width,
+      ),
       text: initialText,
       ...(initialRichText ? { richText: initialRichText } : {}),
       align: "right",
@@ -352,15 +362,37 @@ export function useNoteEditorBlockActions({
           : null;
         const isLegacyColumnBlock = typeof block.width !== "number";
         const previousWidth = getRenderedBlockWidth(block, activeCanvasWidth);
+        const renderedX = getResponsiveBlockX(block, activeCanvasWidth);
+        const isStoredWidthConstrained =
+          typeof block.width === "number" && block.width > previousWidth + 0.5;
+        const shouldPreserveLegacyGeometry =
+          typeof block.horizontalAnchor !== "number" &&
+          (activeCanvasWidth < 768 || Math.abs(renderedX - block.x) > 0.5);
+
+        if (isStoredWidthConstrained || shouldPreserveLegacyGeometry) {
+          return {
+            ...block,
+            text,
+            ...(richText === undefined ? {} : { richText }),
+          };
+        }
+
         const nextWidth = isLegacyColumnBlock
           ? previousWidth
           : measureBlockWidth(text, activeCanvasWidth, textStyle);
         const widthDelta = nextWidth - previousWidth;
-        const nextX = getCanvasBoundedX(
-          activeCanvasWidth,
-          widthDelta === 0 ? block.x : block.x - widthDelta,
-          nextWidth,
-        );
+        const nextX =
+          typeof block.horizontalAnchor === "number"
+            ? getAnchoredBlockX(
+                activeCanvasWidth,
+                block.horizontalAnchor,
+                nextWidth,
+              )
+            : getCanvasBoundedX(
+                activeCanvasWidth,
+                widthDelta === 0 ? renderedX : renderedX - widthDelta,
+                nextWidth,
+              );
 
         return {
           ...block,
@@ -368,6 +400,15 @@ export function useNoteEditorBlockActions({
           ...(richText === undefined ? {} : { richText }),
           x: nextX,
           width: isLegacyColumnBlock ? block.width : nextWidth,
+          ...(isLegacyColumnBlock || typeof block.horizontalAnchor === "number"
+            ? {}
+            : {
+                horizontalAnchor: getBlockHorizontalAnchor(
+                  activeCanvasWidth,
+                  nextX,
+                  nextWidth,
+                ),
+              }),
         };
       },
       false,

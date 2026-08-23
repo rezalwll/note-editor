@@ -56,6 +56,57 @@ export function getBlockRightGutter(canvasWidth: number) {
   return getCanvasInset(canvasWidth);
 }
 
+export function getCanvasBoundedX(
+  canvasWidth: number,
+  desiredX: number,
+  blockWidth: number,
+) {
+  const inset = getCanvasInset(canvasWidth);
+  const rightGutter = getBlockRightGutter(canvasWidth);
+
+  return Math.min(
+    Math.max(inset, desiredX),
+    Math.max(inset, canvasWidth - blockWidth - rightGutter),
+  );
+}
+
+/**
+ * Stores a block's horizontal placement independently from viewport width.
+ * Zero represents the left edge of the usable canvas and one the right edge.
+ */
+export function getBlockHorizontalAnchor(
+  canvasWidth: number,
+  desiredX: number,
+  blockWidth: number,
+) {
+  const inset = getCanvasInset(canvasWidth);
+  const rightmostX = Math.max(
+    inset,
+    canvasWidth - blockWidth - getBlockRightGutter(canvasWidth),
+  );
+  if (rightmostX === inset) {
+    return 1;
+  }
+
+  const boundedX = getCanvasBoundedX(canvasWidth, desiredX, blockWidth);
+  return (boundedX - inset) / (rightmostX - inset);
+}
+
+export function getAnchoredBlockX(
+  canvasWidth: number,
+  horizontalAnchor: number,
+  blockWidth: number,
+) {
+  const inset = getCanvasInset(canvasWidth);
+  const rightmostX = Math.max(
+    inset,
+    canvasWidth - blockWidth - getBlockRightGutter(canvasWidth),
+  );
+  const boundedAnchor = Math.min(1, Math.max(0, horizontalAnchor));
+
+  return inset + (rightmostX - inset) * boundedAnchor;
+}
+
 export function getBlockMaxWidth(canvasWidth: number) {
   const inset = getCanvasInset(canvasWidth);
   const rightGutter = getBlockRightGutter(canvasWidth);
@@ -128,6 +179,16 @@ export function getRenderedBlockWidth(block: FreeformBlock, canvasWidth: number)
   return typeof block.width === "number"
     ? Math.min(block.width, getBlockMaxWidth(canvasWidth))
     : getLegacyBlockWidth(block.x, canvasWidth);
+}
+
+export function getResponsiveBlockX(
+  block: FreeformBlock,
+  canvasWidth: number,
+) {
+  const width = getRenderedBlockWidth(block, canvasWidth);
+  return typeof block.horizontalAnchor === "number"
+    ? getAnchoredBlockX(canvasWidth, block.horizontalAnchor, width)
+    : getCanvasBoundedX(canvasWidth, block.x, width);
 }
 
 export function isImageBlock(block: FreeformBlock) {

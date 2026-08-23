@@ -123,4 +123,27 @@ describe("editor block collision handling", () => {
       { id: "top-right", y: 72 },
     ]);
   });
+
+  it("orders mixed anchored and legacy blocks by their rendered position", () => {
+    const anchored = {
+      ...textBlock("anchored", 92, 72, 300),
+      horizontalAnchor: 0.7,
+    };
+    const legacy = textBlock("legacy", 600, 72, 300);
+    const heights = new Map([
+      [anchored.id, 28],
+      [legacy.id, 28],
+    ]);
+
+    const layout = getResponsiveBlockLayout({
+      blocks: [legacy, anchored],
+      canvasWidth: 1_200,
+      measuredHeights: heights,
+    });
+
+    expect(layout.find((block) => block.id === "anchored")?.y).toBe(72);
+    expect(layout.find((block) => block.id === "legacy")?.y).toBe(
+      72 + 28 + BLOCK_COLLISION_GAP,
+    );
+  });
 });

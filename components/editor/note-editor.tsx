@@ -14,7 +14,6 @@ import { NoteEditorBlock } from "@/components/editor/note-editor-block";
 import { NoteEditorHeader } from "@/components/editor/note-editor-header";
 import { useNoteEditorBlockActions } from "@/components/editor/use-note-editor-block-actions";
 import {
-  getCanvasBoundedX,
   isEditorControlTarget,
   useNoteEditorCanvasInteractions,
 } from "@/components/editor/use-note-editor-canvas-interactions";
@@ -27,6 +26,7 @@ import {
   dispatchEditorCommand,
 } from "@/lib/editor-events";
 import {
+  getCanvasBoundedX,
   getInitialBlocks,
   isImageBlock,
 } from "@/lib/editor-document";
