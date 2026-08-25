@@ -1918,7 +1918,7 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
-  it("resizes a text block from the left edge and stores its position and width", async () => {
+  it("keeps a manually resized text block width while typing", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({
         type: "freeform-v1",
@@ -1961,12 +1961,20 @@ describe("NoteEditor freeform placement", () => {
       expect(textBlock).toHaveStyle({ left: "120px", width: "360px" });
     });
 
+    const textarea = textBlock.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "resized and edited" } });
+
+    await waitFor(() => {
+      expect(textBlock).toHaveStyle({ left: "120px", width: "360px" });
+      expect(textarea).toHaveValue("resized and edited");
+    });
+
     fireEvent(window, new Event("pagehide"));
 
     await waitFor(() => {
       const savedPage = mocks.enqueuePageUpsert.mock.calls
         .map(([pageValue]) => pageValue as { bodyHtml?: string })
-        .find((pageValue) => pageValue.bodyHtml?.includes("resizable"));
+        .find((pageValue) => pageValue.bodyHtml?.includes("resized and edited"));
       const savedDocument = savedPage?.bodyHtml
         ? parseFreeformDocument(savedPage.bodyHtml)
         : null;
@@ -1977,6 +1985,8 @@ describe("NoteEditor freeform placement", () => {
             id: "resizable",
             x: 120,
             width: 360,
+            manualWidth: true,
+            text: "resized and edited",
           }),
         ]),
       );

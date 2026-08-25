@@ -132,6 +132,7 @@ describe("note content", () => {
           x: 92,
           y: 120,
           width: 240,
+          manualWidth: true,
           horizontalAnchor: 0.65,
           text: "متن موبایل",
         },

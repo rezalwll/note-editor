@@ -369,7 +369,11 @@ export function useNoteEditorBlockActions({
           typeof block.horizontalAnchor !== "number" &&
           (activeCanvasWidth < 768 || Math.abs(renderedX - block.x) > 0.5);
 
-        if (isStoredWidthConstrained || shouldPreserveLegacyGeometry) {
+        if (
+          block.manualWidth ||
+          isStoredWidthConstrained ||
+          shouldPreserveLegacyGeometry
+        ) {
           return {
             ...block,
             text,

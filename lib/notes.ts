@@ -61,6 +61,7 @@ const freeformBlockSchema = z.object({
   x: z.number(),
   y: z.number(),
   width: z.number().optional(),
+  manualWidth: z.boolean().optional(),
   horizontalAnchor: z.number().min(0).max(1).optional(),
   text: z.string(),
   richText: z.string().optional(),

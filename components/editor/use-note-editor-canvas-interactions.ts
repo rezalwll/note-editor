@@ -272,6 +272,7 @@ export function useNoteEditorCanvasInteractions({
           ...block,
           x: nextX,
           width: nextWidth,
+          manualWidth: true,
           horizontalAnchor: getBlockHorizontalAnchor(
             rect.width,
             nextX,
