@@ -432,6 +432,25 @@ export function useNoteEditorLayout({
             ? candidate
             : { ...candidate, y: pendingY };
         });
+        const canvasLeft =
+          canvasRef.current?.getBoundingClientRect().left ?? 0;
+        const measuredHorizontalBounds = new Map<
+          string,
+          { left: number; right: number }
+        >();
+        for (const candidate of effectiveBlocks) {
+          const candidateElement = getTextBlockElement(candidate.id);
+          const candidateContainer = candidateElement?.closest<HTMLElement>(
+            "[data-editor-block]",
+          );
+          const candidateRect = candidateContainer?.getBoundingClientRect();
+          if (candidateRect && candidateRect.width > 0) {
+            measuredHorizontalBounds.set(candidate.id, {
+              left: candidateRect.left - canvasLeft,
+              right: candidateRect.right - canvasLeft,
+            });
+          }
+        }
         const growthUpdates = getBlockGrowthPositionUpdates({
           blocks: effectiveBlocks,
           sourceBlockId: block.id,
@@ -439,6 +458,7 @@ export function useNoteEditorLayout({
           nextHeight: blockHeight,
           canvasWidth,
           measuredHeights,
+          measuredHorizontalBounds,
         });
         for (const [blockId, nextY] of growthUpdates) {
           pendingPositionUpdates.set(blockId, nextY);

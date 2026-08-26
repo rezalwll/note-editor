@@ -14,6 +14,8 @@ type BlockBounds = {
   bottom: number;
 };
 
+export type BlockHorizontalBounds = Pick<BlockBounds, "left" | "right">;
+
 function overlapsHorizontally(
   first: Pick<BlockBounds, "left" | "right">,
   second: Pick<BlockBounds, "left" | "right">,
@@ -132,6 +134,7 @@ export function getBlockGrowthPositionUpdates({
   nextHeight,
   canvasWidth,
   measuredHeights,
+  measuredHorizontalBounds,
   gap = BLOCK_COLLISION_GAP,
 }: {
   blocks: readonly FreeformBlock[];
@@ -140,6 +143,7 @@ export function getBlockGrowthPositionUpdates({
   nextHeight: number;
   canvasWidth: number;
   measuredHeights?: ReadonlyMap<string, number>;
+  measuredHorizontalBounds?: ReadonlyMap<string, BlockHorizontalBounds>;
   gap?: number;
 }) {
   const updates = new Map<string, number>();
@@ -153,11 +157,15 @@ export function getBlockGrowthPositionUpdates({
   }
 
   const sourceWidth = getRenderedBlockWidth(source, canvasWidth);
+  const sourceX = getResponsiveBlockX(source, canvasWidth);
+  const sourceHorizontalBounds = measuredHorizontalBounds?.get(source.id) ?? {
+    left: sourceX,
+    right: sourceX + sourceWidth,
+  };
   const previousSourceBottom = source.y + previousHeight;
   const affectedBounds: BlockBounds[] = [
     {
-      left: source.x,
-      right: source.x + sourceWidth,
+      ...sourceHorizontalBounds,
       top: source.y,
       bottom: source.y + nextHeight,
     },
@@ -172,9 +180,10 @@ export function getBlockGrowthPositionUpdates({
 
   for (const block of candidates) {
     const width = getRenderedBlockWidth(block, canvasWidth);
-    const horizontalBounds = {
-      left: block.x,
-      right: block.x + width,
+    const x = getResponsiveBlockX(block, canvasWidth);
+    const horizontalBounds = measuredHorizontalBounds?.get(block.id) ?? {
+      left: x,
+      right: x + width,
     };
     let nextY = block.y;
 

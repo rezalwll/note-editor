@@ -57,6 +57,47 @@ describe("editor block collision handling", () => {
     ).toBe(0);
   });
 
+  it("uses responsive horizontal positions when anchored blocks grow", () => {
+    const source = {
+      ...textBlock("source", 48, 72, 300),
+      horizontalAnchor: 0,
+    };
+    const otherColumn = {
+      ...textBlock("other-column", 48, 112, 300),
+      horizontalAnchor: 1,
+    };
+
+    const updates = getBlockGrowthPositionUpdates({
+      blocks: [source, otherColumn],
+      sourceBlockId: source.id,
+      previousHeight: 28,
+      nextHeight: 84,
+      canvasWidth: 1_200,
+    });
+
+    expect(updates.has(otherColumn.id)).toBe(false);
+  });
+
+  it("trusts rendered bounds when stored geometry is stale", () => {
+    const source = textBlock("source", 48, 72, 500);
+    const visuallySeparate = textBlock("visually-separate", 400, 112, 500);
+    const measuredHorizontalBounds = new Map([
+      [source.id, { left: 80, right: 444 }],
+      [visuallySeparate.id, { left: 488, right: 1_454 }],
+    ]);
+
+    const updates = getBlockGrowthPositionUpdates({
+      blocks: [source, visuallySeparate],
+      sourceBlockId: source.id,
+      previousHeight: 28,
+      nextHeight: 84,
+      canvasWidth: 1_536,
+      measuredHorizontalBounds,
+    });
+
+    expect(updates.has(visuallySeparate.id)).toBe(false);
+  });
+
   it("stacks desktop columns when a narrow canvas forces them to overlap", () => {
     const right = textBlock("right", 600, 72, 300);
     const left = textBlock("left", 48, 72, 300);
