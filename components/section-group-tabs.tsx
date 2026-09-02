@@ -233,7 +233,6 @@ export function SectionGroupTabs({
               data-testid="new-group-name"
               value={draftGroupName}
               onChange={(event) => setDraftGroupName(event.target.value)}
-              onBlur={submitGroupRename}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();

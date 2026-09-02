@@ -98,6 +98,30 @@ describe("PagesSidebar", () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
+  it("does not create a page when the title input loses focus", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Notebook",
+            deletedAt: null,
+            pages: [],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("create-page"));
+    const input = screen.getByTestId("new-page-title");
+    fireEvent.change(input, { target: { value: "Draft page" } });
+    fireEvent.blur(input);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.createPage).not.toHaveBeenCalled();
+    expect(screen.getByTestId("new-page-title")).toBeInTheDocument();
+  });
+
   it("moves a live page to trash from its context menu", async () => {
     render(
       <PagesSidebar

@@ -585,8 +585,20 @@ describe("MobileShell page workflows", () => {
     openPages();
     fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
     const input = screen.getByPlaceholderText("صفحه بدون عنوان");
-    fireEvent.blur(input);
+    fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "صفحه بدون عنوان"));
+    expect(screen.getByPlaceholderText("صفحه بدون عنوان")).toBeInTheDocument();
+  });
+
+  it("does not create a page when the title input loses focus", () => {
+    renderShell();
+    openPages();
+    fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
+    const input = screen.getByPlaceholderText("صفحه بدون عنوان");
+    fireEvent.change(input, { target: { value: "پیش‌نویس" } });
+    fireEvent.blur(input);
+
+    expect(mocks.createPage).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText("صفحه بدون عنوان")).toBeInTheDocument();
   });
 

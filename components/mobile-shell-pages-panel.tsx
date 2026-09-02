@@ -134,7 +134,6 @@ export function MobilePagesPanel({
                 ref={inputRef}
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
-                onBlur={submitCreate}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();

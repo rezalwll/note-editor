@@ -160,7 +160,6 @@ export function MobileSectionsPanel({
                       ref={groupInputRef}
                       value={draftGroupName}
                       onChange={(event) => setDraftGroupName(event.target.value)}
-                      onBlur={submitCreateGroup}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
@@ -290,7 +289,6 @@ export function MobileSectionsPanel({
                                 ref={notebookInputRef}
                                 value={draftNotebookName}
                                 onChange={(event) => setDraftNotebookName(event.target.value)}
-                                onBlur={submitCreateNotebook}
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter") {
                                     event.preventDefault();

@@ -591,7 +591,6 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               data-testid="new-page-title"
               value={draftTitle}
               onChange={(event) => setDraftTitle(event.target.value)}
-              onBlur={submitCreate}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();

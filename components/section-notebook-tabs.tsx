@@ -285,7 +285,11 @@ export function SectionNotebookTabs({
                   disabled={isPending}
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
-                  onBlur={submitNotebookRename}
+                  onBlur={
+                    draftNotebook?.id === notebook.id
+                      ? undefined
+                      : submitNotebookRename
+                  }
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
