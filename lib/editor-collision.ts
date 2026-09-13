@@ -16,6 +16,90 @@ type BlockBounds = {
 
 export type BlockHorizontalBounds = Pick<BlockBounds, "left" | "right">;
 
+/**
+ * Returns the furthest width a block may grow to without crossing a block in
+ * the same visual row. Resizing only changes one edge, so a block on the
+ * opposite side of that fixed edge cannot become a new collision.
+ */
+export function getBlockResizeMaxWidth({
+  blocks,
+  resizingBlockId,
+  edge,
+  startX,
+  startY,
+  startWidth,
+  canvasWidth,
+  measuredHeights,
+  gap = BLOCK_COLLISION_GAP,
+}: {
+  blocks: readonly FreeformBlock[];
+  resizingBlockId: string;
+  edge: "left" | "right";
+  startX: number;
+  startY: number;
+  startWidth: number;
+  canvasWidth: number;
+  measuredHeights?: ReadonlyMap<string, number>;
+  gap?: number;
+}) {
+  const resizingBlock = blocks.find((block) => block.id === resizingBlockId);
+  if (!resizingBlock) {
+    return null;
+  }
+
+  const sourceBounds = {
+    left: startX,
+    right: startX + startWidth,
+    top: startY,
+    bottom:
+      startY +
+      (measuredHeights?.get(resizingBlock.id) ??
+        estimateBlockHeight(resizingBlock, canvasWidth)),
+  };
+  const fixedEdge = edge === "left" ? sourceBounds.right : sourceBounds.left;
+  let maxWidth: number | null = null;
+
+  for (const block of blocks) {
+    if (block.id === resizingBlockId) {
+      continue;
+    }
+
+    const width = getRenderedBlockWidth(block, canvasWidth);
+    const x = getResponsiveBlockX(block, canvasWidth);
+    const bounds = {
+      left: x,
+      right: x + width,
+      top: block.y,
+      bottom:
+        block.y +
+        (measuredHeights?.get(block.id) ?? estimateBlockHeight(block, canvasWidth)),
+    };
+    if (!overlapsVertically(sourceBounds, bounds)) {
+      continue;
+    }
+
+    const candidateMaxWidth =
+      edge === "left"
+        ? fixedEdge - bounds.right - gap
+        : bounds.left - fixedEdge - gap;
+    const isInExpansionDirection =
+      edge === "left"
+        ? bounds.right < fixedEdge
+        : bounds.left > fixedEdge;
+
+    if (!isInExpansionDirection) {
+      continue;
+    }
+
+    // Existing overlapping layouts remain editable, but they must not become
+    // more overlapped while a user drags an edge outward.
+    const safeMaxWidth = Math.max(startWidth, candidateMaxWidth);
+    maxWidth = maxWidth === null ? safeMaxWidth : Math.min(maxWidth, safeMaxWidth);
+  }
+
+  return maxWidth;
+}
+
 function overlapsHorizontally(
   first: Pick<BlockBounds, "left" | "right">,
   second: Pick<BlockBounds, "left" | "right">,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BLOCK_COLLISION_GAP,
+  getBlockResizeMaxWidth,
   getBlockGrowthPositionUpdates,
   getResponsiveBlockLayout,
 } from "@/lib/editor-collision";
@@ -18,6 +19,57 @@ function textBlock(
 }
 
 describe("editor block collision handling", () => {
+  it("stops left-edge resizing before a block in the same row", () => {
+    const left = textBlock("left", 200, 72);
+    const right = textBlock("right", 520, 72);
+
+    expect(
+      getBlockResizeMaxWidth({
+        blocks: [left, right],
+        resizingBlockId: right.id,
+        edge: "left",
+        startX: right.x,
+        startY: right.y,
+        startWidth: right.width ?? 240,
+        canvasWidth: 1_200,
+      }),
+    ).toBe(308);
+  });
+
+  it("stops right-edge resizing before a block in the same row", () => {
+    const left = textBlock("left", 200, 72);
+    const right = textBlock("right", 520, 72);
+
+    expect(
+      getBlockResizeMaxWidth({
+        blocks: [left, right],
+        resizingBlockId: left.id,
+        edge: "right",
+        startX: left.x,
+        startY: left.y,
+        startWidth: left.width ?? 240,
+        canvasWidth: 1_200,
+      }),
+    ).toBe(308);
+  });
+
+  it("does not constrain resizing for a block in another row", () => {
+    const left = textBlock("left", 200, 72);
+    const right = textBlock("right", 520, 180);
+
+    expect(
+      getBlockResizeMaxWidth({
+        blocks: [left, right],
+        resizingBlockId: right.id,
+        edge: "left",
+        startX: right.x,
+        startY: right.y,
+        startWidth: right.width ?? 240,
+        canvasWidth: 1_200,
+      }),
+    ).toBeNull();
+  });
+
   it("pushes intersecting blocks down and cascades through the column", () => {
     const blocks = [
       textBlock("source", 48, 72),

@@ -1993,6 +1993,49 @@ describe("NoteEditor freeform placement", () => {
     });
   });
 
+  it("stops a text block resize before an adjacent block", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "left", x: 200, y: 72, width: 240, text: "left" },
+          { id: "right", x: 520, y: 72, width: 240, text: "right" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+    await waitForHydration();
+
+    const textBlock = await waitFor(() => {
+      const element = container.querySelector(
+        '[data-testid="note-block-right"]',
+      ) as HTMLDivElement | null;
+      expect(element).not.toBeNull();
+      return element as HTMLDivElement;
+    });
+    const resizeEdge = container.querySelector(
+      '[data-testid="resize-edge-block-right"]',
+    ) as HTMLDivElement;
+
+    fireEvent.pointerDown(resizeEdge, {
+      button: 0,
+      clientX: 520,
+      pointerId: 28,
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 100,
+      pointerId: 28,
+    });
+    fireEvent.pointerUp(window, { pointerId: 28 });
+
+    await waitFor(() => {
+      expect(textBlock).toHaveStyle({ left: "452px", width: "308px" });
+    });
+  });
+
   it("clamps text block resize to the width of its longest word", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

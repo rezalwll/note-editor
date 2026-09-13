@@ -24,6 +24,7 @@ import {
   getTextBlockMinWidth,
   isImageBlock,
 } from "@/lib/editor-document";
+import { getBlockResizeMaxWidth } from "@/lib/editor-collision";
 import type { FreeformBlock } from "@/lib/notes";
 
 const POINTER_GEOMETRY_INTENT_THRESHOLD = 2;
@@ -87,6 +88,7 @@ export function useNoteEditorCanvasInteractions({
     edge: "left" | "right";
     startClientX: number;
     startX: number;
+    startY: number;
     startWidth: number;
   } | null>(null);
   const pagePointerStartRef = useRef<{
@@ -239,13 +241,26 @@ export function useNoteEditorCanvasInteractions({
       : getTextBlockMinWidth(currentBlock);
     const pointerDelta = event.clientX - resizeState.startClientX;
     const rightEdge = resizeState.startX + resizeState.startWidth;
-    const maxWidth =
+    const canvasMaxWidth =
       resizeState.edge === "left"
         ? Math.max(minWidth, rightEdge - getCanvasInset(rect.width))
         : Math.max(
             minWidth,
             rect.width - resizeState.startX - getBlockRightGutter(rect.width),
           );
+    const collisionMaxWidth = getBlockResizeMaxWidth({
+      blocks,
+      resizingBlockId: resizeState.id,
+      edge: resizeState.edge,
+      startX: resizeState.startX,
+      startY: resizeState.startY,
+      startWidth: resizeState.startWidth,
+      canvasWidth: rect.width,
+    });
+    const maxWidth = Math.max(
+      minWidth,
+      Math.min(canvasMaxWidth, collisionMaxWidth ?? canvasMaxWidth),
+    );
     const desiredWidth =
       resizeState.edge === "left"
         ? resizeState.startWidth - pointerDelta
@@ -349,6 +364,7 @@ export function useNoteEditorCanvasInteractions({
       edge,
       startClientX: event.clientX,
       startX: block.x,
+      startY: block.y,
       startWidth: getRenderedBlockWidth(
         block,
         canvasRef.current.getBoundingClientRect().width,
