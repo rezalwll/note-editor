@@ -1055,7 +1055,7 @@
 }
 
 .searchFeature {
-  grid-column: span 6;
+  grid-column: span 12;
   min-height: 390px;
   background: linear-gradient(155deg, #ffffff 20%, #f3fbff 100%);
 }

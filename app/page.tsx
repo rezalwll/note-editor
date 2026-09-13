@@ -23,7 +23,6 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
-  WifiOff,
 } from "lucide-react";
 
 import styles from "./landing.module.css";
@@ -132,15 +131,6 @@ function ProductPreview() {
         </div>
       </div>
 
-      <div className={`${styles.floatingBadge} ${styles.syncBadge}`}>
-        <span className={styles.statusIcon}><CloudCheck size={17} /></span>
-        <span><strong>همه‌چیز ذخیره شد</strong><small>فکرت از دست نمی‌رود</small></span>
-      </div>
-
-      <div className={`${styles.floatingBadge} ${styles.organizeBadge}`}>
-        <span className={styles.statusIconAlt}><Layers3 size={17} /></span>
-        <span><strong>هر چیز سر جای خودش</strong><small>مجموعه، زیرمجموعه، صفحه</small></span>
-      </div>
     </div>
   );
 }
@@ -203,31 +193,25 @@ export default function LandingPage() {
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <div className={styles.kicker}>
-            <Sparkles size={16} />
-            <span>فضای شخصی برای فکرهای در حرکت</span>
-          </div>
           <h1>
             یک جای آرام
             <span>برای فکرهای شلوغ.</span>
           </h1>
           <p className={styles.heroLead}>
-            نوتاوا فضای فارسی شما برای نوشتن آزاد، مرتب‌کردن ایده‌ها و
-            ادامه‌دادن از هر دستگاهی است؛ حتی وقتی اینترنت همراهتان نیست.
+            نوتاوا فضای فارسی شما برای نوشتن آزاد و مرتب‌کردن ایده‌هاست.
           </p>
           <div className={styles.heroActions}>
             <Link href="/signup" className={styles.primaryCta}>
-              فضای خودم را بسازم
+              فضای خودم رو می‌سازم
               <ArrowLeft size={19} />
             </Link>
             <Link href="/login" className={styles.secondaryCta}>
-              حساب دارم؛ ورود
+              حساب دارم، میام تو
             </Link>
           </div>
           <div className={styles.heroProof} aria-label="ویژگی‌های اصلی">
             <span><CheckCircle2 size={16} /> چیدمان آزاد بلوکی</span>
             <span><CheckCircle2 size={16} /> ذخیره‌ی خودکار</span>
-            <span><CheckCircle2 size={16} /> آماده برای آفلاین</span>
           </div>
         </div>
 
@@ -237,33 +221,33 @@ export default function LandingPage() {
       <section className={styles.promiseStrip} aria-label="مزیت‌های نوتاوا">
         <div>
           <Move size={22} />
-          <span><strong>آزاد بنویس</strong><small>بلوک‌ها را جابه‌جا و اندازه‌شان را تنظیم کن</small></span>
+          <span><strong>هرجور راحتی بنویس</strong><small>بلوک‌ها رو جابه‌جا کن و اندازه‌شون رو خودت تنظیم کن</small></span>
         </div>
         <div>
           <Layers3 size={22} />
-          <span><strong>به روش خودت مرتب کن</strong><small>از مجموعه تا صفحه، بدون گم‌شدن ایده‌ها</small></span>
+          <span><strong>همه‌چیز دم دستت باشه</strong><small>از مجموعه تا صفحه، ایده‌هات رو راحت پیدا کن</small></span>
         </div>
         <div>
-          <CloudCheck size={22} />
-          <span><strong>هرجا ادامه بده</strong><small>روی موبایل و دسکتاپ، آنلاین یا آفلاین</small></span>
+          <Search size={22} />
+          <span><strong>سریع پیداش کن</strong><small>هرچی می‌خوای، با یه جست‌وجو بهش برس</small></span>
         </div>
       </section>
 
       <section className={styles.featuresSection} id="features">
         <SectionHeading
-          eyebrow="همه‌چیز برای یک ذهن منظم"
-          title="نوشتن باید ساده باشد؛ نظم‌دادن هم همین‌طور."
-          description="نوتاوا ابزارهای لازم را در اختیارتان می‌گذارد، اما اجازه می‌دهد فضای شخصی‌تان را درست همان‌طور که دوست دارید بسازید."
+          eyebrow="چیزهایی که کار رو راحت می‌کنن"
+          title="نوشتن و مرتب‌کردن قرار نیست سخت باشه."
+          description="نوتاوا ابزارهاش رو آماده کرده تا تو فقط روی فکرهات تمرکز کنی و فضای خودت رو همون‌طور که دوست داری بچینی."
         />
 
         <div className={styles.bentoGrid}>
           <article className={`${styles.featureCard} ${styles.editorFeature}`}>
             <div className={styles.featureCopy}>
               <span className={styles.featureIcon}><Move size={20} /></span>
-              <h3>روی یک صفحه‌ی واقعاً آزاد بنویس</h3>
+              <h3>صفحه‌ات رو هرجور دوست داری بچین</h3>
               <p>
-                متن، تصویر و فهرست کارها را در بلوک‌های مستقل بساز؛ جابه‌جا کن،
-                اندازه بده و صفحه را شبیه ذهن خودت بچین.
+                متن، تصویر و فهرست کارها رو جداگانه بچین؛ جابه‌جاشون کن،
+                اندازه‌شون بده و صفحه رو شبیه فکر خودت بساز.
               </p>
             </div>
             <div className={styles.freeCanvas} aria-hidden="true">
@@ -277,12 +261,12 @@ export default function LandingPage() {
               <div className={styles.canvasLine} />
               <div className={styles.canvasTextCard}>
                 <span className={styles.canvasHandle}><GripVertical size={13} /></span>
-                <strong>ایده‌ی اصلی را همین‌جا نگه دار</strong>
-                <span>بدون محدودشدن به یک قالب از پیش‌ساخته.</span>
+                <strong>ایده‌ی اصلی رو همین‌جا نگه دار</strong>
+                <span>قالب از پیش‌ساخته‌ای دست‌وپات رو نمی‌بنده.</span>
               </div>
               <div className={styles.canvasTodoCard}>
                 <Check size={12} />
-                <span>قدم بعدی را مشخص کن</span>
+                <span>قدم بعدی رو مشخص کن</span>
               </div>
               <div className={styles.canvasImageCard}>
                 <ImageIcon size={18} />
@@ -293,8 +277,8 @@ export default function LandingPage() {
           <article className={`${styles.featureCard} ${styles.structureFeature}`}>
             <div className={styles.featureCopy}>
               <span className={`${styles.featureIcon} ${styles.mintIcon}`}><FolderOpen size={20} /></span>
-              <h3>هر فکر، جای خودش</h3>
-              <p>از پروژه‌های بزرگ تا یک یادداشت روزانه، ساختار را به روش خودتان بسازید.</p>
+              <h3>هر چیزی جای خودش</h3>
+              <p>پروژه‌های بزرگ و یادداشت‌های روزانه‌ات رو همون‌طور که دوست داری مرتب کن.</p>
             </div>
             <div className={styles.structureTree} aria-hidden="true">
               <div className={styles.treeCollection}><Layers3 size={16} /><span>مجموعه‌ی شخصی</span></div>
@@ -309,8 +293,8 @@ export default function LandingPage() {
           <article className={`${styles.featureCard} ${styles.searchFeature}`}>
             <div className={styles.featureCopy}>
               <span className={`${styles.featureIcon} ${styles.skyIcon}`}><Search size={20} /></span>
-              <h3>پیدایش کن؛ سریع و دقیق</h3>
-              <p>میان عنوان، متن، برچسب‌ها و فایل‌ها جست‌وجو کن و مستقیم به همان صفحه برس.</p>
+              <h3>دنبالش می‌گردی؟ پیداش می‌کنی</h3>
+              <p>توی عنوان، متن، برچسب‌ها و فایل‌ها بگرد و مستقیم برو سراغ همون صفحه.</p>
             </div>
             <div className={styles.searchDemo} aria-hidden="true">
               <div className={styles.searchInput}><Search size={16} /><span>طرح محصول</span><kbd>⌘ K</kbd></div>
@@ -326,33 +310,11 @@ export default function LandingPage() {
             </div>
           </article>
 
-          <article className={`${styles.featureCard} ${styles.offlineFeature}`}>
-            <div className={styles.featureCopy}>
-              <span className={`${styles.featureIcon} ${styles.amberIcon}`}><WifiOff size={20} /></span>
-              <h3>اینترنت رفت؟ فکرهایت نه.</h3>
-              <p>یادداشت‌ها را آفلاین ادامه بده؛ نوتاوا پس از اتصال دوباره تغییرات را همگام می‌کند.</p>
-            </div>
-            <div className={styles.offlineVisual} aria-hidden="true">
-              <div className={styles.phoneFrame}>
-                <span className={styles.phoneNotch} />
-                <div className={styles.phoneHeader}><Image src="/brand/notava-icon-192.png" alt="" width={20} height={20} /><span>یادداشت امروز</span></div>
-                <div className={styles.phoneText}>
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <div className={styles.phoneOffline}><WifiOff size={12} /> آفلاین؛ ذخیره روی دستگاه</div>
-              </div>
-              <div className={styles.syncTrail}><span /><span /><span /></div>
-              <div className={styles.cloudBubble}><CloudCheck size={23} /><small>همگام شد</small></div>
-            </div>
-          </article>
-
           <article className={`${styles.featureCard} ${styles.themeFeature}`}>
             <div className={styles.featureCopy}>
               <span className={`${styles.featureIcon} ${styles.roseIcon}`}><Palette size={20} /></span>
-              <h3>هر مجموعه، حال‌وهوای خودش</h3>
-              <p>با رنگ‌ها و تم‌های مختلف، مسیرهای فکری‌تان را یک نگاه از هم تشخیص دهید.</p>
+              <h3>هر مجموعه، حال‌وهوای خودش رو داره</h3>
+              <p>با رنگ‌ها و تم‌های مختلف، مسیرهای فکری‌ات رو با یک نگاه از هم جدا کن.</p>
             </div>
             <div className={styles.themeStack} aria-hidden="true">
               <span className={styles.themeLavender}>پروژه‌ی شخصی</span>
@@ -367,29 +329,29 @@ export default function LandingPage() {
       <section className={styles.experienceSection} id="experience">
         <div className={styles.experienceIntro}>
           <span className={styles.eyebrow}>از فکر تا یک صفحه‌ی مرتب</span>
-          <h2>مسیر ساده‌ای که مزاحم فکرکردن نمی‌شود.</h2>
+          <h2>راهش ساده‌ست؛ خودت جلو می‌ری.</h2>
           <p>
-            نوتاوا از همان لحظه‌ی شروع، یک فضای آماده به شما می‌دهد؛ باقی مسیر را
-            خودتان و با ریتم خودتان شکل می‌دهید.
+            از همون اول یک فضای آماده داری؛ بعدش هرطور راحتی جلو برو و کم‌کم
+            فضای خودت رو بساز.
           </p>
           <Link href="/signup" className={styles.textLink}>
-            شروع ساختن فضای من
+            شروع کنیم
             <ArrowLeft size={17} />
           </Link>
         </div>
 
         <div className={styles.steps}>
-          <article>
+            <article>
             <span className={styles.stepNumber}>۱</span>
-            <div><h3>مجموعه‌ات را بساز</h3><p>کار، زندگی، مطالعه یا هر مسیری که برایت معنا دارد.</p></div>
+              <div><h3>مجموعه‌ات رو بساز</h3><p>کار، زندگی، مطالعه؛ هر چیزی که برات مهمه.</p></div>
           </article>
           <article>
             <span className={styles.stepNumber}>۲</span>
-            <div><h3>آزاد و بی‌وقفه بنویس</h3><p>با متن، تصویر، فهرست کار و چیدمانی که خودت انتخاب می‌کنی.</p></div>
+              <div><h3>راحت و بی‌وقفه بنویس</h3><p>متن، تصویر و فهرست کار رو هرجور خودت می‌پسندی کنار هم بچین.</p></div>
           </article>
           <article>
             <span className={styles.stepNumber}>۳</span>
-            <div><h3>هرجا بودی ادامه بده</h3><p>نوتاوا روی نمایشگر کوچک و بزرگ همراه جریان فکرت می‌ماند.</p></div>
+              <div><h3>هرجا بودی ادامه بده</h3><p>روی صفحه‌ی کوچک یا بزرگ، نوتاوا با ریتم تو جلو میاد.</p></div>
           </article>
         </div>
       </section>
@@ -397,24 +359,23 @@ export default function LandingPage() {
       <section className={styles.securitySection} id="security">
         <div className={styles.securityGlow} aria-hidden="true" />
         <div className={styles.securityCopy}>
-          <span className={styles.darkEyebrow}><ShieldCheck size={16} /> امنیت، بدون پیچیدگی</span>
-          <h2>یادداشت شخصی باید واقعاً شخصی بماند.</h2>
+          <h2>یادداشت‌های تو، مال خودت می‌مونن.</h2>
           <p>
-            قفل الگویی، پاک‌شدن داده‌های محلی هنگام خروج و مدیریت روشن تعارض‌ها
-            کمک می‌کنند کنترل فضای فکری‌تان دست خودتان بماند.
+            با قفل الگویی، کنترل تعارض‌ها و ابزارهای پشتیبان، خیالت از بابت
+            یادداشت‌هات راحت‌تره.
           </p>
           <ul>
-            <li><Check size={16} /> قفل جداگانه برای ورود سریع و امن به برنامه</li>
-            <li><Check size={16} /> نگه‌داشتن نسخه‌ی هر دو طرف هنگام تعارض همگام‌سازی</li>
-            <li><Check size={16} /> دریافت و بازیابی نسخه‌ی پشتیبان فضای کاری</li>
+            <li><Check size={16} /> قفل جداگانه برای ورود سریع و امن</li>
+            <li><Check size={16} /> دیدن هر دو نسخه وقتی تغییری با تغییر دیگر قاطی می‌شود</li>
+            <li><Check size={16} /> گرفتن و برگرداندن نسخه‌ی پشتیبان فضای کاری</li>
           </ul>
         </div>
 
         <div className={styles.securityVisual} aria-label="نمای قفل الگویی نوتاوا">
           <div className={styles.lockCard}>
             <span className={styles.lockIcon}><LockKeyhole size={24} /></span>
-            <strong>فضای شخصی شما</strong>
-            <small>برای ادامه الگوی خود را بکشید</small>
+            <strong>فضای خودت</strong>
+             <small>برای ادامه، الگوت رو بکش</small>
             <div className={styles.patternGrid} aria-hidden="true">
               {Array.from({ length: 9 }).map((_, index) => (
                 <span key={index} className={index === 0 || index === 1 || index === 4 || index === 7 ? styles.patternActive : undefined} />
@@ -423,33 +384,29 @@ export default function LandingPage() {
               <i className={styles.patternLineTwo} />
               <i className={styles.patternLineThree} />
             </div>
-            <span className={styles.lockStatus}><ShieldCheck size={14} /> محافظت‌شده با قفل برنامه</span>
+             <span className={styles.lockStatus}><ShieldCheck size={14} /> فضای تو قفل شده</span>
           </div>
         </div>
       </section>
 
       <section className={styles.questionsSection} id="questions">
         <SectionHeading
-          eyebrow="پرسش‌های کوتاه"
-          title="چیزهایی که شاید بخواهید بدانید."
-          description="پاسخ‌های روشن درباره‌ی استفاده‌ی روزمره از نوتاوا."
+          eyebrow="چند سؤال کوتاه"
+          title="قبل از شروع شاید این‌ها به کارت بیاد."
+          description="چند جواب ساده برای سؤال‌هایی که ممکنه موقع شروع داشته باشی."
         />
         <div className={styles.faqList}>
           <details>
-            <summary>نوتاوا بدون اینترنت هم کار می‌کند؟ <Plus size={19} /></summary>
-            <p>بله. بعد از بارگذاری اولیه می‌توانید یادداشت‌های در دسترس را آفلاین ویرایش کنید؛ تغییرات پس از اتصال دوباره همگام می‌شوند.</p>
+            <summary>می‌تونم نوتاوا رو روی موبایل نصب کنم؟ <Plus size={19} /></summary>
+            <p>بله، نوتاوا یک وب‌اپ نصب‌شدنیه و روی موبایل و دسکتاپ خوب کار می‌کنه.</p>
           </details>
           <details>
-            <summary>می‌توانم نوتاوا را روی موبایل نصب کنم؟ <Plus size={19} /></summary>
-            <p>بله. نوتاوا یک وب‌اپ نصب‌پذیر است و رابط آن برای موبایل و دسکتاپ طراحی شده است.</p>
+            <summary>می‌تونم از کارهام نسخه‌ی پشتیبان بگیرم؟ <Plus size={19} /></summary>
+            <p>از تنظیمات، فضای کارت رو به‌صورت فایل بگیر و هر وقت خواستی دوباره برش گردون.</p>
           </details>
           <details>
-            <summary>راهی برای نگه‌داشتن نسخه‌ی پشتیبان دارم؟ <Plus size={19} /></summary>
-            <p>از بخش تنظیمات می‌توانید فضای کاری‌تان را به‌صورت فایل خروجی بگیرید و در صورت نیاز دوباره وارد کنید.</p>
-          </details>
-          <details>
-            <summary>اگر هم‌زمان روی دو دستگاه ویرایش کنم چه می‌شود؟ <Plus size={19} /></summary>
-            <p>اگر تغییرها با هم تعارض داشته باشند، نوتاوا آن را مشخص می‌کند تا نسخه‌ی درست را خودتان انتخاب کنید.</p>
+            <summary>اگه هم‌زمان روی دو دستگاه تغییر بدم چی؟ <Plus size={19} /></summary>
+            <p>اگر تغییرها با هم قاطی بشن، هر دو نسخه رو نشونت می‌دیم تا خودت تصمیم بگیری.</p>
           </details>
         </div>
       </section>
@@ -461,11 +418,11 @@ export default function LandingPage() {
           <Image src="/brand/notava-icon-512.png" alt="" width={132} height={132} />
         </div>
         <div className={styles.finalCtaCopy}>
-          <span className={styles.eyebrow}>فکر بعدی از راه می‌رسد</span>
-          <h2>از همین حالا جایی برایش بساز.</h2>
-          <p>فضای شخصی نوتاوا را بسازید و اولین صفحه‌تان را همان‌طور که دوست دارید شکل دهید.</p>
+          <span className={styles.eyebrow}>فکر بعدی همین نزدیکی‌هاست</span>
+          <h2>براش یه جا درست کن.</h2>
+          <p>فضای نوتاوا رو بساز و اولین صفحه‌ات رو همون‌طور که دوست داری راه بنداز.</p>
           <div className={styles.heroActions}>
-            <Link href="/signup" className={styles.primaryCta}>شروع در نوتاوا <ArrowLeft size={19} /></Link>
+            <Link href="/signup" className={styles.primaryCta}>بزن بریم <ArrowLeft size={19} /></Link>
             <Link href="/login" className={styles.secondaryCta}>ورود به حساب</Link>
           </div>
         </div>
@@ -475,7 +432,7 @@ export default function LandingPage() {
         <Link href="/" className={styles.footerBrand}>
           <Image src="/brand/notava-logo.png" alt="نوتاوا" width={116} height={37} />
         </Link>
-        <p>فضای آرام شما برای نوشتن، نظم‌دادن و ساختن ایده‌ها.</p>
+        <p>یه فضای آروم برای نوشتن، مرتب‌کردن و ساختن ایده‌ها.</p>
         <div>
           <a href="#features">امکانات</a>
           <Link href="/login">ورود</Link>
