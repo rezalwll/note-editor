@@ -93,6 +93,10 @@ describe("application shell and runtimes", () => {
     );
     expect(screen.getByText("Mobile shell")).toBeInTheDocument();
     expect(screen.getByText("Section tabs")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "خانه" })).toHaveAttribute(
+      "href",
+      "/",
+    );
     expect(screen.getByText("Workspace")).toBeInTheDocument();
   });
 

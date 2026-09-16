@@ -15,6 +15,8 @@ import {
   TRASH_PAGES_NOTEBOOK_SYSTEM_KEY,
 } from "@/lib/trash";
 import { getUserAccent, getUserInitials } from "@/lib/users";
+import { Home } from "lucide-react";
+import Link from "next/link";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -94,6 +96,15 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                   priority
                   showWordmark={false}
                 />
+                <Link
+                  href="/"
+                  aria-label="خانه"
+                  title="خانه"
+                  className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/55 bg-white/84 px-3 text-sm font-semibold text-[#32406d] shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:bg-white"
+                >
+                  <Home className="h-[18px] w-[18px]" aria-hidden="true" />
+                  <span>خانه</span>
+                </Link>
                 <SearchTrigger className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/55 bg-white/84 px-3 py-1.5 text-[#32406d] shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:bg-white" />
                 <EditorToolbar />
               </div>
