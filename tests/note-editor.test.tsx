@@ -983,6 +983,35 @@ describe("NoteEditor freeform placement", () => {
     },
   );
 
+  it("turns a dash followed by Space into a bullet item", async () => {
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          {
+            id: "markdown-bullet",
+            x: 48,
+            y: 72,
+            width: 240,
+            text: "-",
+          },
+        ],
+      }),
+    );
+    await waitForHydration();
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(1, 1);
+    fireEvent.keyDown(textarea, { key: " " });
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("● ");
+      expect(textarea.selectionStart).toBe(2);
+      expect(textarea.selectionEnd).toBe(2);
+    });
+  });
+
   it("starts the next todo unchecked and exits an empty todo item", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

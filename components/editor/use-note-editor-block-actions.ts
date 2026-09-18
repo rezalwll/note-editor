@@ -475,11 +475,7 @@ export function useNoteEditorBlockActions({
     event: KeyboardEvent<HTMLTextAreaElement>,
     block: FreeformBlock,
   ) {
-    if (
-      event.key !== "Enter" ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing
-    ) {
+    if (event.nativeEvent.isComposing) {
       return;
     }
 
@@ -494,6 +490,38 @@ export function useNoteEditorBlockActions({
       block.text,
       selectionStart,
     );
+
+    // Keep the familiar Markdown shortcut in plain text blocks. Rich-text
+    // blocks get this from Tiptap, while text blocks need to convert it here.
+    const markdownBulletMatch = lineText.match(/^([ \t]*)-$/);
+    if (
+      event.key === " " &&
+      selectionStart === lineEnd &&
+      markdownBulletMatch
+    ) {
+      event.preventDefault();
+      const indentation = markdownBulletMatch[1];
+      const nextText =
+        block.text.slice(0, lineStart) +
+        indentation +
+        BULLET_PREFIX +
+        block.text.slice(lineEnd);
+      const nextCursorPosition =
+        lineStart + indentation.length + BULLET_PREFIX.length;
+
+      selectionRestoreRef.current = {
+        id: block.id,
+        start: nextCursorPosition,
+        end: nextCursorPosition,
+      };
+      updateBlockText(block.id, nextText);
+      return;
+    }
+
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
     const bulletMatch = lineText.match(/^([ \t]*)(?:\u25CF|\u2022)\s/);
     const todoMatch = lineText.match(/^([ \t]*)(\u2610|\u2611|\u2612)\s/);
     const numberedMatch = lineText.match(
