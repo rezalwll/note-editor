@@ -6,7 +6,7 @@ import {
   getBlockGrowthPositionUpdates,
   getResponsiveBlockLayout,
 } from "@/lib/editor-collision";
-import { estimateBlockHeight } from "@/lib/editor-document";
+import { estimateBlockHeight, getBlockHorizontalAnchor } from "@/lib/editor-document";
 import type { FreeformBlock } from "@/lib/notes";
 
 function textBlock(
@@ -192,6 +192,24 @@ describe("editor block collision handling", () => {
     expect(
       getResponsiveBlockLayout({ blocks: overlapping, canvasWidth: 900 }),
     ).toEqual(overlapping);
+  });
+
+  it("does not stack desktop blocks for floating-point anchor rounding", () => {
+    const anchored = {
+      ...textBlock("anchored", 199, 72),
+      horizontalAnchor: getBlockHorizontalAnchor(900, 199, 240),
+    };
+    const neighbor = textBlock("neighbor", 48, 72);
+
+    expect(
+      getResponsiveBlockLayout({
+        blocks: [neighbor, anchored],
+        canvasWidth: 900,
+      }).map(({ id, x, y }) => ({ id, x, y })),
+    ).toEqual([
+      { id: "neighbor", x: 48, y: 72 },
+      { id: "anchored", x: 199, y: 72 },
+    ]);
   });
 
   it("cascades responsive displacement through blocks below it", () => {

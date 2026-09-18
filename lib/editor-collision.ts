@@ -6,6 +6,7 @@ import {
 import type { FreeformBlock } from "@/lib/notes";
 
 export const BLOCK_COLLISION_GAP = 12;
+const POSITION_ROUNDING_TOLERANCE = 0.5;
 
 type BlockBounds = {
   left: number;
@@ -111,6 +112,13 @@ function overlapsVertically(first: BlockBounds, second: BlockBounds) {
   return first.top < second.bottom && first.bottom > second.top;
 }
 
+function getStableResponsiveX(block: FreeformBlock, canvasWidth: number) {
+  const x = getResponsiveBlockX(block, canvasWidth);
+  // An anchor reconstructed at the same canvas width can differ by a tiny
+  // floating-point fraction. That is not a viewport constraint.
+  return Math.abs(x - block.x) < POSITION_ROUNDING_TOLERANCE ? block.x : x;
+}
+
 /**
  * Creates a display-only layout for a narrower canvas. Blocks retain their
  * persisted desktop coordinates, but blocks forced into each other by width
@@ -130,7 +138,7 @@ export function getResponsiveBlockLayout({
   if (blocks.length < 2) {
     return blocks.map((block) => {
       const width = getRenderedBlockWidth(block, canvasWidth);
-      const x = getResponsiveBlockX(block, canvasWidth);
+      const x = getStableResponsiveX(block, canvasWidth);
       return x === block.x ? block : { ...block, x };
     });
   }
@@ -142,14 +150,14 @@ export function getResponsiveBlockLayout({
   const orderedBlocks = [...blocks].sort(
     (first, second) =>
       first.y - second.y ||
-      getResponsiveBlockX(second, canvasWidth) -
-        getResponsiveBlockX(first, canvasWidth) ||
+      getStableResponsiveX(second, canvasWidth) -
+        getStableResponsiveX(first, canvasWidth) ||
       first.id.localeCompare(second.id),
   );
 
   for (const block of orderedBlocks) {
     const width = getRenderedBlockWidth(block, canvasWidth);
-    const x = getResponsiveBlockX(block, canvasWidth);
+    const x = getStableResponsiveX(block, canvasWidth);
     const height =
       measuredHeights?.get(block.id) ?? estimateBlockHeight(block, canvasWidth);
     const constrained =

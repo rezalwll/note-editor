@@ -278,7 +278,7 @@ export function NoteEditorBlock({
                         onPointerDown={(event) =>
                           startDraggingBlock(event, block)
                         }
-                        className="absolute -right-8 top-1 z-10 inline-flex h-7 w-7 touch-none items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] opacity-100 shadow-sm transition hover:bg-[#f0f8f4] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                        className="absolute -right-2 top-1 z-10 inline-flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] opacity-100 shadow-sm transition hover:bg-[#f0f8f4] active:cursor-grabbing md:-right-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                         aria-label="جابه‌جایی تصویر"
                       >
                         <GripVertical className="h-4 w-4" />
@@ -384,7 +384,7 @@ export function NoteEditorBlock({
                     <button
                       type="button"
                       onPointerDown={(event) => startDraggingBlock(event, block)}
-                      className="absolute -right-7 top-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-0 shadow-sm transition hover:bg-[#f7fbff] group-hover:opacity-100 md:-right-8"
+                      className="absolute -right-2 top-1 inline-flex h-6 w-6 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-100 shadow-sm transition hover:bg-[#f7fbff] active:cursor-grabbing md:-right-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                       aria-label="جابجایی بلوک"
                     >
                       <GripVertical className="h-3.5 w-3.5" />

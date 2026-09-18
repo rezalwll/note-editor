@@ -805,6 +805,140 @@ describe("NoteEditor freeform placement", () => {
     });
     expect(container.querySelector('button[aria-label="جابجایی بلوک"]')).not.toBeNull();
   });
+
+  it("moves a responsive displaced block from its visible position", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "left", x: 48, y: 72, width: 300, text: "left" },
+          { id: "right", x: 600, y: 72, width: 300, text: "right" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 390);
+    syncLayout();
+    await waitForHydration();
+    vi.clearAllMocks();
+
+    const displaced = container.querySelector(
+      '[data-testid="note-block-left"]',
+    ) as HTMLDivElement;
+    const stationary = container.querySelector(
+      '[data-testid="note-block-right"]',
+    ) as HTMLDivElement;
+    await waitFor(() => expect(displaced).toHaveStyle({ top: "112px" }));
+
+    fireEvent.pointerDown(
+      displaced.querySelector('button[aria-label="جابجایی بلوک"]') as HTMLButtonElement,
+      { button: 0, pointerId: 44, clientX: 90, clientY: 120 },
+    );
+    fireEvent.pointerMove(window, {
+      pointerId: 44,
+      clientX: 90,
+      clientY: 220,
+    });
+    fireEvent.pointerUp(window, { pointerId: 44 });
+
+    await waitFor(() => {
+      expect(displaced).toHaveStyle({ top: "212px" });
+      expect(stationary).toHaveStyle({ top: "72px" });
+    });
+
+    fireEvent(window, new Event("pagehide"));
+    await waitFor(() => {
+      const savedPage = mocks.enqueuePageUpsert.mock.calls
+        .map(([pageValue]) => pageValue as { bodyHtml?: string })
+        .find((pageValue) => pageValue.bodyHtml?.includes("right"));
+      const savedDocument = savedPage?.bodyHtml
+        ? parseFreeformDocument(savedPage.bodyHtml)
+        : null;
+
+      expect(savedDocument?.blocks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "left", x: 48, y: 212 }),
+          expect.objectContaining({ id: "right", x: 600, y: 72 }),
+        ]),
+      );
+    });
+  });
+
+  it("ignores other pointers and ends a block drag when its pointer is cancelled", async () => {
+    setViewport(1200);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "stable", x: 100, y: 72, width: 240, text: "stable" }],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 1200);
+    syncLayout();
+
+    const block = container.querySelector(
+      '[data-testid="note-block-stable"]',
+    ) as HTMLDivElement;
+    fireEvent.pointerDown(
+      block.querySelector('button[aria-label="جابجایی بلوک"]') as HTMLButtonElement,
+      { button: 0, pointerId: 45, clientX: 120, clientY: 80 },
+    );
+    fireEvent.pointerMove(window, {
+      pointerId: 46,
+      clientX: 300,
+      clientY: 280,
+    });
+    fireEvent.pointerCancel(window, { pointerId: 45 });
+    fireEvent.pointerMove(window, {
+      pointerId: 45,
+      clientX: 300,
+      clientY: 280,
+    });
+
+    expect(block).toHaveStyle({ left: "100px", top: "72px" });
+  });
+
+  it("keeps desktop block positions stable when dragging across another block", async () => {
+    setViewport(900);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "neighbor", x: 48, y: 72, width: 240, text: "neighbor" },
+          { id: "dragged", x: 500, y: 72, width: 240, text: "dragged" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    const page = canvas.parentElement as HTMLDivElement;
+    mockEditorRects(canvas, page, 900);
+    syncLayout();
+
+    const dragged = container.querySelector(
+      '[data-testid="note-block-dragged"]',
+    ) as HTMLDivElement;
+    const neighbor = container.querySelector(
+      '[data-testid="note-block-neighbor"]',
+    ) as HTMLDivElement;
+    fireEvent.pointerDown(
+      dragged.querySelector('button[aria-label="جابجایی بلوک"]') as HTMLButtonElement,
+      { button: 0, pointerId: 40, clientX: 520, clientY: 80 },
+    );
+    fireEvent.pointerMove(window, {
+      pointerId: 40,
+      clientX: 219,
+      clientY: 80,
+    });
+    fireEvent.pointerUp(window, { pointerId: 40 });
+
+    await waitFor(() => {
+      expect(dragged).toHaveStyle({ left: "199px", top: "72px" });
+      expect(neighbor).toHaveStyle({ left: "48px", top: "72px" });
+    });
+  });
   it("applies text color and font size commands to the active block", async () => {
     const { container } = renderEditor(
       serializeFreeformDocument({

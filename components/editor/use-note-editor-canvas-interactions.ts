@@ -77,14 +77,15 @@ export function useNoteEditorCanvasInteractions({
 }: UseNoteEditorCanvasInteractionsOptions) {
   const dragStateRef = useRef<{
     id: string;
+    pointerId: number;
     startClientX: number;
     startClientY: number;
     startRenderedX: number;
     startRenderedY: number;
-    startPersistedY: number;
   } | null>(null);
   const resizeStateRef = useRef<{
     id: string;
+    pointerId: number;
     edge: "left" | "right";
     startClientX: number;
     startX: number;
@@ -165,18 +166,20 @@ export function useNoteEditorCanvasInteractions({
   }
 
   const handleBlockDrag = useEffectEvent((event: PointerEvent) => {
-    if (!canvasRef.current || !dragStateRef.current) {
+    const dragState = dragStateRef.current;
+    if (
+      !canvasRef.current ||
+      !dragState ||
+      event.pointerId !== dragState.pointerId
+    ) {
       return;
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const currentBlock = blocks.find(
-      (block) => block.id === dragStateRef.current?.id,
-    );
+    const currentBlock = blocks.find((block) => block.id === dragState.id);
     const blockWidth = currentBlock
       ? getRenderedBlockWidth(currentBlock, rect.width)
       : BLOCK_DEFAULT_WIDTH;
-    const dragState = dragStateRef.current;
     const horizontalDelta = event.clientX - dragState.startClientX;
     const verticalDelta = event.clientY - dragState.startClientY;
     const nextRenderedX = getCanvasBoundedX(
@@ -188,18 +191,20 @@ export function useNoteEditorCanvasInteractions({
       24,
       dragState.startRenderedY + verticalDelta,
     );
-    const nextY = Math.max(
-      24,
-      dragState.startPersistedY + nextRenderedY - dragState.startRenderedY,
-    );
     const movedHorizontally =
       Math.abs(nextRenderedX - dragState.startRenderedX) >=
       POINTER_GEOMETRY_INTENT_THRESHOLD;
+    const movedVertically =
+      Math.abs(nextRenderedY - dragState.startRenderedY) >=
+      POINTER_GEOMETRY_INTENT_THRESHOLD;
+    if (!movedHorizontally && !movedVertically) {
+      return;
+    }
 
     markEditorInteraction();
     setEditedBlocks((current) =>
       current.map((block) => {
-        if (block.id !== dragStateRef.current?.id) {
+        if (block.id !== dragState.id) {
           return block;
         }
         const nextBlock = {
@@ -214,7 +219,9 @@ export function useNoteEditorCanvasInteractions({
                 ),
               }
             : {}),
-          y: nextY,
+          // A responsive layout may display this block below its saved y.
+          // Drag from the position the user actually grabbed.
+          y: nextRenderedY,
         };
         upsertLayoutBlock(nextBlock);
         return nextBlock;
@@ -223,19 +230,21 @@ export function useNoteEditorCanvasInteractions({
   });
 
   const handleBlockResize = useEffectEvent((event: PointerEvent) => {
-    if (!canvasRef.current || !resizeStateRef.current) {
+    const resizeState = resizeStateRef.current;
+    if (
+      !canvasRef.current ||
+      !resizeState ||
+      event.pointerId !== resizeState.pointerId
+    ) {
       return;
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const currentBlock = blocks.find(
-      (block) => block.id === resizeStateRef.current?.id,
-    );
+    const currentBlock = blocks.find((block) => block.id === resizeState.id);
     if (!currentBlock) {
       return;
     }
 
-    const resizeState = resizeStateRef.current;
     const minWidth = isImageBlock(currentBlock)
       ? IMAGE_MIN_WIDTH
       : getTextBlockMinWidth(currentBlock);
@@ -280,7 +289,7 @@ export function useNoteEditorCanvasInteractions({
     markEditorInteraction();
     setEditedBlocks((current) =>
       current.map((block) => {
-        if (block.id !== resizeStateRef.current?.id) {
+        if (block.id !== resizeState.id) {
           return block;
         }
         const nextBlock = {
@@ -304,18 +313,24 @@ export function useNoteEditorCanvasInteractions({
     const handlePointerMove = (event: PointerEvent) => handleBlockDrag(event);
     const handleResizePointerMove = (event: PointerEvent) =>
       handleBlockResize(event);
-    const handlePointerUp = () => {
-      dragStateRef.current = null;
-      resizeStateRef.current = null;
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (dragStateRef.current?.pointerId === event.pointerId) {
+        dragStateRef.current = null;
+      }
+      if (resizeStateRef.current?.pointerId === event.pointerId) {
+        resizeStateRef.current = null;
+      }
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointermove", handleResizePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointermove", handleResizePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
     };
   }, []);
 
@@ -334,15 +349,14 @@ export function useNoteEditorCanvasInteractions({
 
     const rect = canvasRef.current.getBoundingClientRect();
     const blockWidth = getRenderedBlockWidth(block, rect.width);
-    const persistedBlock = blocks.find((candidate) => candidate.id === block.id);
     const renderedX = getResponsiveBlockX(block, rect.width);
     dragStateRef.current = {
       id: block.id,
+      pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startRenderedX: renderedX,
       startRenderedY: block.y,
-      startPersistedY: persistedBlock?.y ?? block.y,
     };
   }
 
@@ -361,6 +375,7 @@ export function useNoteEditorCanvasInteractions({
     selectSingleBlock(block.id);
     resizeStateRef.current = {
       id: block.id,
+      pointerId: event.pointerId,
       edge,
       startClientX: event.clientX,
       startX: block.x,
