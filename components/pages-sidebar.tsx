@@ -582,11 +582,23 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
         </div>
 
         {isCreating ? (
-          <div
-            className="border-b bg-white px-3 py-2 text-right"
+          <form
+            className="border-b bg-white px-3 py-3 text-right"
             style={{ borderColor: activeTheme?.sidebarBorder }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitCreate();
+            }}
+            dir="rtl"
           >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label htmlFor="desktop-new-page-title" className="text-xs font-semibold text-[#39495a]">
+                عنوان صفحه جدید
+              </label>
+              <span className="text-[10px] text-[#83909d]">Enter برای ایجاد</span>
+            </div>
             <input
+              id="desktop-new-page-title"
               ref={inputRef}
               data-testid="new-page-title"
               value={draftTitle}
@@ -604,10 +616,29 @@ export function PagesSidebar({ notebooks }: PagesSidebarProps) {
               }}
               disabled={isPending}
               placeholder="صفحه بدون عنوان"
-              className="w-full border-none bg-transparent text-right text-sm text-[#313131] outline-none"
+              className="h-9 w-full rounded-xl border border-[#dce4ec] bg-[#f8fbfd] px-3 text-right text-sm text-[#313131] outline-none transition focus:border-[#8aa7bc] focus:bg-white focus:ring-2 focus:ring-[#dcebf4] disabled:cursor-wait disabled:opacity-60"
               dir="rtl"
             />
-          </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="submit"
+                data-testid="confirm-create-page"
+                disabled={isPending}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-[#334b5e] px-3 text-xs font-semibold text-white transition hover:bg-[#253b4d] disabled:cursor-wait disabled:opacity-60"
+              >
+                {isPending ? "در حال ایجاد…" : "ایجاد صفحه"}
+              </button>
+              <button
+                type="button"
+                data-testid="cancel-create-page"
+                onClick={cancelCreate}
+                disabled={isPending}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-[#dce4ec] bg-white px-3 text-xs font-medium text-[#526575] transition hover:bg-[#f4f8fa] disabled:cursor-wait disabled:opacity-60"
+              >
+                لغو
+              </button>
+            </div>
+          </form>
         ) : null}
 
         <div

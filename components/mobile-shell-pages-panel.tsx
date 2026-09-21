@@ -129,8 +129,22 @@ export function MobilePagesPanel({
 
         <div className="h-[calc(100dvh-132px-env(safe-area-inset-top))] overflow-y-auto px-3 py-3 pb-24">
           {isCreating ? (
-            <div className="mb-2 rounded-[16px] border border-dashed border-[#b9b1f6] bg-[#faf9ff] px-3 py-3">
+            <form
+              className="mb-3 rounded-[18px] border border-[#d7d2fb] bg-[#faf9ff] px-3 py-3 shadow-[0_8px_24px_rgba(103,86,216,0.08)]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitCreate();
+              }}
+              dir="rtl"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label htmlFor="mobile-new-page-title" className="text-xs font-semibold text-[#40376f]">
+                  عنوان صفحه جدید
+                </label>
+                <span className="text-[10px] text-[#8b84b5]">Enter برای ایجاد</span>
+              </div>
               <input
+                id="mobile-new-page-title"
                 ref={inputRef}
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
@@ -139,13 +153,39 @@ export function MobilePagesPanel({
                     event.preventDefault();
                     submitCreate();
                   }
+
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setDraftTitle("");
+                    setIsCreating(false);
+                  }
                 }}
                 disabled={isPending}
                 placeholder="صفحه بدون عنوان"
-                className="w-full border-none bg-transparent text-right text-sm outline-none placeholder:text-[#8b92a3]"
+                className="h-11 w-full rounded-[14px] border border-[#dedaf8] bg-white px-3 text-right text-sm outline-none transition placeholder:text-[#8b92a3] focus:border-[#8d7fe9] focus:ring-2 focus:ring-[#ebe8ff] disabled:cursor-wait disabled:opacity-60"
                 dir="rtl"
               />
-            </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex min-h-11 items-center justify-center rounded-[14px] bg-[#6756d8] px-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isPending ? "در حال ایجاد…" : "ایجاد صفحه"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => {
+                    setDraftTitle("");
+                    setIsCreating(false);
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-[14px] border border-[#dedaf8] bg-white px-3 text-sm font-medium text-[#5e5685] transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                >
+                  لغو
+                </button>
+              </div>
+            </form>
           ) : null}
 
           {activeGroupNotebooks.length === 0 ? (

@@ -89,7 +89,7 @@ describe("PagesSidebar", () => {
     fireEvent.change(screen.getByTestId("new-page-title"), {
       target: { value: "New page" },
     });
-    fireEvent.keyDown(screen.getByTestId("new-page-title"), { key: "Enter" });
+    fireEvent.click(screen.getByTestId("confirm-create-page"));
 
     await waitFor(() => {
       expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "New page");
@@ -120,6 +120,39 @@ describe("PagesSidebar", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.createPage).not.toHaveBeenCalled();
     expect(screen.getByTestId("new-page-title")).toBeInTheDocument();
+  });
+
+  it("supports keyboard confirmation and explicit cancellation", async () => {
+    render(
+      <PagesSidebar
+        notebooks={[
+          {
+            id: "notebook-1",
+            name: "Notebook",
+            deletedAt: null,
+            pages: [],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("create-page"));
+    fireEvent.change(screen.getByTestId("new-page-title"), {
+      target: { value: "Discard me" },
+    });
+    fireEvent.click(screen.getByTestId("cancel-create-page"));
+    expect(screen.queryByTestId("new-page-title")).not.toBeInTheDocument();
+    expect(mocks.createPage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("create-page"));
+    fireEvent.change(screen.getByTestId("new-page-title"), {
+      target: { value: "Keyboard page" },
+    });
+    fireEvent.keyDown(screen.getByTestId("new-page-title"), { key: "Enter" });
+
+    await waitFor(() => {
+      expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "Keyboard page");
+    });
   });
 
   it("moves a live page to trash from its context menu", async () => {

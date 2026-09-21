@@ -569,7 +569,7 @@ describe("MobileShell page workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
     const input = screen.getByPlaceholderText("صفحه بدون عنوان");
     fireEvent.change(input, { target: { value: "صفحه تازه" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "ایجاد صفحه" }));
 
     await waitFor(() => expect(mocks.createPage).toHaveBeenCalledWith("notebook-1", "صفحه تازه"));
     expect(mocks.push).toHaveBeenCalledWith("/pages/new-page");
@@ -600,6 +600,22 @@ describe("MobileShell page workflows", () => {
 
     expect(mocks.createPage).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText("صفحه بدون عنوان")).toBeInTheDocument();
+  });
+
+  it("cancels page creation by button and Escape", () => {
+    renderShell();
+    openPages();
+    fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
+    fireEvent.change(screen.getByPlaceholderText("صفحه بدون عنوان"), {
+      target: { value: "پیش‌نویس لغوشده" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "لغو" }));
+    expect(screen.queryByPlaceholderText("صفحه بدون عنوان")).not.toBeInTheDocument();
+    expect(mocks.createPage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "صفحه جدید" }));
+    fireEvent.keyDown(screen.getByPlaceholderText("صفحه بدون عنوان"), { key: "Escape" });
+    expect(screen.queryByPlaceholderText("صفحه بدون عنوان")).not.toBeInTheDocument();
   });
 
   it("switches notebooks from the pages panel", () => {
