@@ -387,7 +387,7 @@ export function SectionTabs({ groups, notebooks }: SectionTabsProps) {
       }
 
       if (shouldRedirect) {
-        router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/");
+        router.push(fallbackNotebookId ? `/notebooks/${fallbackNotebookId}` : "/workspace");
       } else {
         router.refresh();
       }

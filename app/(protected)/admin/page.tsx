@@ -22,7 +22,8 @@ export const metadata: Metadata = {
 };
 
 const routeLabels: Record<string, string> = {
-  "/": "خانه",
+  "/": "صفحه معرفی",
+  "/workspace": "خانه",
   "/pages/:id": "صفحه یادداشت",
   "/notebooks/:id": "دفتر",
   "/support": "پشتیبانی",

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   unregister: vi.fn(),
   register: vi.fn(),
   cacheDelete: vi.fn(),
-  pathname: "/",
+  pathname: "/workspace",
 }));
 
 vi.mock("@/lib/queries", () => ({ getSidebarData: mocks.getSidebarData }));
@@ -62,7 +62,7 @@ beforeEach(() => {
   mocks.unregister.mockResolvedValue(true);
   mocks.register.mockResolvedValue(undefined);
   mocks.cacheDelete.mockResolvedValue(true);
-  mocks.pathname = "/";
+  mocks.pathname = "/workspace";
   document.cookie = "notava_last_page_user-1=; Path=/; Max-Age=0";
 });
 
@@ -95,7 +95,7 @@ describe("application shell and runtimes", () => {
     expect(screen.getByText("Section tabs")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "خانه" })).toHaveAttribute(
       "href",
-      "/",
+      "/workspace",
     );
     expect(screen.getByText("Workspace")).toBeInTheDocument();
   });

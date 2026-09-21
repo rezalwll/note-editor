@@ -575,7 +575,7 @@ export async function searchWorkspace(
           ? `/pages/${row.targetPageId}`
           : row.targetNotebookId
             ? `/notebooks/${row.targetNotebookId}`
-            : "/",
+            : "/workspace",
         matchedField: "name",
       })),
       attachment: attachmentRows.slice(0, limit).map((row) => ({

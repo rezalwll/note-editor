@@ -55,7 +55,7 @@ export function MobileShellNavigation({
 }: MobileShellNavigationProps) {
   const router = useRouter();
   const isEditor = pathname.startsWith("/pages/");
-  const isHome = pathname === "/";
+  const isHome = pathname === "/workspace";
 
   const closeTransientPanels = () => {
     setCreateMenuOpen(false);
@@ -181,7 +181,7 @@ export function MobileShellNavigation({
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e5e6ef] bg-white/94 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_34px_rgba(35,50,77,0.08)] backdrop-blur-xl" aria-label="ناوبری اصلی">
         <div className="grid h-[76px] grid-cols-5 items-center px-2" dir="rtl">
           <Link
-            href="/"
+            href="/workspace"
             onClick={closeTransientPanels}
             className={`flex h-14 flex-col items-center justify-center gap-1 rounded-2xl ${isHome ? "text-[#715cf0]" : "text-[#5f687b]"}`}
             aria-current={isHome ? "page" : undefined}

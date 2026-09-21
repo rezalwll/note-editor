@@ -194,7 +194,7 @@ export default function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
           <h1>
-            یک جای آرام
+            یک جای آرام{" "}
             <span>برای فکرهای شلوغ.</span>
           </h1>
           <p className={styles.heroLead}>

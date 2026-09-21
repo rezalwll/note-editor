@@ -144,6 +144,21 @@
   color: var(--primary);
 }
 
+.logoLink:focus-visible,
+.footerBrand:focus-visible,
+.navLinks a:focus-visible,
+.loginLink:focus-visible,
+.navCta:focus-visible,
+.primaryCta:focus-visible,
+.secondaryCta:focus-visible,
+.textLink:focus-visible,
+.footer a:focus-visible,
+.faqList summary:focus-visible {
+  outline: 3px solid rgba(91, 103, 232, 0.42);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
 .navCta,
 .primaryCta,
 .secondaryCta {

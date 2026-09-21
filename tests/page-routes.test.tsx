@@ -46,6 +46,7 @@ vi.mock("@/components/forms/workspace-portability-card", () => ({ WorkspacePorta
 vi.mock("@/lib/email-auth", () => ({ getSupportEmail: () => "help@notava.test" }));
 
 import DashboardPage from "@/app/(protected)/workspace/page";
+import LandingPage, { metadata as landingMetadata } from "@/app/page";
 import NotebookPage, { generateMetadata as notebookMetadata } from "@/app/(protected)/notebooks/[id]/page";
 import PageView, { generateMetadata as pageMetadata } from "@/app/(protected)/pages/[id]/page";
 import SettingsPage from "@/app/(protected)/settings/page";
@@ -70,6 +71,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireUser.mockResolvedValue(user);
   mocks.cookieGet.mockReturnValue(undefined);
+});
+
+describe("public landing page", () => {
+  it("presents the product and routes visitors to authentication", () => {
+    render(<LandingPage />);
+
+    expect(
+      screen.getByRole("heading", { name: /یک جای آرام برای فکرهای شلوغ/ }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /شروع در نوتاوا/ })[0]).toHaveAttribute(
+      "href",
+      "/signup",
+    );
+    expect(screen.getAllByRole("link", { name: "ورود" })[0]).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(landingMetadata).toMatchObject({
+      title: expect.stringContaining("نوتاوا"),
+      openGraph: { locale: "fa_IR", type: "website" },
+    });
+  });
 });
 
 describe("protected page routes", () => {

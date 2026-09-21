@@ -216,6 +216,11 @@ describe("MobileShell panels and installation", () => {
   it("delegates mobile logout to the safe client workflow", async () => {
     renderShell();
 
+    expect(screen.getByRole("link", { name: "خانه" })).toHaveAttribute(
+      "href",
+      "/workspace",
+    );
+
     fireEvent.click(screen.getByRole("button", { name: /باز کردن پروفایل/ }));
     const profile = screen.getByText("@owner").closest("div.fixed")!;
     fireEvent.submit(profile.querySelector("form")!);
@@ -687,7 +692,7 @@ describe("MobileShell page workflows", () => {
     expect(screen.getByText("این زیر مجموعه هنوز صفحه‌ای ندارد.")).toBeInTheDocument();
     view.unmount();
 
-    mocks.pathname = "/";
+    mocks.pathname = "/workspace";
     renderShell({ groups: [], notebooks: [] });
     openPages();
     expect(screen.getByText("هنوز زیر مجموعه‌ای برای این مجموعه انتخاب نشده است.")).toBeInTheDocument();
