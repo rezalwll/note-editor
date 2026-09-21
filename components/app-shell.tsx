@@ -97,7 +97,7 @@ export async function AppShell({ children, currentUser }: AppShellProps) {
                   showWordmark={false}
                 />
                 <Link
-                  href="/workspace"
+                  href="/"
                   aria-label="خانه"
                   title="خانه"
                   className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/55 bg-white/84 px-3 text-sm font-semibold text-[#32406d] shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:bg-white"

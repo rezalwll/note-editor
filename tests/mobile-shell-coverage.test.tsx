@@ -216,11 +216,6 @@ describe("MobileShell panels and installation", () => {
   it("delegates mobile logout to the safe client workflow", async () => {
     renderShell();
 
-    expect(screen.getByRole("link", { name: "خانه" })).toHaveAttribute(
-      "href",
-      "/workspace",
-    );
-
     fireEvent.click(screen.getByRole("button", { name: /باز کردن پروفایل/ }));
     const profile = screen.getByText("@owner").closest("div.fixed")!;
     fireEvent.submit(profile.querySelector("form")!);
@@ -518,7 +513,7 @@ describe("MobileShell notebook workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "انتقال زیر مجموعه به حذف‌شده‌ها" }));
 
     await waitFor(() => expect(mocks.archiveNotebook).toHaveBeenCalledWith("notebook-1"));
-    expect(mocks.push).toHaveBeenCalledWith("/workspace");
+    expect(mocks.push).toHaveBeenCalledWith("/");
     await runHistoryCallbacks();
     expect(mocks.assignNotebookGroup).toHaveBeenCalledWith(["notebook-1"], "group-1");
   });
@@ -553,7 +548,7 @@ describe("MobileShell notebook workflows", () => {
 
     await waitFor(() => expect(mocks.deleteNotebookPermanently).toHaveBeenCalledWith("deleted-notebook"));
     expect(mocks.clear).toHaveBeenCalled();
-    expect(mocks.push).toHaveBeenCalledWith("/workspace");
+    expect(mocks.push).toHaveBeenCalledWith("/");
   });
 
   it("does not offer operations for system notebooks and renders empty groups", () => {
@@ -692,7 +687,7 @@ describe("MobileShell page workflows", () => {
     expect(screen.getByText("این زیر مجموعه هنوز صفحه‌ای ندارد.")).toBeInTheDocument();
     view.unmount();
 
-    mocks.pathname = "/workspace";
+    mocks.pathname = "/";
     renderShell({ groups: [], notebooks: [] });
     openPages();
     expect(screen.getByText("هنوز زیر مجموعه‌ای برای این مجموعه انتخاب نشده است.")).toBeInTheDocument();

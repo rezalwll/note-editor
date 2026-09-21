@@ -98,7 +98,7 @@ export function getSafeAppLockReturnPath(value: unknown) {
     !value.startsWith("//") &&
     !value.startsWith("/lock")
     ? value
-    : "/workspace";
+    : "/";
 }
 
 export function maskEmail(email: string | null | undefined) {

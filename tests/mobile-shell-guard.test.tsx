@@ -5,7 +5,7 @@ import { MobileShell } from "@/components/mobile-shell";
 
 const mocks = vi.hoisted(() => ({
   createNotebook: vi.fn(),
-  pathname: "/workspace",
+  pathname: "/",
 }));
 
 vi.mock("next/navigation", () => ({

@@ -197,7 +197,7 @@ describe("signup actions", () => {
       "user-1",
     );
     expect(mocks.createSession).toHaveBeenCalledWith("user-1");
-    expect(mocks.redirect).toHaveBeenCalledWith("/workspace");
+    expect(mocks.redirect).toHaveBeenCalledWith("/");
   });
 
   it("resends and refreshes the pending signup code", async () => {

@@ -39,8 +39,8 @@ describe("pattern lock helpers", () => {
     expect(getSafeAppLockReturnPath("/pages/page-1?tab=a")).toBe(
       "/pages/page-1?tab=a",
     );
-    expect(getSafeAppLockReturnPath("//evil.test")).toBe("/workspace");
-    expect(getSafeAppLockReturnPath("/lock?returnTo=/")).toBe("/workspace");
+    expect(getSafeAppLockReturnPath("//evil.test")).toBe("/");
+    expect(getSafeAppLockReturnPath("/lock?returnTo=/")).toBe("/");
     expect(maskEmail("owner@example.com")).toBe("ow•••@example.com");
     expect(maskEmail(null)).toBeNull();
   });

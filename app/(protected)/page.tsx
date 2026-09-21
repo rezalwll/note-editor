@@ -62,7 +62,7 @@ export default async function DashboardPage() {
           ? `/pages/${firstPage.id}`
           : firstNotebook
             ? `/notebooks/${firstNotebook.id}`
-            : "/workspace",
+            : "/",
       };
     });
 

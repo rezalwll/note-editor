@@ -81,7 +81,7 @@ export async function createNotebookGroupInlineAction(
     return { group, notebook, page };
   });
 
-  revalidatePath("/workspace");
+  revalidatePath("/");
   revalidatePath(`/notebooks/${notebook.id}`);
   revalidatePath(`/pages/${page.id}`);
   return {
@@ -114,7 +114,7 @@ export async function renameNotebookGroupInlineAction(id: string, name: string) 
     data: { name: groupName.data || "مجموعه بدون عنوان" },
   });
 
-  revalidatePath("/workspace");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -140,7 +140,7 @@ export async function updateNotebookGroupThemeInlineAction(
     data: { themeKey },
   });
 
-  revalidatePath("/workspace");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -206,7 +206,7 @@ export async function deleteNotebookGroupInlineAction(id: string) {
     return ids;
   });
 
-  revalidatePath("/workspace");
+  revalidatePath("/");
   return {
     success: true,
     trashGroupId: trashGroup.id,
@@ -265,7 +265,7 @@ export async function restoreNotebookGroupInlineAction(input: {
   } else {
     await restoreNotebooksToGroup(user.id, parsed.data.notebookIds, parsed.data.id);
   }
-  revalidatePath("/workspace");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -299,6 +299,6 @@ export async function reorderNotebookGroupsInlineAction(groupIds: string[]) {
     ),
   );
 
-  revalidatePath("/workspace");
+  revalidatePath("/");
   return { success: true };
 }

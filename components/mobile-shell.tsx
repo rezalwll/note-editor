@@ -497,7 +497,7 @@ export function MobileShell({ notebooks, groups, currentUser }: MobileShellProps
       }
 
       if (routeNotebook?.id === notebook.id || activePageId) {
-        router.push("/workspace");
+        router.push("/");
       } else {
         router.refresh();
       }
