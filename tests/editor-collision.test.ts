@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BLOCK_COLLISION_GAP,
+  getBlockAutoGrowthWidth,
   getBlockResizeMaxWidth,
   getBlockGrowthPositionUpdates,
   getResponsiveBlockLayout,
@@ -19,6 +20,45 @@ function textBlock(
 }
 
 describe("editor block collision handling", () => {
+  it("caps automatic text growth at a neighboring block so the text wraps", () => {
+    const left = textBlock("left", 200, 72);
+    const typing = textBlock("typing", 520, 72);
+
+    expect(
+      getBlockAutoGrowthWidth({
+        blocks: [left, typing],
+        growingBlockId: typing.id,
+        desiredWidth: 500,
+        canvasWidth: 1_200,
+        sourceHeight: 28,
+      }),
+    ).toBe(308);
+    expect(
+      getBlockAutoGrowthWidth({
+        blocks: [{ ...left, y: 180 }, typing],
+        growingBlockId: typing.id,
+        desiredWidth: 500,
+        canvasWidth: 1_200,
+        sourceHeight: 28,
+      }),
+    ).toBe(500);
+  });
+
+  it("respects a centered block anchor when limiting text growth", () => {
+    const left = textBlock("left", 200, 72);
+    const typing = { ...textBlock("typing", 480, 72), horizontalAnchor: 0.5 };
+
+    expect(
+      getBlockAutoGrowthWidth({
+        blocks: [left, typing],
+        growingBlockId: typing.id,
+        desiredWidth: 500,
+        canvasWidth: 1_200,
+        sourceHeight: 28,
+      }),
+    ).toBe(296);
+  });
+
   it("stops left-edge resizing before a block in the same row", () => {
     const left = textBlock("left", 200, 72);
     const right = textBlock("right", 520, 72);

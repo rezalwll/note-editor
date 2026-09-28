@@ -806,6 +806,57 @@ describe("NoteEditor freeform placement", () => {
     expect(container.querySelector('button[aria-label="جابجایی بلوک"]')).not.toBeNull();
   });
 
+  it("wraps typed text before an adjacent block instead of growing into it", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      font: "",
+      measureText: (value: string) => ({ width: value.length * 10 }),
+    } as unknown as CanvasRenderingContext2D);
+
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [
+          { id: "neighbor", x: 200, y: 72, width: 240, text: "neighbor" },
+          { id: "typing", x: 520, y: 72, width: 240, text: "start" },
+        ],
+      }),
+    );
+    const canvas = container.querySelector(".freeform-canvas") as HTMLDivElement;
+    mockEditorRects(canvas, canvas.parentElement as HTMLDivElement, 1200);
+    syncLayout();
+    await waitForHydration();
+
+    fireEvent.change(
+      container.querySelector('[data-testid="note-block-typing"] textarea') as HTMLTextAreaElement,
+      { target: { value: "a".repeat(50) } },
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="note-block-typing"]')).toHaveStyle({
+        left: "452px",
+        width: "308px",
+      });
+    });
+  });
+
+  it("keeps the mobile drag handle above text and hides it until selection", async () => {
+    setViewport(390);
+    const { container } = renderEditor(
+      serializeFreeformDocument({
+        type: "freeform-v1",
+        blocks: [{ id: "mobile-handle", x: 48, y: 72, width: 240, text: "body" }],
+      }),
+    );
+    await waitForHydration();
+
+    const block = container.querySelector('[data-testid="note-block-mobile-handle"]') as HTMLDivElement;
+    const handle = block.querySelector('button[aria-label="جابجایی بلوک"]') as HTMLButtonElement;
+    expect(handle).toHaveClass("-top-7", "right-0", "opacity-0", "pointer-events-none");
+
+    fireEvent.focus(block.querySelector("textarea") as HTMLTextAreaElement);
+    expect(handle).toHaveClass("-top-7", "right-0", "opacity-100");
+  });
+
   it("moves a responsive displaced block from its visible position", async () => {
     setViewport(390);
     const { container } = renderEditor(

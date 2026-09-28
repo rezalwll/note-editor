@@ -278,7 +278,7 @@ export function NoteEditorBlock({
                         onPointerDown={(event) =>
                           startDraggingBlock(event, block)
                         }
-                        className="absolute -right-2 top-1 z-10 inline-flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] opacity-100 shadow-sm transition hover:bg-[#f0f8f4] active:cursor-grabbing md:-right-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                        className={`absolute -top-8 right-0 z-10 inline-flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#668399] shadow-sm transition hover:bg-[#f0f8f4] active:cursor-grabbing md:-right-8 md:top-1 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 ${isSelected ? "opacity-100" : "opacity-0 pointer-events-none md:pointer-events-auto"}`}
                         aria-label="جابه‌جایی تصویر"
                       >
                         <GripVertical className="h-4 w-4" />
@@ -384,7 +384,7 @@ export function NoteEditorBlock({
                     <button
                       type="button"
                       onPointerDown={(event) => startDraggingBlock(event, block)}
-                      className="absolute -right-2 top-1 inline-flex h-6 w-6 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] opacity-100 shadow-sm transition hover:bg-[#f7fbff] active:cursor-grabbing md:-right-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      className={`absolute -top-7 right-0 z-10 inline-flex h-6 w-6 touch-none cursor-grab items-center justify-center rounded-md border border-[#d8e1ea] bg-white/95 text-[#7a94a6] shadow-sm transition hover:bg-[#f7fbff] active:cursor-grabbing md:-right-8 md:top-1 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 ${isSelected ? "opacity-100" : "opacity-0 pointer-events-none md:pointer-events-auto"}`}
                       aria-label="جابجایی بلوک"
                     >
                       <GripVertical className="h-3.5 w-3.5" />

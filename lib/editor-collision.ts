@@ -1,5 +1,7 @@
 import {
   estimateBlockHeight,
+  getAnchoredBlockX,
+  getCanvasBoundedX,
   getRenderedBlockWidth,
   getResponsiveBlockX,
 } from "@/lib/editor-document";
@@ -16,6 +18,71 @@ type BlockBounds = {
 };
 
 export type BlockHorizontalBounds = Pick<BlockBounds, "left" | "right">;
+
+/** Keep automatically growing text inside its own column. The text then wraps
+ * at the available width instead of extending into a neighbouring block. */
+export function getBlockAutoGrowthWidth({
+  blocks,
+  growingBlockId,
+  desiredWidth,
+  canvasWidth,
+  sourceHeight,
+  gap = BLOCK_COLLISION_GAP,
+}: {
+  blocks: readonly FreeformBlock[];
+  growingBlockId: string;
+  desiredWidth: number;
+  canvasWidth: number;
+  sourceHeight: number;
+  gap?: number;
+}) {
+  const source = blocks.find((block) => block.id === growingBlockId);
+  if (!source) return desiredWidth;
+
+  const currentWidth = getRenderedBlockWidth(source, canvasWidth);
+  if (desiredWidth <= currentWidth) return desiredWidth;
+
+  const currentX = getResponsiveBlockX(source, canvasWidth);
+  const xAtWidth = (width: number) =>
+    typeof source.horizontalAnchor === "number"
+      ? getAnchoredBlockX(canvasWidth, source.horizontalAnchor, width)
+      : getCanvasBoundedX(
+          canvasWidth,
+          currentX - (width - currentWidth),
+          width,
+        );
+  const neighbors = blocks.filter((block) => {
+    if (block.id === growingBlockId) return false;
+    const height = estimateBlockHeight(block, canvasWidth);
+    return source.y < block.y + height && block.y < source.y + sourceHeight;
+  });
+  if (neighbors.length === 0) return desiredWidth;
+
+  const isClear = (width: number) => {
+    const left = xAtWidth(width);
+    const right = left + width;
+    return neighbors.every((block) => {
+      const neighborLeft = getResponsiveBlockX(block, canvasWidth);
+      const neighborRight =
+        neighborLeft + getRenderedBlockWidth(block, canvasWidth);
+      return right + gap <= neighborLeft || left >= neighborRight + gap;
+    });
+  };
+
+  // A pre-existing collision should not cause typing to resize the block.
+  if (!isClear(currentWidth)) return currentWidth;
+  if (isClear(desiredWidth)) return desiredWidth;
+
+  let low = currentWidth;
+  let high = desiredWidth;
+  for (let index = 0; index < 24; index += 1) {
+    const middle = (low + high) / 2;
+    if (isClear(middle)) low = middle;
+    else high = middle;
+  }
+  const roundedUp = Math.ceil(low - 0.001);
+  return Math.max(currentWidth, isClear(roundedUp) ? roundedUp : Math.floor(low));
+}
 
 /**
  * Returns the furthest width a block may grow to without crossing a block in

@@ -9,6 +9,7 @@ import {
 import { flushSync } from "react-dom";
 
 import type { RichTextBlockHandle } from "@/components/editor/rich-text-block-editor";
+import { getBlockAutoGrowthWidth } from "@/lib/editor-collision";
 import {
   BLOCK_DEFAULT_WIDTH,
   createBlockId,
@@ -381,9 +382,20 @@ export function useNoteEditorBlockActions({
           };
         }
 
-        const nextWidth = isLegacyColumnBlock
+        const measuredWidth = isLegacyColumnBlock
           ? previousWidth
           : measureBlockWidth(text, activeCanvasWidth, textStyle);
+        const nextWidth = getBlockAutoGrowthWidth({
+          blocks,
+          growingBlockId: id,
+          desiredWidth: measuredWidth,
+          canvasWidth: activeCanvasWidth,
+          sourceHeight: Math.max(
+            textElement?.scrollHeight ?? 0,
+            textElement?.offsetHeight ?? 0,
+            28,
+          ),
+        });
         const widthDelta = nextWidth - previousWidth;
         const nextX =
           typeof block.horizontalAnchor === "number"
